@@ -20,7 +20,10 @@ import {
   ArrowDown,
   RefreshCcw,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Moon,
+  Sun,
+  ArrowRight
 } from 'lucide-react';
 import { getClients, getWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
@@ -51,7 +54,7 @@ interface DashboardRow {
 }
 
 export default function MasterDashboard() {
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [clients, setClients] = useState<Client[]>([]);
   const [rows, setRows] = useState<DashboardRow[]>([]);
 
@@ -313,394 +316,244 @@ export default function MasterDashboard() {
   }, [rows, searchTerm, sortConfig]);
 
   return (
-    <div className="space-y-8 pb-12">
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 rounded-[40px] border backdrop-blur-2xl relative z-50 ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/40 border-white/5'
-        }`}>
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
-              <LayoutDashboard className="text-white" size={24} />
+    <div className={`min-h-screen transition-colors duration-500 pb-20 ${theme === 'white' ? 'bg-[#f0f4f5]' : 'bg-black'}`}>
+      {/* High Fidelity Global Header */}
+      <div className={`sticky top-0 z-50 border-b shadow-xl ${theme === 'white' ? 'bg-[#0a191e] border-white/10' : 'bg-zinc-950 border-white/5'}`}>
+        <div className="max-w-[1800px] mx-auto px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-12">
+            <div className="flex flex-col group cursor-pointer" onClick={() => window.location.reload()}>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#6ec5b8]">Mission Control</span>
+              <h1 className="text-2xl font-black tracking-tighter uppercase italic text-white leading-none mt-1">SEO Hub</h1>
             </div>
-            <div>
-              <h2 className={`text-3xl font-black tracking-tighter uppercase italic ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Master Dashboard</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest leading-none">Cross-Property Intelligence</p>
-                {viewingPeriod && (
-                  <span className="px-2 py-0.5 rounded-full bg-blue-600/10 text-blue-600 text-[9px] font-black uppercase tracking-widest">
-                    {format(viewingPeriod.start, 'MMM dd')} - {format(viewingPeriod.end, 'MMM dd, yyyy')}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <div className={`p-1.5 rounded-2xl flex gap-1 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'
-            }`}>
-            <Tooltip content="Week over Week Performance">
-              <button
-                onClick={() => setViewMode('weekly')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'weekly'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : theme === 'white'
-                      ? 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
-              >
-                Weekly (WoW)
-              </button>
-            </Tooltip>
-            <Tooltip content="Month over Month Performance">
-              <button
-                onClick={() => setViewMode('monthly')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'monthly'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : theme === 'white'
-                      ? 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
-              >
-                Monthly (MoM)
-              </button>
-            </Tooltip>
-            <Tooltip content="Rolling Last 7 Days vs Previous 7 Days">
-              <button
-                onClick={() => setViewMode('rolling')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'rolling'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : theme === 'white'
-                      ? 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
-              >
-                Rolling 7D
-              </button>
-            </Tooltip>
-          </div>
-
-          {viewMode === 'custom' && (
-            <div className={`p-1.5 rounded-2xl flex items-center gap-2 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'}`}>
-              <input 
-                type="date" 
-                value={dateRange.start} 
-                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className={`bg-transparent text-[10px] font-black uppercase outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
-              />
-              <Minus size={12} className="text-zinc-500" />
-              <input 
-                type="date" 
-                value={dateRange.end} 
-                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className={`bg-transparent text-[10px] font-black uppercase outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
-              />
-              <button 
-                onClick={() => setViewMode('weekly')}
-                className="p-1 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          )}
-
-          <button 
-            onClick={() => setViewMode('custom')}
-            className={`p-2.5 rounded-xl border transition-all ${
-              viewMode === 'custom'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                : theme === 'white'
-                  ? 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                  : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-white hover:bg-zinc-700'
-            }`}
-          >
-            <Calendar size={18} />
-          </button>
-
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-500 transition-colors" size={18} />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-bold outline-none focus:border-blue-500 w-48 transition-all ${theme === 'white' ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-zinc-800 border-white/5 text-white'
-                }`}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className={`rounded-[40px] border backdrop-blur-xl shadow-2xl ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
-        }`}>
-        <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-[30]">
-              <tr className={`border-b ${theme === 'white' ? 'bg-zinc-50 border-zinc-100' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl'}`}>
-                <th
-                  className={`px-6 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest sticky left-0 z-[40] border-r cursor-pointer hover:text-blue-500 transition-colors ${theme === 'white' ? 'bg-white border-zinc-100' : 'bg-zinc-950 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)]'
-                    }`}
-                  onClick={() => handleSort('client')}
-                  style={{ width: '80px' }}
-                >
-                  <div className="flex items-center gap-2">
-                    CODE
-                    {sortConfig?.key === 'client' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('pm')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Project Manager Code" position="bottom">PM</Tooltip>
-                    {sortConfig?.key === 'pm' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('leads')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Verified high-quality leads" position="bottom">Legit Leads</Tooltip>
-                    {sortConfig?.key === 'leads' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('top3')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Keywords in top 3 positions" position="bottom">Top 3</Tooltip>
-                    {sortConfig?.key === 'top3' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('top10')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Actual vs Target keywords in top 10" position="bottom">Top 10 (A/T)</Tooltip>
-                    {sortConfig?.key === 'top10' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-4 text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('ctr')}>
-                  <div className="flex items-center justify-center gap-1">
-                    Avg CTR {sortConfig?.key === 'ctr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-4 text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('impressions')}>
-                  <div className="flex items-center justify-center gap-1">
-                    Impressions {sortConfig?.key === 'impressions' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-4 text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('position')}>
-                  <div className="flex items-center justify-center gap-1">
-                    Avg Pos {sortConfig?.key === 'position' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('gsc')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Current vs Previous GSC Clicks" position="bottom">GSC Traffic (C/P)</Tooltip>
-                    {sortConfig?.key === 'gsc' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('ga4')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Current vs Previous GA4 Users" position="bottom">GA4 Traffic (C/P)</Tooltip>
-                    {sortConfig?.key === 'ga4' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center">
-                  <Tooltip content="Weekly production activities" position="bottom">Activity</Tooltip>
-                </th>
-                <th className="px-4 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center">Intelligence</th>
-                <th className="px-8 py-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center sticky right-0 z-[40] border-l bg-inherit shadow-[-2px_0_10px_rgba(3,7,18,0.5)] cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('status')}>
-                  <div className="flex items-center justify-center gap-2">
-                    Status
-                    {sortConfig?.key === 'status' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-white/5'}`}>
-              {loading ? (
-                Array(5).fill(0).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td colSpan={12} className={`px-6 py-12 ${theme === 'white' ? 'bg-zinc-50' : 'bg-white/5'}`} />
-                  </tr>
-                ))
-              ) : filteredRows.map((row) => (
-                <tr key={row.client.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
-                  <td className={`px-6 py-6 sticky left-0 z-[19] border-r transition-colors ${theme === 'white' ? 'bg-white border-zinc-100 group-hover:bg-zinc-50' : 'bg-zinc-900 group-hover:bg-zinc-800 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)]'
-                    }`}>
-                    <Tooltip content={row.client.name} position="right">
-                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs uppercase ring-1 transition-all ${theme === 'white'
-                          ? 'bg-zinc-100 text-zinc-600 ring-zinc-200 group-hover:bg-zinc-900 group-hover:text-white'
-                          : 'bg-blue-600/10 text-blue-500 ring-blue-500/20 group-hover:bg-blue-600 group-hover:text-white'
-                        }`}>
-                        {row.client.short_code}
-                      </div>
-                    </Tooltip>
-                  </td>
-                  <td className="px-4 py-6">
-                    <Tooltip content={`Project Officer: ${row.client.project_owner_name}`} className="flex justify-center">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black border transition-colors ${theme === 'white' ? 'bg-zinc-50 text-zinc-500 border-zinc-200 group-hover:bg-zinc-100' : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:bg-zinc-700 group-hover:text-white'
-                        }`}>
-                        {row.client.project_owner_code}
-                      </div>
-                    </Tooltip>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    {editingLeads?.clientId === row.client.id ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <input
-                          autoFocus
-                          type="number"
-                          className={`w-16 px-2 py-1.5 text-xs font-black border rounded-lg outline-none ring-4 ${theme === 'white' ? 'bg-white border-blue-500 text-zinc-900 ring-blue-500/5' : 'bg-zinc-800 border-blue-500 text-white ring-blue-500/10'
-                            }`}
-                          value={editingLeads.value}
-                          onChange={(e) => setEditingLeads({ ...editingLeads, value: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleLeadsUpdate(row);
-                            if (e.key === 'Escape') setEditingLeads(null);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        className="space-y-1 cursor-pointer select-none"
-                        onDoubleClick={() => setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() })}
-                      >
-                        <div className="flex flex-col items-center">
-                          <span className={`font-black text-xl tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.leads.legit}</span>
-                          <TrendIndicator value={row.leads.change} />
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <div 
-                      className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform"
-                      onClick={() => setKeywordModal({
-                        clientId: row.client.id,
-                        clientName: row.client.name,
-                        type: 'top3',
-                        startDate: format(viewingPeriod?.start || subWeeks(new Date(), 1), 'yyyy-MM-dd'),
-                        endDate: format(viewingPeriod?.end || new Date(), 'yyyy-MM-dd')
-                      })}
-                    >
-                      <span className={`font-black text-md tracking-tighter ${theme === 'white' ? 'text-blue-600' : 'text-blue-400'}`}>{row.gscTraffic.top3}</span>
-                      <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest opacity-60">LIVE</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <div 
-                      className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform"
-                      onClick={() => setKeywordModal({
-                        clientId: row.client.id,
-                        clientName: row.client.name,
-                        type: 'top10',
-                        startDate: format(viewingPeriod?.start || subWeeks(new Date(), 1), 'yyyy-MM-dd'),
-                        endDate: format(viewingPeriod?.end || new Date(), 'yyyy-MM-dd')
-                      })}
-                    >
-                      <span className={`font-black text-md tracking-tighter ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{row.gscTraffic.top10}</span>
-                      <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">TAR: {row.client.top_10_target || 0}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <div className="flex flex-col items-center">
-                      <span className={`text-xs font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
-                        {row.gscTraffic.ctr.toFixed(2)}%
-                      </span>
-                      <TrendIndicator value={calculateChange(row.gscTraffic.ctr, row.gscTraffic.prevCtr)} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <div className="flex flex-col items-center">
-                      <span className={`text-xs font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
-                        {(row.gscTraffic.impressions / 1000).toFixed(1)}K
-                      </span>
-                      <TrendIndicator value={calculateChange(row.gscTraffic.impressions, row.gscTraffic.prevImpressions)} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <div className="flex flex-col items-center">
-                      <span className={`text-xs font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
-                        {(row.currentData?.tracked_keywords_avg_position || row.gscTraffic.position || 0).toFixed(1)}
-                      </span>
-                      <TrendIndicator value={calculatePosChange(row.currentData?.tracked_keywords_avg_position, row.prevData?.tracked_keywords_avg_position)} inverse />
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <Tooltip content={
-                      <div className="space-y-1">
-                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span>{row.currentRangeStr}</span></div>
-                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span>{row.prevRangeStr}</span></div>
-                      </div>
-                    }>
-                      <div className="flex flex-col items-center">
-                        <div className="flex items-baseline gap-1">
-                          <span className={`font-black text-md tracking-tighter ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{row.gscTraffic.current.toLocaleString()}</span>
-                          <span className="text-[9px] text-zinc-500 font-bold opacity-60">/ {row.gscTraffic.previous.toLocaleString()}</span>
-                        </div>
-                        <TrendIndicator value={row.gscTraffic.change} />
-                      </div>
-                    </Tooltip>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <Tooltip content={
-                      <div className="space-y-1">
-                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span>{row.currentRangeStr}</span></div>
-                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span>{row.prevRangeStr}</span></div>
-                      </div>
-                    }>
-                      <div className="flex flex-col items-center">
-                        <div className="flex items-baseline gap-1">
-                          <span className={`font-black text-md tracking-tighter ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{row.ga4Traffic.current.toLocaleString()}</span>
-                          <span className="text-[9px] text-zinc-500 font-bold opacity-60">/ {row.ga4Traffic.previous.toLocaleString()}</span>
-                        </div>
-                        <TrendIndicator value={row.ga4Traffic.change} />
-                      </div>
-                    </Tooltip>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <div className={`flex items-center justify-center gap-2 translate-y-1 border-t pt-2 ${theme === 'white' ? 'border-zinc-100' : 'border-white/5'}`}>
-                      <MiniMetric
-                        count={row.latestData?.blogs_published || row.currentData?.blogs_published || 0}
-                        color="blue"
-                        theme={theme}
-                        tooltip="Blogs Published"
-                        prefix="B"
-                      />
-                      <MiniMetric
-                        count={row.latestData?.backlinks_built || row.currentData?.backlinks_built || 0}
-                        color="purple"
-                        theme={theme}
-                        tooltip="Backlinks Built"
-                        prefix="BL"
-                      />
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <button
-                      onClick={() => setSelectedIntelligence({
-                        client: row.client,
-                        currentData: row.currentData,
-                        latestData: row.latestData,
-                        gsc: row.gscTraffic,
-                        ga4: row.ga4Traffic
-                      })}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${theme === 'white' ? 'bg-zinc-100 text-zinc-600 hover:bg-blue-600 hover:text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-blue-600 hover:text-white'
-                        } shadow-lg`}
-                    >
-                      <Activity size={18} />
-                    </button>
-                  </td>
-                  <td className="px-8 py-6 text-center sticky right-0 z-[19] border-l bg-inherit shadow-[-2px_0_10px_rgba(3,7,18,0.5)]">
-                    <Tooltip content={`Performance Status: ${row.status.reason}`} position="top" align="end">
-                      <div className={`w-3 h-3 rounded-full mx-auto ring-4 ${theme === 'white' ? 'ring-zinc-100' : 'ring-zinc-900'
-                        } ${row.status.color === 'green' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' :
-                          row.status.color === 'orange' ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' :
-                            'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
-                        }`} />
-                    </Tooltip>
-                  </td>
-                </tr>
+            
+            <nav className="hidden md:flex items-center gap-8">
+              {['Portfolio', 'Intelligence', 'Governance', 'Client View'].map((item, i) => (
+                <button key={item} className={`text-[10px] font-black uppercase tracking-widest transition-all relative py-1 ${
+                  i === 0 ? 'text-[#f47b20] border-b-2 border-[#f47b20]' : 'text-zinc-500 hover:text-white'
+                }`}>
+                  {item}
+                </button>
               ))}
-            </tbody>
-          </table>
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/10">
+              {['CEO', 'DRI', 'CLIENT'].map((role, i) => (
+                <button key={role} className={`px-5 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                  i === 0 ? 'bg-[#6ec5b8]/20 text-[#6ec5b8]' : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                  {role}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 border-l border-white/10 pl-6">
+               <button 
+                onClick={() => setTheme(theme === 'white' ? 'mission' : 'white')}
+                className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white transition-colors"
+               >
+                 {theme === 'white' ? <Moon size={16} /> : <Sun size={16} />}
+               </button>
+            </div>
+          </div>
         </div>
       </div>
 
+      <div className="max-w-[1800px] mx-auto px-8 pt-10">
+        {/* Intervention Queue Header */}
+        <div className="flex items-end justify-between mb-10 pb-6 border-b border-zinc-200/50 dark:border-white/5">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full bg-[#f47b20] animate-pulse" />
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">CEO Decision View</span>
+            </div>
+            <h2 className={`text-5xl font-black tracking-tighter uppercase italic ${theme === 'white' ? 'text-[#0a191e]' : 'text-white'}`}>Intervention Queue</h2>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center bg-white dark:bg-zinc-900 rounded-2xl p-1 border border-zinc-200 dark:border-white/5 shadow-sm">
+              <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'weekly' ? 'bg-[#0a191e] text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-600'}`}>Weekly</button>
+              <button onClick={() => setViewMode('monthly')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'monthly' ? 'bg-[#0a191e] text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-600'}`}>Monthly</button>
+              <button onClick={() => setViewMode('rolling')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'rolling' ? 'bg-[#0a191e] text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-600'}`}>Rolling 7D</button>
+            </div>
+
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+              <input
+                type="text"
+                placeholder="Filter clients..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`pl-10 pr-4 py-2.5 rounded-2xl text-sm font-bold outline-none border transition-all w-64 ${
+                  theme === 'white' ? 'bg-white border-zinc-200 focus:border-[#6ec5b8]' : 'bg-zinc-900 border-white/5 focus:border-[#6ec5b8]'
+                }`}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Portfolio Stats Bar (Mini) */}
+        <div className="grid grid-cols-5 gap-6 mb-10">
+           {[
+             { label: 'Total Leads', value: clients.reduce((acc, c) => acc + (c.leads_count || 0), 0), trend: '+14%', color: 'text-[#6ec5b8]' },
+             { label: 'Qualified Leads', value: Math.floor(clients.reduce((acc, c) => acc + (c.leads_count || 0), 0) * 0.58), trend: '+5%', color: 'text-[#6ec5b8]' },
+             { label: 'Proposals', value: 48, trend: 'stable', color: 'text-zinc-400' },
+             { label: 'Clients Won', value: 12, trend: '+2', color: 'text-[#6ec5b8]' },
+             { label: 'Blended CPL', value: '$42', trend: 'on target', color: 'text-[#6ec5b8]' }
+           ].map((stat) => (
+             <div key={stat.label} className={`p-6 rounded-[24px] border transition-all hover:scale-105 ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900 border-white/5'}`}>
+               <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">{stat.label}</span>
+               <div className="flex items-baseline gap-2 mt-2">
+                 <span className={`text-3xl font-black tracking-tighter ${theme === 'white' ? 'text-[#0a191e]' : 'text-white'}`}>{stat.value}</span>
+                 <span className={`text-[10px] font-black uppercase ${stat.color}`}>{stat.trend}</span>
+               </div>
+             </div>
+           ))}
+        </div>
+
+        {/* Main Table Container */}
+        <div className={`rounded-[32px] border overflow-hidden shadow-2xl ${theme === 'white' ? 'bg-white border-zinc-200 shadow-zinc-200/20' : 'bg-zinc-950 border-white/5'}`}>
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className={theme === 'white' ? 'bg-[#08242e]' : 'bg-zinc-900'}>
+                  <th className="pl-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Client Portfolio</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('status')}>
+                    <div className="flex items-center justify-center gap-2">
+                      RAG
+                      {sortConfig?.key === 'status' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                    </div>
+                  </th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">FRESHNESS</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">QUALITY</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('leads')}>
+                    LEADS
+                  </th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">BASELINE</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">TOP 3</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">TOP 10</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">ROAS</th>
+                  <th className="px-4 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">HEALTH</th>
+                  <th className="pr-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-right">ACTION</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-white/5'}`}>
+                {loading ? (
+                  Array(5).fill(0).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td colSpan={11} className={`px-6 py-12 ${theme === 'white' ? 'bg-zinc-50' : 'bg-white/5'}`} />
+                    </tr>
+                  ))
+                ) : filteredRows.map((row) => (
+                  <tr key={row.client.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-[#f8fafb]' : 'hover:bg-white/5'}`}>
+                    <td className="pl-8 py-6">
+                      <div className="flex flex-col">
+                        <span className={`text-sm font-black uppercase tracking-tight ${theme === 'white' ? 'text-[#0a191e]' : 'text-white'}`}>
+                          {row.client.name}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                          {row.client.short_code} • {row.client.project_owner_code}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          row.status.color === 'green' ? 'bg-[#6ec5b8]' : 
+                          row.status.color === 'orange' ? 'bg-[#f47b20]' : 'bg-[#d94a38]'
+                        }`} />
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${
+                          row.status.color === 'green' ? 'text-[#6ec5b8]' : 
+                          row.status.color === 'orange' ? 'text-[#f47b20]' : 'text-[#d94a38]'
+                        }`}>
+                          {row.status.color === 'green' ? 'On Track' : row.status.color === 'orange' ? 'Watch' : 'At Risk'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <span className={`text-xs font-black ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>85/100</span>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <span className={`text-xs font-black ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>92/100</span>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className={`font-black text-xl tracking-tighter ${theme === 'white' ? 'text-[#0a191e]' : 'text-white'}`}>{row.leads.legit}</span>
+                        <TrendIndicator value={row.leads.change} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${row.leads.change >= 0 ? 'text-[#6ec5b8]' : 'text-[#f47b20]'}`}>
+                        {row.leads.change >= 0 ? 'On Target' : 'Watch'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <div 
+                        className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform"
+                        onClick={() => setKeywordModal({
+                          clientId: row.client.id,
+                          clientName: row.client.name,
+                          type: 'top3',
+                          startDate: format(viewingPeriod?.start || subWeeks(new Date(), 1), 'yyyy-MM-dd'),
+                          endDate: format(viewingPeriod?.end || new Date(), 'yyyy-MM-dd')
+                        })}
+                      >
+                        <span className={`font-black text-md tracking-tighter ${theme === 'white' ? 'text-blue-600' : 'text-blue-400'}`}>{row.gscTraffic.top3}</span>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest opacity-60">LIVE</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <div 
+                        className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform"
+                        onClick={() => setKeywordModal({
+                          clientId: row.client.id,
+                          clientName: row.client.name,
+                          type: 'top10',
+                          startDate: format(viewingPeriod?.start || subWeeks(new Date(), 1), 'yyyy-MM-dd'),
+                          endDate: format(viewingPeriod?.end || new Date(), 'yyyy-MM-dd')
+                        })}
+                      >
+                        <span className={`font-black text-md tracking-tighter ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{row.gscTraffic.top10}</span>
+                        <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">TAR: {row.client.top_10_target || 0}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <span className={`text-xs font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>5.2x</span>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                         <div className="w-16 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#6ec5b8]" style={{ width: '84%' }} />
+                         </div>
+                         <span className="text-[10px] font-black">84</span>
+                      </div>
+                    </td>
+                    <td className="pr-8 py-6 text-right">
+                      <button 
+                        onClick={() => setSelectedIntelligence({
+                          client: row.client,
+                          currentData: row.currentData,
+                          latestData: row.latestData,
+                          gsc: row.gscTraffic,
+                          ga4: row.ga4Traffic
+                        })}
+                        className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 ml-auto ${
+                          theme === 'white' ? 'bg-[#f47b20] text-white shadow-lg shadow-[#f47b20]/30 hover:scale-105 active:scale-95' : 'bg-white text-zinc-950 hover:bg-zinc-200'
+                        }`}
+                      >
+                        Detail <ArrowRight size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
       {selectedIntelligence && (
         <IntelligenceModal 
           data={selectedIntelligence} 

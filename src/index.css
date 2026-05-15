@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -33,14 +33,14 @@
   }
 
   [data-theme='white'] {
-    --background: 0 0% 98%;
-    --foreground: 0 0% 10%;
+    --background: 195 10% 96%; /* #f0f4f5 */
+    --foreground: 200 50% 10%; /* #0a191e */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    --primary: 217 91% 60%;
-    --border: 0 0% 90%;
-    --accent: 217 91% 60%;
-    --font-heading: "Inter";
+    --card-foreground: 200 50% 10%;
+    --primary: 171 46% 60%; /* #6ec5b8 mint */
+    --border: 195 10% 90%;
+    --accent: 25 91% 54%; /* #f47b20 orange */
+    --font-heading: "Outfit";
     --heading-style: font-black;
   }
 }
@@ -50,7 +50,8 @@ body {
 }
 
 [data-theme='white'] body {
-  @apply bg-[#f8f9fa] text-slate-900;
+  @apply bg-[#f0f4f5] text-[#0a191e];
+  font-family: 'Inter', sans-serif;
 }
 
 [data-theme='white'] ::-webkit-scrollbar-track {
