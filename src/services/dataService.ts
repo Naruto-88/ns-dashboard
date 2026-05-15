@@ -108,6 +108,18 @@ export const getInsights = async (clientId: string, range: DateRange) => {
   }
 };
 
+export const getKeywordRankingDetails = async (clientId: string, range: DateRange) => {
+  try {
+    const response = await fetch(`/api/clients/${clientId}/keyword-ranking-details?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch keyword details');
+    return data;
+  } catch (error: any) {
+    console.error('Error in getKeywordRankingDetails:', error);
+    throw error;
+  }
+};
+
 export const getPerformanceTrend = async (clientId: string, range: DateRange) => {
   try {
     const response = await fetch(`/api/clients/${clientId}/performance-trend?startDate=${range.startDate}&endDate=${range.endDate}`);

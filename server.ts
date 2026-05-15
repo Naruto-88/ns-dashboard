@@ -30,6 +30,61 @@ app.set('trust proxy', true);
 app.use(express.json());
 app.use(cookieParser());
 
+app.get('/api/clients/:clientId/keyword-ranking-details', async (req, res) => {
+  const { clientId } = req.params;
+  const { startDate, endDate } = req.query;
+  console.log(`[DEBUG] HIT: /api/clients/${clientId}/keyword-ranking-details`);
+
+  if (!startDate || !endDate) return res.status(400).json({ error: 'startDate and endDate are required' });
+
+  try {
+    const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
+    const { data: client } = await supabase.from('clients').select('*').eq('id', clientId).single();
+    
+    if (!client) {
+      console.log(`[DEBUG] Client not found: ${clientId}`);
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    if (!auth || !client.gsc_site_url) {
+      console.log(`[DEBUG] No auth or GSC URL for client: ${clientId}`);
+      return res.json({ keywords: [] });
+    }
+
+    const searchconsole = google.searchconsole({ version: 'v1', auth });
+
+    const { response } = await fetchGscWithSelfHeal(
+      searchconsole,
+      clientId,
+      client.name,
+      client.gsc_site_url,
+      (url) => searchconsole.searchanalytics.query({
+        siteUrl: url,
+        requestBody: {
+          startDate: startDate as string,
+          endDate: endDate as string,
+          dimensions: ['query', 'page'],
+          rowLimit: 1000
+        }
+      })
+    );
+
+    const keywords = (response.data.rows || []).map((row: any) => ({
+      keyword: row.keys[0],
+      page: row.keys[1],
+      clicks: row.clicks,
+      impressions: row.impressions,
+      ctr: row.ctr,
+      position: row.position
+    }));
+
+    console.log(`[DEBUG] Returning ${keywords.length} keywords for ${clientId}`);
+    res.json({ keywords });
+  } catch (error: any) {
+    console.error('GSC Keyword Details Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -549,11 +604,12 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
       }
     }
 
-    // 2. Fetch GSC Data
-    let gscData = { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+    // 2. Fetch GSC Data (Summary & Keyword Counts)
+    let gscData = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
     if (client?.gsc_site_url) {
       try {
-        const { response } = await fetchGscWithSelfHeal(
+        // Summary call
+        const { response: summaryRes } = await fetchGscWithSelfHeal(
           searchconsole,
           clientId,
           client.name,
@@ -568,13 +624,35 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
           })
         );
 
-        const row = response.data.rows?.[0];
-        if (row) {
-          gscData.clicks = row.clicks || 0;
-          gscData.impressions = row.impressions || 0;
-          gscData.ctr = (row.ctr || 0) * 100;
-          gscData.position = row.position || 0;
+        const summaryRow = summaryRes.data.rows?.[0];
+        if (summaryRow) {
+          gscData.clicks = summaryRow.clicks || 0;
+          gscData.impressions = summaryRow.impressions || 0;
+          gscData.ctr = (summaryRow.ctr || 0) * 100;
+          gscData.position = summaryRow.position || 0;
         }
+
+        // Keyword counts call
+        const { response: keywordsRes } = await fetchGscWithSelfHeal(
+          searchconsole,
+          clientId,
+          client.name,
+          client.gsc_site_url,
+          (url) => searchconsole.searchanalytics.query({
+            siteUrl: url,
+            requestBody: {
+              startDate: startDate as string,
+              endDate: endDate as string,
+              dimensions: ['query'],
+              rowLimit: 1000
+            }
+          })
+        );
+
+        const keywordRows = keywordsRes.data.rows || [];
+        gscData.top3 = keywordRows.filter((r: any) => r.position <= 3).length;
+        gscData.top10 = keywordRows.filter((r: any) => r.position <= 10).length;
+
       } catch (e: any) {
         console.error('GSC Live Fetch self-heal failure:', e.message);
       }
@@ -585,6 +663,8 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
       gsc_impressions: gscData.impressions,
       gsc_ctr: parseFloat(gscData.ctr.toFixed(2)),
       gsc_position: parseFloat(gscData.position.toFixed(2)),
+      gsc_top3: gscData.top3,
+      gsc_top10: gscData.top10,
       ga4_traffic: ga4Data.traffic,
       ga4_new_users: ga4Data.newUsers,
       ga4_returning_users: ga4Data.returningUsers
