@@ -1,0 +1,335 @@
+import { supabase } from '../lib/supabase';
+import { DateRange, ComparisonResult, calculateMetricComparison, calculatePositionComparison } from '../lib/seoUtils';
+
+export interface Client {
+  id: string;
+  name: string;
+  short_code: string;
+  ga4_property_id: string;
+  gsc_site_url: string;
+  lead_event_names: string;
+  keyword_tracking_enabled: boolean;
+  api_import_enabled: boolean;
+  notes: string;
+  timezone: string;
+  lead_target_monthly: number;
+  avg_position_target: number;
+  technical_score_target: number;
+  project_owner_name: string;
+  project_owner_code: string;
+  top_10_target: number;
+}
+
+export interface WeeklyData {
+  id?: string;
+  client_id: string;
+  week_start_date: string;
+  gsc_clicks: number;
+  gsc_impressions: number;
+  gsc_ctr: number;
+  gsc_position: number;
+  ga4_traffic: number;
+  ga4_new_users: number;
+  ga4_returning_users: number;
+  leads_total: number;
+  leads_legit: number;
+  target_leads: number;
+  top_3_count: number;
+  top_10_count: number;
+  tracked_keywords_avg_position: number;
+  technical_score: number;
+  primary_issue_type?: string;
+  primary_insight?: string;
+  next_seo_action?: string;
+  weekly_activity_summary?: string;
+  pages_optimized: number;
+  blogs_published: number;
+  backlinks_built: number;
+  tech_fixes: number;
+  schema_updates: number;
+  internal_links: number;
+  notes?: string;
+}
+
+export const getClients = async (): Promise<Client[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .order('name', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching clients:', error);
+    return [];
+  }
+};
+
+export const getWeeklyData = async (clientId: string, range: DateRange): Promise<WeeklyData[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('weekly_data')
+      .select('*')
+      .eq('client_id', clientId)
+      .gte('week_start_date', range.startDate)
+      .lte('week_start_date', range.endDate)
+      .order('week_start_date', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching weekly data:', error);
+    return [];
+  }
+};
+
+export const getLiveMetrics = async (clientId: string, range: DateRange) => {
+  try {
+    const response = await fetch(`/api/clients/${clientId}/live-metrics?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch live metrics');
+    return data;
+  } catch (error: any) {
+    console.error('Error in getLiveMetrics:', error);
+    throw error;
+  }
+};
+
+export const getInsights = async (clientId: string, range: DateRange) => {
+  try {
+    const response = await fetch(`/api/clients/${clientId}/insights?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch insights');
+    return data;
+  } catch (error: any) {
+    console.error('Error in getInsights:', error);
+    throw error;
+  }
+};
+
+export const getPerformanceTrend = async (clientId: string, range: DateRange) => {
+  try {
+    const response = await fetch(`/api/clients/${clientId}/performance-trend?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch trend');
+    return data;
+  } catch (error: any) {
+    console.error('Error in getPerformanceTrend:', error);
+    throw error;
+  }
+};
+
+export interface DashboardMetrics {
+  clicks: ComparisonResult;
+  impressions: ComparisonResult;
+  ctr: ComparisonResult;
+  position: ComparisonResult;
+  traffic: ComparisonResult;
+  leads: ComparisonResult;
+  activityTotal: ComparisonResult;
+}
+
+export const aggregateMetrics = async (clientId: string, current: DateRange, previous: DateRange): Promise<DashboardMetrics> => {
+  const [currentLive, previousLive, currentWeekly, previousWeekly] = await Promise.all([
+    getLiveMetrics(clientId, current),
+    getLiveMetrics(clientId, previous),
+    getWeeklyData(clientId, current),
+    getWeeklyData(clientId, previous)
+  ]);
+
+  const sumWeekly = (data: WeeklyData[], key: keyof WeeklyData) => {
+    return data.reduce((acc, curr) => acc + (Number(curr[key]) || 0), 0);
+  };
+
+  const currSum = {
+    clicks: currentLive?.gsc_clicks || 0,
+    impressions: currentLive?.gsc_impressions || 0,
+    ctr: currentLive?.gsc_ctr || 0,
+    position: currentLive?.gsc_position || 0,
+    traffic: currentLive?.ga4_traffic || 0,
+    leads: sumWeekly(currentWeekly, 'leads_total'),
+    activity: sumWeekly(currentWeekly, 'pages_optimized') + sumWeekly(currentWeekly, 'blogs_published') + sumWeekly(currentWeekly, 'backlinks_built')
+  };
+
+  const prevSum = {
+    clicks: previousLive?.gsc_clicks || 0,
+    impressions: previousLive?.gsc_impressions || 0,
+    ctr: previousLive?.gsc_ctr || 0,
+    position: previousLive?.gsc_position || 0,
+    traffic: previousLive?.ga4_traffic || 0,
+    leads: sumWeekly(previousWeekly, 'leads_total'),
+    activity: sumWeekly(previousWeekly, 'pages_optimized') + sumWeekly(previousWeekly, 'blogs_published') + sumWeekly(previousWeekly, 'backlinks_built')
+  };
+
+  const hasPrev = !!previousLive;
+
+  return {
+    clicks: calculateMetricComparison(currSum.clicks, hasPrev ? prevSum.clicks : null),
+    impressions: calculateMetricComparison(currSum.impressions, hasPrev ? prevSum.impressions : null),
+    ctr: calculateMetricComparison(currSum.ctr, hasPrev ? prevSum.ctr : null),
+    position: calculatePositionComparison(currSum.position, hasPrev ? prevSum.position : null),
+    traffic: calculateMetricComparison(currSum.traffic, hasPrev ? prevSum.traffic : null),
+    leads: calculateMetricComparison(currSum.leads, hasPrev ? prevSum.leads : null),
+    activityTotal: calculateMetricComparison(currSum.activity, hasPrev ? prevSum.activity : null),
+  };
+};
+
+export const updateLegitLeads = async (clientId: string, weekStartDate: string, legitLeads: number): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('weekly_data')
+      .upsert({ 
+        client_id: clientId, 
+        week_start_date: weekStartDate, 
+        leads_legit: legitLeads 
+      }, { onConflict: 'client_id, week_start_date' });
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating legit leads:', error);
+    throw error;
+  }
+};
+
+export interface Keyword {
+  id: string;
+  query: string;
+  landing_page_url?: string;
+  target_url?: string;
+  priority?: string;
+  search_intent?: string;
+}
+
+export interface KeywordHistory {
+  id: string;
+  keyword_id: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+  date_start: string;
+}
+
+export const getKeywords = async (clientId: string): Promise<Keyword[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('keywords')
+      .select('*')
+      .eq('client_id', clientId);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching keywords:', error);
+    return [];
+  }
+};
+
+export const getKeywordHistory = async (clientId: string, range: DateRange): Promise<KeywordHistory[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('keyword_history')
+      .select('*, keywords!inner(client_id)')
+      .eq('keywords.client_id', clientId)
+      .gte('date_start', range.startDate)
+      .lte('date_start', range.endDate);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching keyword history:', error);
+    return [];
+  }
+};
+
+export const addClient = async (client: Omit<Client, 'id'>): Promise<string> => {
+  try {
+    const { data, error } = await supabase
+      .from('clients')
+      .insert(client)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data.id;
+  } catch (error) {
+    console.error('Error adding client:', error);
+    throw error;
+  }
+};
+
+export const updateClient = async (id: string, data: Partial<Client>): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('clients')
+      .update(data)
+      .eq('id', id);
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating client:', error);
+    throw error;
+  }
+};
+
+export const deleteClient = async (id: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('clients')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting client:', error);
+    throw error;
+  }
+};
+
+export const addKeyword = async (clientId: string, keyword: any): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('keywords')
+      .insert({ ...keyword, client_id: clientId });
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error adding keyword:', error);
+    throw error;
+  }
+};
+
+export const syncWeeklyData = async (clientId: string, data: Partial<WeeklyData>): Promise<void> => {
+  try {
+    const { id, ...saveData } = data;
+    if (id) {
+      const { error } = await supabase
+        .from('weekly_data')
+        .update(saveData)
+        .eq('id', id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('weekly_data')
+        .insert({ ...saveData, client_id: clientId });
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error('Error saving weekly data:', error);
+    throw error;
+  }
+};
+
+export const deleteKeyword = async (clientId: string, id: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('keywords')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting keyword:', error);
+    throw error;
+  }
+};

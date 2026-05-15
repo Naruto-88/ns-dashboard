@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SEO Hub - Team Portal</title>
+    <script>
+      // Defensive guard for window.fetch in AI Studio environment
+      // Some libraries try to polyfill fetch by re-assigning it, which fails in iframes where fetch is a read-only getter.
+      (function() {
+        try {
+          var _fetch = window.fetch;
+          if (_fetch) {
+            Object.defineProperty(window, 'fetch', {
+              configurable: true,
+              enumerable: true,
+              get: function() { return _fetch; },
+              set: function() { 
+                console.warn('Prevented attempt to overwrite window.fetch');
+              }
+            });
+          }
+        } catch (e) {
+          console.log('window.fetch is already non-configurable.');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

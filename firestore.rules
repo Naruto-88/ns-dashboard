@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definitions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "weerasinghemelaka1@gmail.com" || 
+        request.auth.token.email == "melaka@team.com" ||
+        request.auth.token.email_verified == true
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validations (Pillar 2)
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'short_code', 'ga4_property_id', 'gsc_site_url']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 256 &&
+             data.short_code is string && data.short_code.size() > 0 && data.short_code.size() <= 50 &&
+             data.ga4_property_id is string && data.ga4_property_id.size() > 0 &&
+             data.gsc_site_url is string && data.gsc_site_url.size() > 0;
+    }
+
+    function isValidKeyword(data) {
+      return data.keys().hasAll(['client_id', 'query']) &&
+             isValidId(data.client_id) &&
+             data.query is string && data.query.size() > 0 && data.query.size() <= 512;
+    }
+
+    function isValidWeeklyData(data) {
+      return data.keys().hasAll(['client_id', 'week_start', 'week_end']) &&
+             isValidId(data.client_id) &&
+             data.week_start is string && data.week_end is string;
+    }
+
+    // 1. The "Master Gate" (Pillar 1)
+    match /clients/{clientId} {
+      allow read, write: if isSignedIn();
+
+      match /keywords/{keywordId} {
+        allow read, write: if isSignedIn();
+      }
+
+      match /keyword_history/{historyId} {
+        allow read, write: if isSignedIn();
+      }
+
+      match /weekly_data/{dataId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    match /import_logs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+    }
+
+    match /google_tokens/{tokenId} {
+      // Strictly restrict tokens to server-side only or very specific users
+      allow read, write: if false; // Only server (admin-sdk) should touch these
+    }
+  }
+}

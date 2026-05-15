@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  :root {
+    /* Default is Midnight Boutique */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 100%;
+    --primary: 217 91% 60%;
+    --border: 0 0% 15%;
+    --accent: 217 91% 60%;
+    --font-heading: "Inter";
+    --heading-style: italic font-black;
+  }
+
+  [data-theme='mission'] {
+    --background: 240 10% 4%;
+    --foreground: 240 5% 96%;
+    --card: 240 10% 7%;
+    --card-foreground: 240 5% 96%;
+    --primary: 142 71% 45%; /* Emerald for precise feel */
+    --border: 240 5% 15%;
+    --accent: 142 71% 45%;
+    --font-heading: "JetBrains Mono";
+    --heading-style: font-bold;
+  }
+
+  [data-theme='white'] {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --primary: 217 91% 60%;
+    --border: 0 0% 90%;
+    --accent: 217 91% 60%;
+    --font-heading: "Inter";
+    --heading-style: font-black;
+  }
+}
+
+body {
+  @apply bg-black text-white antialiased selection:bg-blue-500/30 transition-colors duration-300;
+}
+
+[data-theme='white'] body {
+  @apply bg-[#f8f9fa] text-slate-900;
+}
+
+[data-theme='white'] ::-webkit-scrollbar-track {
+  @apply bg-zinc-100;
+}
+
+[data-theme='white'] ::-webkit-scrollbar-thumb {
+  @apply bg-zinc-300 border-zinc-100 hover:bg-zinc-400;
+}
+
+/* Custom scrollbar for premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-black;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-800 rounded-full border-2 border-black hover:bg-zinc-700;
+}

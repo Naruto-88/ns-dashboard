@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "Represents an SEO client with tracking configuration.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "short_code": { "type": "string", "description": "Short identifier for the client (e.g. EAH)" },
+        "ga4_property_id": { "type": "string", "description": "GA4 Property ID (numeric)" },
+        "gsc_site_url": { "type": "string", "description": "GSC Site URL (https://... or sc-domain:...)" },
+        "lead_event_names": { "type": "string", "description": "Comma-separated lead event names" },
+        "keyword_tracking_enabled": { "type": "boolean" },
+        "api_import_enabled": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "timezone": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ga4_property_id", "gsc_site_url"]
+    },
+    "Keyword": {
+      "title": "Keyword",
+      "description": "A keyword targeted by a client.",
+      "type": "object",
+      "properties": {
+        "client_id": { "type": "string" },
+        "query": { "type": "string" },
+        "landing_page_url": { "type": "string" },
+        "target_url": { "type": "string" },
+        "priority": { "type": "string" },
+        "search_intent": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["client_id", "query"]
+    },
+    "KeywordHistory": {
+      "title": "KeywordHistory",
+      "description": "Historical performance data for a keyword.",
+      "type": "object",
+      "properties": {
+        "keyword_id": { "type": "string" },
+        "client_id": { "type": "string" },
+        "date_start": { "type": "string", "format": "date" },
+        "date_end": { "type": "string", "format": "date" },
+        "query": { "type": "string" },
+        "landing_page_url": { "type": "string" },
+        "clicks": { "type": "number" },
+        "impressions": { "type": "number" },
+        "ctr": { "type": "number" },
+        "position": { "type": "number" },
+        "import_source": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "WeeklyData": {
+      "title": "WeeklyData",
+      "description": "Weekly aggregate metrics for a client.",
+      "type": "object",
+      "properties": {
+        "client_id": { "type": "string" },
+        "week_start": { "type": "string", "format": "date" },
+        "week_end": { "type": "string", "format": "date" },
+        "gsc_clicks": { "type": "number" },
+        "gsc_impressions": { "type": "number" },
+        "gsc_ctr": { "type": "number" },
+        "gsc_position": { "type": "number" },
+        "ga4_traffic": { "type": "number" },
+        "ga4_new_users": { "type": "number" },
+        "ga4_returning_users": { "type": "number" },
+        "leads_total": { "type": "number" },
+        "leads_legit": { "type": "number" },
+        "tech_score": { "type": "number" },
+        "pages_optimized": { "type": "number" },
+        "blogs_published": { "type": "number" },
+        "backlinks_built": { "type": "number" },
+        "tech_fixes": { "type": "number" },
+        "schema_updates": { "type": "number" },
+        "internal_links": { "type": "number" },
+        "import_source": { "type": "string" },
+        "imported_at": { "type": "string" },
+        "imported_by": { "type": "string" }
+      }
+    },
+    "ImportLog": {
+      "title": "ImportLog",
+      "description": "Log of data import operations.",
+      "type": "object",
+      "properties": {
+        "client_id": { "type": "string" },
+        "imported_at": { "type": "string", "format": "date-time" },
+        "imported_by": { "type": "string" },
+        "status": { "type": "string" },
+        "message": { "type": "string" },
+        "operation_type": { "type": "string" }
+      }
+    },
+    "GoogleToken": {
+      "title": "GoogleToken",
+      "description": "Securely stored Google OAuth tokens for API access.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "access_token": { "type": "string" },
+        "refresh_token": { "type": "string" },
+        "expiry_date": { "type": "number" },
+        "last_connected": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Client configurations"
+    },
+    "/clients/{clientId}/keywords/{keywordId}": {
+      "schema": "Keyword",
+      "description": "Keywords for a specific client"
+    },
+    "/clients/{clientId}/keyword_history/{historyId}": {
+      "schema": "KeywordHistory",
+      "description": "Historical data for keywords"
+    },
+    "/clients/{clientId}/weekly_data/{dataId}": {
+      "schema": "WeeklyData",
+      "description": "Weekly aggregate metrics"
+    },
+    "/import_logs/{logId}": {
+      "schema": "ImportLog",
+      "description": "Global import logs"
+    },
+    "/google_tokens/central_account": {
+      "schema": "GoogleToken",
+      "description": "Tokens for the central reporting account"
+    },
+    "/google_tokens/{clientId}": {
+      "schema": "GoogleToken",
+      "description": "Tokens for a specific client account"
+    }
+  }
+}
