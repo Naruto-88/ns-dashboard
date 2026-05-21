@@ -85,8 +85,8 @@ export default function GlobalSettings() {
     <div className="max-w-4xl mx-auto space-y-12 pb-24">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className={`text-3xl font-black uppercase tracking-tighter italic ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Command Center</h2>
-          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">Operational configuration and satellite links</p>
+          <h2 className={`text-3xl font-black font-heading uppercase tracking-tighter italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Command Center</h2>
+          <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Operational configuration and satellite links</p>
         </div>
       </div>
 
@@ -97,16 +97,16 @@ export default function GlobalSettings() {
             theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
           }`}>
             <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Palette size={120} className="text-blue-500" />
+              <Palette size={120} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
             </div>
             <div className="relative z-10">
               <div className="flex items-center gap-4 mb-8">
-                <div className="p-3 bg-blue-600/10 text-blue-500 rounded-2xl border border-blue-500/20">
+                <div className={`p-3 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-blue-600/10 text-blue-500 border-blue-500/20'}`}>
                   <Palette size={24} />
                 </div>
                 <div>
-                  <h3 className={`text-xl font-black uppercase italic tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Visual Protocol</h3>
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Select operational aesthetic</p>
+                  <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Visual Protocol</h3>
+                  <p className={`text-[10px] uppercase tracking-widest font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Select operational aesthetic</p>
                 </div>
               </div>
 
@@ -116,7 +116,7 @@ export default function GlobalSettings() {
                   className={`relative p-6 rounded-[32px] border transition-all text-left group/btn ${
                     theme === 'midnight' 
                       ? 'bg-blue-600 border-blue-500 shadow-[0_0_40px_rgba(37,99,235,0.2)]' 
-                      : theme === 'white' ? 'bg-zinc-50 border-zinc-200 hover:border-zinc-300' : 'bg-zinc-800/50 border-white/5 hover:border-white/10'
+                      : theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 hover:border-[#76c9be]/30' : 'bg-zinc-800/50 border-white/5 hover:border-white/10'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-4">
@@ -132,7 +132,7 @@ export default function GlobalSettings() {
                   className={`relative p-6 rounded-[32px] border transition-all text-left group/btn ${
                     theme === 'mission' 
                       ? 'bg-emerald-600 border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.2)]' 
-                      : theme === 'white' ? 'bg-zinc-50 border-zinc-200 hover:border-zinc-300' : 'bg-zinc-800/50 border-white/5 hover:border-white/10'
+                      : theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 hover:border-[#76c9be]/30' : 'bg-zinc-800/50 border-white/5 hover:border-white/10'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-4">
@@ -147,7 +147,7 @@ export default function GlobalSettings() {
                   onClick={() => setTheme('white')}
                   className={`relative p-6 rounded-[24px] border transition-all text-left group/btn ${
                     theme === 'white' 
-                      ? 'bg-zinc-900 border-zinc-900 shadow-xl' 
+                      ? 'bg-[#082a36] border-[#082a36] shadow-xl' 
                       : 'bg-white border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
@@ -155,28 +155,28 @@ export default function GlobalSettings() {
                     <Palette size={24} className={theme === 'white' ? 'text-white' : 'text-zinc-500'} />
                     {theme === 'white' && <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_#10b981]" />}
                   </div>
-                  <h4 className={`text-sm font-black uppercase tracking-widest ${theme === 'white' ? 'text-white' : 'text-zinc-900'}`}>White Boutique</h4>
-                  <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-zinc-500' : 'text-zinc-500'}`}>High Contrast Light</p>
+                  <h4 className={`text-sm font-black font-heading uppercase tracking-widest ${theme === 'white' ? 'text-white' : 'text-zinc-900'}`}>White Boutique</h4>
+                  <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#76c9be]' : 'text-zinc-500'}`}>High Contrast Light</p>
                 </button>
               </div>
             </div>
           </section>
 
           <section className={`rounded-[24px] border shadow-2xl backdrop-blur-xl transition-all duration-300 overflow-hidden group ${
-            theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+            theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
           }`}>
             <div className={`p-10 border-b flex items-center justify-between transition-colors ${
               theme === 'white' ? 'bg-zinc-50/50 border-zinc-100' : 'bg-zinc-950/50 border-white/5'
             }`}>
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-2xl border transition-all ${
-                  theme === 'white' ? 'bg-white border-zinc-200 text-blue-600' : 'bg-zinc-800 text-blue-400 border-white/5'
+                  theme === 'white' ? 'bg-[#76c9be]/5 border-[#76c9be]/20 text-[#76c9be]' : 'bg-zinc-800 text-blue-400 border-white/5'
                 }`}>
                   <Globe size={24} />
                 </div>
                 <div>
-                  <h3 className={`text-xl font-black uppercase italic tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Satellite Uplink</h3>
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Central Google OAuth Protocol</p>
+                  <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Satellite Uplink</h3>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Central Google OAuth Protocol</p>
                 </div>
               </div>
               {!status?.is_initialized && (
@@ -186,7 +186,9 @@ export default function GlobalSettings() {
                 </div>
               )}
               {status?.connected && status?.is_initialized && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[9px] font-black rounded-full border border-emerald-500/20 uppercase tracking-widest">
+                <div className={`flex items-center gap-2 px-3 py-1 text-[9px] font-black rounded-full border uppercase tracking-widest ${
+                  theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                }`}>
                   <CheckCircle2 size={12} />
                   Active Link
                 </div>
@@ -212,9 +214,9 @@ export default function GlobalSettings() {
               {status?.redirect_uri && (
                 <div className="space-y-6">
                   <div className={`p-8 border rounded-[32px] space-y-4 shadow-inner transition-colors ${
-                    theme === 'white' ? 'bg-zinc-50/50 border-zinc-200' : 'bg-zinc-950 border-white/5'
+                    theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-zinc-950 border-white/5'
                   }`}>
-                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Callback Terminal (Redirect URI)</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-600'}`}>Callback Terminal (Redirect URI)</label>
                     <div className="flex gap-3">
                       <input 
                         readOnly 
@@ -226,36 +228,36 @@ export default function GlobalSettings() {
                       <button 
                         onClick={() => copyToClipboard(status.redirect_uri!)}
                         className={`px-6 border rounded-2xl text-[10px] font-black transition-all uppercase tracking-widest active:scale-95 ${
-                          theme === 'white' ? 'bg-zinc-900 text-white border-zinc-900 hover:bg-zinc-800' : 'bg-zinc-800 border-white/5 text-white hover:bg-zinc-700'
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] hover:bg-[#082a36]/90' : 'bg-zinc-800 border-white/5 text-white hover:bg-zinc-700'
                         }`}
                       >
                         Copy
                       </button>
                     </div>
                     <div className={`flex gap-3 p-4 border rounded-2xl transition-colors ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900 border-white/5'
+                      theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-900 border-white/5'
                     }`}>
-                      <AlertCircle size={16} className="text-zinc-600 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest leading-relaxed italic">
+                      <AlertCircle size={16} className={`shrink-0 mt-0.5 ${theme === 'white' ? 'text-[#76c9be]' : 'text-zinc-600'}`} />
+                      <p className={`text-[10px] font-black uppercase tracking-widest leading-relaxed italic ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
                         Protocol: You must copy the exact terminal path above into your G-Console credentials. Subdomain-only links will trigger a 
-                        <span className={theme === 'white' ? 'text-zinc-900' : 'text-white'}> Security Exception (403)</span>.
+                        <span className={theme === 'white' ? 'text-[#082a36]' : 'text-white'}> Security Exception (403)</span>.
                       </p>
                     </div>
                   </div>
 
                   {!status?.connected && (
                     <div className={`p-8 rounded-[32px] border space-y-4 transition-colors ${
-                      theme === 'white' ? 'bg-amber-500/5 border-amber-200' : 'bg-amber-500/5 border-amber-500/20'
+                      theme === 'white' ? 'bg-[#f47b20]/5 border-[#f47b20]/20' : 'bg-amber-500/5 border-amber-500/20'
                     }`}>
-                      <h4 className="text-sm font-black text-amber-500 flex items-center gap-2 uppercase italic tracking-tighter">
+                      <h4 className={`text-sm font-black flex items-center gap-2 uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}`}>
                         <Zap size={18} />
                         Resolution Protocols for Access Block
                       </h4>
-                      <ul className="text-[10px] text-zinc-400 space-y-3 uppercase tracking-widest font-black leading-relaxed">
-                        <li className="flex gap-3"><span className="text-amber-500">→</span> <span>Set state to <span className={theme === 'white' ? 'text-zinc-900 italic' : 'text-white italic'}>"Production"</span> in OAuth Consent Screen (Fixes 403).</span></li>
-                        <li className="flex gap-3 items-start"><span className="text-amber-500">→</span> <span>Add your email to <span className={theme === 'white' ? 'text-zinc-900 italic' : 'text-white italic'}>"Authorized Test Users"</span>.</span></li>
-                        <li className="flex gap-3 items-start"><span className="text-amber-500">→</span> <span>Whitelist <span className={theme === 'white' ? 'text-zinc-900 italic' : 'text-white italic'}>run.app</span> as an Authorized Domain.</span></li>
-                        <li className="flex gap-3 items-start"><span className="text-amber-500">→</span> <span>Initiate link via <span className={theme === 'white' ? 'text-zinc-900 italic' : 'text-white italic'}>Incognito Node</span> to prevent session collisions.</span></li>
+                      <ul className={`text-[10px] space-y-3 uppercase tracking-widest font-black leading-relaxed ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>
+                        <li className="flex gap-3"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Set state to <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>"Production"</span> in OAuth Consent Screen (Fixes 403).</span></li>
+                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Add your email to <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>"Authorized Test Users"</span>.</span></li>
+                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Whitelist <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>run.app</span> as an Authorized Domain.</span></li>
+                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Initiate link via <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>Incognito Node</span> to prevent session collisions.</span></li>
                       </ul>
                     </div>
                   )}
@@ -266,37 +268,37 @@ export default function GlobalSettings() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div className="space-y-8">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Identified Link</label>
-                      <p className={`text-sm font-black italic truncate ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{status.email}</p>
+                      <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>Identified Link</label>
+                      <p className={`text-sm font-black font-heading italic truncate ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{status.email}</p>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Last Pulse Detected</label>
-                      <p className="text-xs font-black text-zinc-400 font-mono">
+                      <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>Last Pulse Detected</label>
+                      <p className={`text-xs font-black font-mono ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-400'}`}>
                         {status.last_connected ? new Date(status.last_connected).toLocaleString() : 'PENDING'}
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Encryption Integrity</label>
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${status.token_status?.includes('Valid') ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <label className={`text-[9px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>Encryption Integrity</label>
+                      <p className={`text-[10px] font-black uppercase tracking-widest ${status.token_status?.includes('Valid') ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500')}`}>
                         {status.token_status || 'UNKNOWN'}
                       </p>
                     </div>
                   </div>
                   <div className={`p-8 rounded-[32px] border space-y-6 relative group/card transition-colors ${
-                    theme === 'white' ? 'bg-zinc-50/50 border-zinc-200' : 'bg-zinc-950 border-white/5'
+                    theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-zinc-950 border-white/5'
                   }`}>
                     <div className="flex items-center gap-3">
-                      <Shield size={18} className="text-blue-500" />
-                      <h4 className={`text-xs font-black uppercase tracking-widest ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Security Clearance</h4>
+                      <Shield size={18} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
+                      <h4 className={`text-xs font-black font-heading uppercase tracking-widest ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Security Clearance</h4>
                     </div>
-                    <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest leading-relaxed italic">
+                    <p className={`text-[10px] font-black uppercase tracking-widest leading-relaxed italic ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>
                       Automated reporting nodes use vault-encrypted keys. Access level is strictly set to read-only surveillance.
                     </p>
                     <div className="flex flex-col gap-3">
                       <button 
                         onClick={handleConnect}
                         className={`w-full flex items-center justify-center gap-3 px-6 py-3 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
-                          theme === 'white' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-800 border-white/5 text-white'
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-zinc-800 border-white/5 text-white'
                         } hover:brightness-110`}
                       >
                         <RefreshCw size={14} />
@@ -305,7 +307,9 @@ export default function GlobalSettings() {
                       <button 
                         onClick={fetchSites}
                         disabled={loadingSites}
-                        className={`w-full flex items-center justify-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all active:scale-95 disabled:opacity-50`}
+                        className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 ${
+                          theme === 'white' ? 'bg-[#76c9be] text-white hover:bg-[#76c9be]/90' : 'bg-blue-600 text-white hover:brightness-110'
+                        }`}
                       >
                         {loadingSites ? <RefreshCw size={14} className="animate-spin" /> : <Monitor size={14} />}
                         Scan Authorized Sites
@@ -338,22 +342,24 @@ export default function GlobalSettings() {
                     <div className="absolute inset-0 bg-blue-500/5 blur-[40px] rounded-full" />
                   </div>
                   <div className="max-w-md space-y-3">
-                    <h4 className={`text-xl font-black uppercase italic tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Link Required</h4>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest leading-relaxed px-10">
+                    <h4 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Link Required</h4>
+                    <p className={`text-[10px] font-black uppercase tracking-widest leading-relaxed px-10 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                       Automated surveillance nodes require a high-clearance Google account for global data collection.
                     </p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
                     <button 
                       onClick={handleConnect}
-                      className="flex-1 flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
+                      className={`flex-1 flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+                        theme === 'white' ? 'bg-[#f47b20] text-white shadow-[#f47b20]/20 hover:bg-[#f47b20]/90' : 'bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500'
+                      }`}
                     >
                       Establish Link
                     </button>
                     <button 
                       onClick={() => window.open(window.location.href, '_blank')}
                       className={`flex-1 flex items-center justify-center gap-3 px-8 py-4 border rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 ${
-                        theme === 'white' ? 'bg-zinc-100 border-zinc-200 text-zinc-500 hover:bg-zinc-200' : 'bg-zinc-800 border-white/5 text-zinc-400 hover:bg-zinc-700'
+                        theme === 'white' ? 'bg-[#76c9be]/10 border-[#76c9be]/20 text-[#082a36] hover:bg-[#76c9be]/20' : 'bg-zinc-800 border-white/5 text-zinc-400 hover:bg-zinc-700'
                       }`}
                     >
                       Bypass Node (iFrame) <ExternalLink size={14} />
@@ -366,20 +372,20 @@ export default function GlobalSettings() {
 
           {authorizedSites.length > 0 && (
             <section className={`rounded-[40px] border shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-500 overflow-hidden transition-colors ${
-              theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+              theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
             }`}>
                <div className={`p-10 border-b flex items-center justify-between ${
                  theme === 'white' ? 'bg-zinc-50/50 border-zinc-100' : 'bg-zinc-950/50 border-white/5'
                }`}>
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-2xl border transition-all ${
-                    theme === 'white' ? 'bg-white border-zinc-200 text-blue-600' : 'bg-blue-600/10 text-blue-400 border-white/5'
+                    theme === 'white' ? 'bg-[#76c9be]/5 border-[#76c9be]/20 text-[#76c9be]' : 'bg-blue-600/10 text-blue-400 border-white/5'
                   }`}>
                     <Monitor size={24} />
                   </div>
                   <div>
-                    <h3 className={`text-xl font-black uppercase italic tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Asset Synchronization</h3>
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Authorized GSC Properties Detected</p>
+                    <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Asset Synchronization</h3>
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Authorized GSC Properties Detected</p>
                   </div>
                 </div>
                 <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
@@ -389,18 +395,18 @@ export default function GlobalSettings() {
               <div className="p-10">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {authorizedSites.map((site) => (
-                    <div key={site} className={`flex items-center justify-between p-4 border rounded-2xl group hover:border-blue-500/30 transition-all ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'
+                    <div key={site} className={`flex items-center justify-between p-4 border rounded-2xl group transition-all ${
+                      theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5 hover:border-[#76c9be]/30' : 'bg-zinc-950 border-white/5'
                     }`}>
                       <div className="flex items-center gap-4 overflow-hidden">
-                        <Globe size={16} className="text-zinc-600 group-hover:text-blue-500 transition-colors shrink-0" />
-                        <span className={`text-[11px] font-black group-hover:text-white transition-colors truncate uppercase tracking-tighter ${
-                          theme === 'white' ? 'text-zinc-600 font-bold group-hover:text-zinc-900' : 'text-zinc-400'
+                        <Globe size={16} className={`transition-colors shrink-0 ${theme === 'white' ? 'text-[#76c9be]' : 'text-zinc-600 group-hover:text-blue-500'}`} />
+                        <span className={`text-[11px] font-black transition-colors truncate uppercase tracking-tighter ${
+                          theme === 'white' ? 'text-[#607a80] group-hover:text-[#082a36]' : 'text-zinc-400 group-hover:text-white'
                         }`}>{site}</span>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(site)}
-                        className={`p-2 transition-colors ${theme === 'white' ? 'text-zinc-400 hover:text-zinc-900' : 'text-zinc-700 hover:text-white'}`}
+                        className={`p-2 transition-colors ${theme === 'white' ? 'text-[#607a80] hover:text-[#082a36]' : 'text-zinc-700 hover:text-white'}`}
                       >
                         <ExternalLink size={14} />
                       </button>
@@ -408,11 +414,11 @@ export default function GlobalSettings() {
                   ))}
                 </div>
                 <div className={`mt-8 p-6 border rounded-3xl flex items-start gap-4 transition-colors ${
-                  theme === 'white' ? 'bg-blue-50/50 border-blue-100' : 'bg-zinc-950 border-blue-500/10'
+                  theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-950 border-blue-500/10'
                 }`}>
-                  <AlertCircle size={18} className="text-blue-500 shrink-0 mt-1" />
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest leading-relaxed">
-                    Deployment Note: You must use the <span className={theme === 'white' ? 'text-zinc-900 italic' : 'text-white italic'}>EXACT</span> URL strings listed above in your Client Management settings. 
+                  <AlertCircle size={18} className={theme === 'white' ? 'text-[#76c9be] shrink-0 mt-1' : 'text-blue-500 shrink-0 mt-1'} />
+                  <p className={`text-[10px] font-black uppercase tracking-widest leading-relaxed ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                    Deployment Note: You must use the <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>EXACT</span> URL strings listed above in your Client Management settings. 
                     Adding or omitting a trailing slash (/) will result in a <span className="text-rose-500">Permission Denied</span> error from Google Satellite.
                   </p>
                 </div>
@@ -423,11 +429,11 @@ export default function GlobalSettings() {
 
         <aside className="space-y-8">
           <section className={`rounded-[40px] border p-10 shadow-2xl backdrop-blur-xl transition-all ${
-            theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+            theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
           }`}>
-            <h3 className={`text-lg font-black uppercase italic tracking-tighter mb-6 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Database Ops</h3>
+            <h3 className={`text-lg font-black font-heading uppercase italic tracking-tighter mb-6 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Database Ops</h3>
             <div className="space-y-4">
-              <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest leading-relaxed mb-6">
+              <p className={`text-[9px] font-black uppercase tracking-widest leading-relaxed mb-6 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                 Initialize client nodes and operational officer accounts.
               </p>
               <button 
@@ -443,7 +449,7 @@ export default function GlobalSettings() {
                   }
                 }}
                 className={`w-full flex items-center justify-center gap-3 px-6 py-4 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
-                  theme === 'white' ? 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
+                  theme === 'white' ? 'bg-[#76c9be]/5 text-[#082a36] border-[#163f4d]/10 hover:bg-[#76c9be]/10' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
                 }`}
               >
                 <RefreshCw size={16} />
@@ -453,18 +459,20 @@ export default function GlobalSettings() {
           </section>
 
           <section className={`rounded-[40px] border p-10 shadow-2xl backdrop-blur-xl transition-all ${
-            theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+            theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
           }`}>
-            <h3 className={`text-lg font-black uppercase italic tracking-tighter mb-8 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Pulse Scheduler</h3>
+            <h3 className={`text-lg font-black font-heading uppercase italic tracking-tighter mb-8 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Pulse Scheduler</h3>
             <div className="space-y-6">
               <div className={`p-6 rounded-[32px] border transition-colors ${
-                theme === 'white' ? 'bg-zinc-50 border-zinc-100' : 'bg-zinc-950 border-white/5'
+                theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-950 border-white/5'
               }`}>
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Weekly Cycle</p>
-                <p className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mb-4">Monday 0400 Local Time</p>
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Weekly Cycle</p>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-4 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>Monday 0400 Local Time</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 uppercase tracking-widest">Active</span>
-                  <button className={`text-[9px] font-black uppercase tracking-widest transition-colors ${theme === 'white' ? 'text-blue-600 hover:text-blue-700' : 'text-blue-400 hover:text-blue-300'}`}>Mod Spec</button>
+                  <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest ${
+                    theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                  }`}>Active</span>
+                  <button className={`text-[9px] font-black uppercase tracking-widest transition-colors ${theme === 'white' ? 'text-[#76c9be] hover:text-[#082a36]' : 'text-blue-400 hover:text-blue-300'}`}>Mod Spec</button>
                 </div>
               </div>
             </div>

@@ -140,6 +140,8 @@ export interface DashboardMetrics {
   traffic: ComparisonResult;
   leads: ComparisonResult;
   activityTotal: ComparisonResult;
+  top3: number;
+  top10: number;
 }
 
 export const aggregateMetrics = async (clientId: string, current: DateRange, previous: DateRange): Promise<DashboardMetrics> => {
@@ -184,6 +186,8 @@ export const aggregateMetrics = async (clientId: string, current: DateRange, pre
     traffic: calculateMetricComparison(currSum.traffic, hasPrev ? prevSum.traffic : null),
     leads: calculateMetricComparison(currSum.leads, hasPrev ? prevSum.leads : null),
     activityTotal: calculateMetricComparison(currSum.activity, hasPrev ? prevSum.activity : null),
+    top3: currentLive?.gsc_top3 || 0,
+    top10: currentLive?.gsc_top10 || 0
   };
 };
 

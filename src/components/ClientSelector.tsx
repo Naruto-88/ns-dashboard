@@ -46,7 +46,7 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`flex items-center justify-between w-full md:w-64 px-4 py-2 border rounded-xl shadow-xl transition-all text-xs font-black uppercase tracking-widest ${
-            theme === 'white' ? 'bg-white border-zinc-200 text-zinc-900 hover:bg-zinc-50' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'
+            theme === 'white' ? 'bg-white border-[#163f4d]/10 text-[#082a36] hover:bg-[#76c9be]/5' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'
           }`}
           id="client-selector-button"
         >
@@ -54,7 +54,9 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
             {selectedClient ? (
               <span className="flex items-center gap-2">
                 {selectedClient.short_code && (
-                  <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-lg font-black font-mono">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-lg font-black font-mono ${
+                    theme === 'white' ? 'bg-[#76c9be] text-white' : 'bg-blue-600 text-white'
+                  }`}>
                     {selectedClient.short_code}
                   </span>
                 )}
@@ -68,10 +70,10 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
 
       {isOpen && (
         <div className={`absolute z-[100] mt-2 w-full min-w-[320px] border rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in duration-100 backdrop-blur-xl ${
-          theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-950 border-white/10'
+          theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-950 border-white/10'
         }`} id="client-selector-dropdown">
           <div className={`p-3 border-b flex items-center gap-3 ${
-            theme === 'white' ? 'border-zinc-100' : 'border-white/5'
+            theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'
           }`}>
             <Search size={16} className="text-zinc-600 ml-2" />
             <input
@@ -80,8 +82,8 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
               placeholder="Filter nodes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={`w-full py-2 text-xs bg-transparent outline-none placeholder:text-zinc-700 font-black uppercase tracking-widest ${
-                theme === 'white' ? 'text-zinc-900' : 'text-white'
+              className={`w-full py-2 text-xs bg-transparent outline-none font-black uppercase tracking-widest ${
+                theme === 'white' ? 'text-[#082a36] placeholder:text-[#607a80]/50' : 'text-white placeholder:text-zinc-700'
               }`}
             />
           </div>
@@ -97,14 +99,14 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
                   }}
                   className={`w-full text-left px-4 py-3 rounded-xl text-[11px] flex items-center justify-between transition-all ${
                     selectedId === client.id 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 font-black' 
-                      : theme === 'white' ? 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 font-black' : 'text-zinc-500 hover:bg-white/5 hover:text-white font-black'
+                      ? (theme === 'white' ? 'bg-[#76c9be] text-white shadow-lg shadow-[#76c9be]/20 font-black' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 font-black')
+                      : theme === 'white' ? 'text-[#607a80] hover:bg-[#76c9be]/5 hover:text-[#082a36] font-black' : 'text-zinc-500 hover:bg-white/5 hover:text-white font-black'
                   }`}
                 >
                   <div className="flex items-center gap-3 truncate uppercase tracking-tight">
                     {client.short_code && (
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
-                        selectedId === client.id ? 'bg-white/20' : theme === 'white' ? 'bg-zinc-100 text-zinc-500 border border-zinc-200' : 'bg-zinc-800 text-zinc-500 border border-white/5'
+                        selectedId === client.id ? 'bg-white/20' : theme === 'white' ? 'bg-[#76c9be]/5 text-[#607a80] border border-[#163f4d]/5' : 'bg-zinc-800 text-zinc-500 border border-white/5'
                       }`}>
                         {client.short_code}
                       </span>

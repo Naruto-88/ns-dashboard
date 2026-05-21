@@ -585,10 +585,14 @@ NOTIFY pgrst, 'reload schema';
   };
 
   const filteredClients = clients.filter(client => {
+    if (!searchTerm.trim()) return true;
     const name = client.name || '';
     const code = client.short_code || '';
-    return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           code.toLowerCase().includes(searchTerm.toLowerCase());
+    const terms = searchTerm.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    return terms.some(term =>
+      name.toLowerCase().includes(term) ||
+      code.toLowerCase().includes(term)
+    );
   });
 
   return (
@@ -610,33 +614,35 @@ NOTIFY pgrst, 'reload schema';
       )}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className={`text-2xl font-black uppercase tracking-tighter italic ${isWhite ? 'text-zinc-900' : 'text-white'}`}>Client Management</h2>
-          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1 italic">Configure security and tracking nodes</p>
+          <h2 className={`text-2xl font-black font-heading uppercase tracking-tighter italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>Client Management</h2>
+          <p className={`text-[10px] font-black uppercase tracking-widest mt-1 italic ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>Configure security and tracking nodes</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={16} />
+            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isWhite ? 'text-[#607a80]' : 'text-zinc-600'}`} size={16} />
             <input 
               type="text" 
               placeholder="Search nodes..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-xs font-black focus:outline-none focus:border-blue-500 transition-all w-64 uppercase tracking-widest ${
-                theme === 'white' ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-xs font-black focus:outline-none transition-all w-64 uppercase tracking-widest ${
+                isWhite ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
               }`}
             />
           </div>
           <button 
             onClick={checkDbConnection}
             className={`px-5 py-2.5 border rounded-2xl font-black text-[9px] uppercase tracking-widest hover:brightness-110 transition-all ${
-              theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600' : 'bg-zinc-900 border-white/5 text-zinc-400'
+              isWhite ? 'bg-white border-[#163f4d]/10 text-[#607a80]' : 'bg-zinc-900 border-white/5 text-zinc-400'
             }`}
           >
             Pings DB
           </button>
             <button 
               onClick={handleCopySql}
-              className="px-5 py-2.5 bg-amber-500/10 text-amber-500 rounded-2xl font-black text-[9px] hover:bg-amber-500/20 transition-all border border-amber-500/20 flex items-center gap-2 uppercase tracking-widest shadow-lg shadow-amber-500/5"
+              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] transition-all border flex items-center gap-2 uppercase tracking-widest shadow-lg ${
+                isWhite ? 'bg-[#f47b20]/10 text-[#f47b20] border-[#f47b20]/20 shadow-[#f47b20]/5 hover:bg-[#f47b20]/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-amber-500/5 hover:bg-amber-500/20'
+              }`}
               title="Fix database columns if you see schema errors"
             >
               <Shield size={14} />
@@ -644,8 +650,8 @@ NOTIFY pgrst, 'reload schema';
             </button>
             <button 
               onClick={handleBootstrap}
-              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] hover:bg-zinc-700 transition-all uppercase tracking-widest border ${
-                theme === 'white' ? 'bg-zinc-100 text-zinc-900 border-zinc-200' : 'bg-zinc-800 text-white border-white/5'
+              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] transition-all uppercase tracking-widest border ${
+                isWhite ? 'bg-[#76c9be]/5 text-[#082a36] border-[#163f4d]/10 hover:bg-[#76c9be]/10' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
               }`}
             >
               Seed Accounts
@@ -654,7 +660,7 @@ NOTIFY pgrst, 'reload schema';
               onClick={handleScanAllAccess}
               disabled={repairing}
               className={`px-5 py-2.5 rounded-2xl font-black text-[9px] hover:brightness-110 transition-all border flex items-center gap-2 uppercase tracking-widest shadow-lg disabled:opacity-50 ${
-                theme === 'white' ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
+                isWhite ? 'bg-[#082a36] text-white border-[#082a36] shadow-[#082a36]/20' : 'bg-blue-500 text-white border-blue-400 shadow-blue-500/20'
               }`}
             >
               {repairing ? <RefreshCw size={14} className="animate-spin" /> : <Activity size={14} />}
@@ -665,8 +671,8 @@ NOTIFY pgrst, 'reload schema';
               disabled={repairing}
               className={`px-5 py-2.5 rounded-2xl font-black text-[9px] hover:brightness-110 transition-all border flex items-center gap-2 uppercase tracking-widest shadow-lg disabled:opacity-50 ${
                 repairsAvailable 
-                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20 animate-bounce' 
-                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-emerald-500/5'
+                  ? (isWhite ? 'bg-[#76c9be] text-white border-[#76c9be] shadow-[#76c9be]/20 animate-bounce' : 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20 animate-bounce') 
+                  : (isWhite ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20 shadow-[#76c9be]/5' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-emerald-500/5')
               }`}
             >
               {repairing ? <RefreshCw size={14} className="animate-spin" /> : (repairsAvailable ? <Sparkles size={14} /> : <Shield size={14} />)}
@@ -678,7 +684,7 @@ NOTIFY pgrst, 'reload schema';
                   setShowModal('add');
                 }}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
-                  isWhite ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-zinc-900/10' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/20'
+                  isWhite ? 'bg-[#f47b20] text-white hover:bg-[#f47b20]/90 shadow-[#f47b20]/20' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/20'
                 }`}
               >
                 <Plus size={18} />
@@ -686,25 +692,24 @@ NOTIFY pgrst, 'reload schema';
               </button>
           </div>
       </div>
-
-      <div className={`rounded-[24px] border shadow-2xl overflow-hidden backdrop-blur-xl ${
-        isWhite ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+      <div className={`rounded-[20px] border shadow-2xl overflow-hidden backdrop-blur-xl ${
+        isWhite ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
       }`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead>
-              <tr className={`border-b text-[9px] font-black text-zinc-500 uppercase tracking-widest ${
-                isWhite ? 'bg-zinc-50/50 border-zinc-100' : 'bg-zinc-950/50 border-white/5'
+            <thead className="sticky top-0 z-10">
+              <tr className={`border-b text-[10px] font-black uppercase tracking-widest ${
+                isWhite ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/50 border-white/5 text-zinc-500'
               }`}>
-                <th className="px-8 py-5">Client Identity</th>
-                <th className="px-6 py-5">Account Manager</th>
-                <th className="px-6 py-5">Monthly Leads</th>
-                <th className="px-6 py-5">Target Pos</th>
-                <th className="px-6 py-5">Access Status</th>
-                <th className="px-8 py-5 text-right whitespace-nowrap">Operational Actions</th>
+                <th className="px-8 py-2 rounded-tl-[20px]">Client Identity</th>
+                <th className="px-6 py-2">Account Manager</th>
+                <th className="px-6 py-2">Monthly Leads</th>
+                <th className="px-6 py-2">Target Pos</th>
+                <th className="px-6 py-2">Access Status</th>
+                <th className="px-8 py-2 text-right whitespace-nowrap rounded-tr-[20px]">Operational Actions</th>
               </tr>
             </thead>
-                  <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-white/5'}`}>
+                  <tbody className={`divide-y ${isWhite ? 'divide-[#163f4d]/5' : 'divide-white/5'}`}>
               {!loading && filteredClients.length === 0 && (
                 <tr>
                   <td colSpan={6} className={`px-8 py-20 text-center font-black uppercase tracking-widest text-sm ${theme === 'white' ? 'text-zinc-400' : 'text-zinc-700'}`}>
@@ -720,41 +725,41 @@ NOTIFY pgrst, 'reload schema';
                 ))
               ) : filteredClients.map((client) => (
                 <tr key={client.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
-                  <td className="px-8 py-5">
+                  <td className="px-8 py-2">
                     <div className="flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs uppercase border shadow-xl transition-all ${
                         isWhite 
-                          ? 'bg-zinc-100 text-zinc-900 border-zinc-200 group-hover:bg-zinc-900 group-hover:text-white' 
+                          ? 'bg-[#76c9be]/5 text-[#082a36] border-[#163f4d]/10 group-hover:bg-[#082a36] group-hover:text-white' 
                           : 'bg-zinc-800 text-blue-400 border-white/5 group-hover:bg-blue-600 group-hover:text-white'
                       }`}>
                         {client.short_code}
                       </div>
                       <div>
-                        <p className={`font-black uppercase tracking-tight text-sm italic ${isWhite ? 'text-zinc-900' : 'text-white'}`}>{client.name}</p>
-                        <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mt-0.5">{client.timezone}</p>
+                        <p className={`font-black font-heading uppercase tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>{client.name}</p>
+                        <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>{client.timezone}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-2">
                     <span className={`text-[10px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${
-                      theme === 'white' ? 'text-zinc-600 bg-zinc-100 border-zinc-200' : 'text-zinc-400 bg-zinc-800 border-white/5'
+                      isWhite ? 'text-[#607a80] bg-[#76c9be]/5 border-[#163f4d]/5' : 'text-zinc-400 bg-zinc-800 border-white/5'
                     }`}>{client.project_owner_code || 'MW'}</span>
                   </td>
-                  <td className={`px-6 py-5 text-[11px] font-black uppercase font-mono ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-300'}`}>
-                    {client.lead_target_monthly} <span className="text-zinc-600">/ MO</span>
+                  <td className={`px-6 py-2 text-[11px] font-black uppercase font-mono ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
+                    {client.lead_target_monthly} <span className={isWhite ? 'text-[#607a80]' : 'text-zinc-600'}>/ MO</span>
                   </td>
-                  <td className={`px-6 py-5 text-[11px] font-black uppercase font-mono ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                  <td className={`px-6 py-2 text-[11px] font-black uppercase font-mono ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
                     {client.avg_position_target || '-'}
                   </td>
-                  <td className="px-6 py-5 text-[9px] font-black uppercase tracking-widest min-w-[200px]">
+                  <td className="px-6 py-2 text-[9px] font-black uppercase tracking-widest min-w-[200px]">
                     {testResults[client.id] ? (
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2">
-                          <span className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${testResults[client.id].ga4Status === 'Success' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                          <span className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${testResults[client.id].ga4Status === 'Success' ? (isWhite ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20') : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
                             {testResults[client.id].ga4Status === 'Success' ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
                             GA4: {testResults[client.id].ga4Status}
                           </span>
-                          <span className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${testResults[client.id].gscStatus.includes('Success') ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                          <span className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${testResults[client.id].gscStatus.includes('Success') ? (isWhite ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20') : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
                             {testResults[client.id].gscStatus.includes('Success') ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
                             GSC: {testResults[client.id].gscStatus}
                           </span>
@@ -767,13 +772,13 @@ NOTIFY pgrst, 'reload schema';
                       <span className={isWhite ? 'text-zinc-300' : 'text-zinc-700'}>Monitoring Offline</span>
                     )}
                   </td>
-                  <td className="px-8 py-5 text-right whitespace-nowrap">
+                  <td className="px-8 py-2 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1.5 grayscale group-hover:grayscale-0 transition-all">
                       <button 
                         onClick={() => handleSyncWeekly(client.id)}
                         disabled={testingId === client.id}
                         className={`p-2 rounded-xl transition-all disabled:opacity-50 border border-transparent shadow-sm group relative ${
-                            isWhite ? 'bg-zinc-100 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:border-emerald-500' : 'text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/20'
+                            isWhite ? 'bg-[#76c9be]/5 text-[#76c9be] hover:bg-[#76c9be] hover:text-white hover:border-[#76c9be]' : 'text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/20'
                         }`}
                       >
                         {testingId === client.id ? <RefreshCw className="animate-spin" size={16} /> : <RefreshCw size={16} />}
@@ -785,7 +790,7 @@ NOTIFY pgrst, 'reload schema';
                         onClick={() => handleTestAccess(client.id)}
                         disabled={testingId === client.id}
                         className={`p-2 rounded-xl transition-all disabled:opacity-50 border border-transparent shadow-sm group relative ${
-                            isWhite ? 'bg-zinc-100 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-500' : 'text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/20'
+                            isWhite ? 'bg-[#76c9be]/5 text-[#082a36] hover:bg-[#082a36] hover:text-white hover:border-[#082a36]' : 'text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/20'
                         }`}
                       >
                         {testingId === client.id ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
@@ -796,7 +801,7 @@ NOTIFY pgrst, 'reload schema';
                       <button 
                         onClick={() => openEditModal(client)}
                         className={`p-2 rounded-xl transition-all border border-transparent shadow-sm group relative ${
-                          isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-900 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                          isWhite ? 'bg-[#76c9be]/5 text-[#607a80] hover:bg-[#082a36] hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
                         }`}
                       >
                         <SettingsIcon size={16} />
@@ -889,7 +894,7 @@ NOTIFY pgrst, 'reload schema';
               {/* officer and target */}
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Assigned Officer</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Assigned Officer</label>
                   <select 
                     value={formData.project_owner_name}
                     onChange={(e) => {
@@ -908,7 +913,7 @@ NOTIFY pgrst, 'reload schema';
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Monthly Lead Target</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Monthly Lead Target</label>
                   <input 
                     type="number" 
                     value={formData.lead_target_monthly}
@@ -922,7 +927,7 @@ NOTIFY pgrst, 'reload schema';
 
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Rank Benchmark (Avg Pos)</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Rank Benchmark (Avg Pos)</label>
                   <input 
                     type="number" 
                     step="0.1"
@@ -934,7 +939,7 @@ NOTIFY pgrst, 'reload schema';
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Tech Health Target (%)</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Tech Health Target (%)</label>
                   <input 
                     type="number" 
                     value={formData.technical_score_target}
@@ -948,7 +953,7 @@ NOTIFY pgrst, 'reload schema';
 
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">T10 Visibility Goal</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>T10 Visibility Goal</label>
                   <input 
                     type="number" 
                     value={formData.top_10_target}
@@ -959,7 +964,7 @@ NOTIFY pgrst, 'reload schema';
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Property Name</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Property Name</label>
                   <input 
                     required
                     type="text" 
@@ -975,7 +980,7 @@ NOTIFY pgrst, 'reload schema';
 
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Strategic Short Code</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Strategic Short Code</label>
                   <input 
                     required
                     type="text" 
@@ -988,7 +993,7 @@ NOTIFY pgrst, 'reload schema';
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Node Timezone</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Node Timezone</label>
                   <select 
                     value={formData.timezone}
                     onChange={(e) => setFormData({...formData, timezone: e.target.value})}

@@ -58,10 +58,10 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
       theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-950 border-white/5 shadow-[0_0_100px_rgba(37,99,235,0.05)]'
     } border-r h-screen sticky top-0 flex flex-col transition-all duration-300 ease-in-out z-30`}>
       <div className="p-6 overflow-hidden">
-        <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
+        <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
           <TrendingUp className={
             theme === 'mission' ? "text-emerald-500 shrink-0" : 
-            theme === 'white' ? "text-zinc-900 shrink-0" :
+            theme === 'white' ? "text-[#082a36] shrink-0" :
             "text-blue-500 shrink-0"
           } />
           {!isCollapsed && (
@@ -84,7 +84,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
                         theme === 'white' ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-900/20' :
                         'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                       )
-                    : theme === 'white' ? 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900' : 'text-zinc-500 hover:bg-zinc-900 hover:text-white'
+                    : theme === 'white' ? 'text-[#082a36] hover:bg-zinc-100 hover:text-[#76c9be]' : 'text-zinc-500 hover:bg-zinc-900 hover:text-white'
                 }`}
               >
                 <item.icon size={16} className="shrink-0" />
