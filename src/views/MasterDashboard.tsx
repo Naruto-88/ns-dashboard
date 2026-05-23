@@ -119,8 +119,15 @@ export default function MasterDashboard() {
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Failed to sync to Google Sheets");
+        const text = await response.text();
+        let errorMessage = "Failed to sync to Google Sheets";
+        try {
+          const errData = JSON.parse(text);
+          errorMessage = errData.error || errorMessage;
+        } catch (parseError) {
+          errorMessage = `Server Error (${response.status}): ${text.substring(0, 150) || 'Empty response'}`;
+        }
+        throw new Error(errorMessage);
       }
 
       alert("Data successfully synchronized to Google Sheets! Tabs 'Master Dashboard' and 'Goals and Targets' have been updated.");
