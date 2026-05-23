@@ -20,7 +20,8 @@ import {
   ArrowDown,
   RefreshCcw,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  FileSpreadsheet
 } from 'lucide-react';
 import { getClients, getWeeklyData, getAllWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
@@ -98,6 +99,38 @@ export default function MasterDashboard() {
   } | null>(null);
 
   const [viewingPeriod, setViewingPeriod] = useState<{ start: Date; end: Date } | null>(null);
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+
+  const handleSyncToSheets = async () => {
+    if (rows.length === 0) {
+      alert("No data available to sync.");
+      return;
+    }
+    setIsSyncingSheets(true);
+    try {
+      const response = await fetch('/api/admin/sync-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          weekStart: dateRange.start,
+          weekEnd: dateRange.end,
+          rows: rows
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to sync to Google Sheets");
+      }
+
+      alert("Data successfully synchronized to Google Sheets! Tabs 'Master Dashboard' and 'Goals and Targets' have been updated.");
+    } catch (e: any) {
+      console.error(e);
+      alert("Sync failed: " + e.message);
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
 
   const fetchData = async (silent = false, forceLive = false) => {
     if (forceLive) {
@@ -519,6 +552,19 @@ export default function MasterDashboard() {
           >
             <RefreshCcw size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
             Live Sync
+          </button>
+
+          <button
+            onClick={handleSyncToSheets}
+            disabled={isSyncingSheets}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+              theme === 'white' 
+                ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 shadow-lg border border-[#082a36]' 
+                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg border border-blue-500 shadow-blue-600/20'
+            } disabled:opacity-50`}
+          >
+            <FileSpreadsheet size={14} className={isSyncingSheets ? 'animate-pulse' : ''} />
+            {isSyncingSheets ? 'Syncing...' : 'Sync to Sheets'}
           </button>
         </div>
       </div>

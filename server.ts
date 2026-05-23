@@ -121,6 +121,7 @@ const getOAuthClient = (req: express.Request) => {
 const SCOPES = [
   'https://www.googleapis.com/auth/webmasters.readonly',
   'https://www.googleapis.com/auth/analytics.readonly',
+  'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile'
 ];
@@ -1214,8 +1215,8 @@ app.get('/api/admin/keys', async (req, res) => {
       throw error;
     }
     const maskedKeys = (data || []).map(k => {
-      let masked = '';
-      if (k.key_value) {
+      let masked = k.key_value || '';
+      if (k.id !== 'google_sheet_id' && k.key_value) {
         const val = k.key_value;
         if (val.length > 8) {
           masked = `${val.substring(0, 4)}...${val.substring(val.length - 4)}`;
@@ -1239,7 +1240,7 @@ app.post('/api/admin/keys', async (req, res) => {
     return res.status(400).json({ error: 'id and key_value are required' });
   }
   // Ignore masked value saves
-  if (key_value.includes('...') || key_value.includes('••')) {
+  if (id !== 'google_sheet_id' && (key_value.includes('...') || key_value.includes('••'))) {
     return res.json({ success: true, message: 'Key unchanged (masked value)' });
   }
   try {
@@ -1252,6 +1253,222 @@ app.post('/api/admin/keys', async (req, res) => {
   } catch (e: any) {
     console.error('Error saving API key:', e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST sync to Google Sheets
+app.post('/api/admin/sync-sheets', async (req, res) => {
+  const { weekStart, weekEnd, rows } = req.body;
+  
+  if (!weekStart || !weekEnd || !rows || !Array.isArray(rows)) {
+    return res.status(400).json({ error: 'weekStart, weekEnd, and rows are required' });
+  }
+
+  try {
+    // 1. Get global google_sheet_id key
+    const { data: keyData, error: keyError } = await supabase
+      .from('api_keys')
+      .select('key_value')
+      .eq('id', 'google_sheet_id')
+      .maybeSingle();
+
+    if (keyError) throw keyError;
+    let sheetId = keyData?.key_value || '';
+
+    if (!sheetId) {
+      return res.status(400).json({ error: 'Google Sheet ID/URL is not configured. Please set it in Command Center settings.' });
+    }
+
+    // Extract Sheet ID from URL if full URL is passed
+    if (sheetId.includes('/d/')) {
+      const match = sheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (match) sheetId = match[1];
+    }
+
+    // 2. Authenticate central client
+    const auth = await getAuthenticatedClient(req);
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // 3. Ensure spreadsheet tabs exist
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const sheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title).filter(Boolean) || [];
+
+    const addSheetRequests = [];
+    if (!sheetNames.includes('Master Dashboard')) {
+      addSheetRequests.push({ addSheet: { properties: { title: 'Master Dashboard' } } });
+    }
+    if (!sheetNames.includes('Goals and Targets')) {
+      addSheetRequests.push({ addSheet: { properties: { title: 'Goals and Targets' } } });
+    }
+
+    if (addSheetRequests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { requests: addSheetRequests }
+      });
+    }
+
+    // 4. Update 'Master Dashboard' Tab (weekly logs)
+    const masterDataRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: "'Master Dashboard'!A1:P2000"
+    });
+    const masterRows = masterDataRes.data.values || [];
+
+    const masterHeaders = [
+      "Client Name", "Week Start", "Week End", "Clicks (GSC)", "Impressions (GSC)", 
+      "CTR (GSC)", "Average Position (GSC)", "Organic Traffic (GA4)", 
+      "Total Leads", "Legit Leads", "Phone Calls", "Ahrefs DR", 
+      "Backlinks", "Ref Domains", "Status", "Reason"
+    ];
+
+    if (masterRows.length === 0) {
+      masterRows.push(masterHeaders);
+    } else {
+      masterRows[0] = masterHeaders;
+    }
+
+    for (const r of rows) {
+      const clientName = r.client?.name || '';
+      const clicks = r.gscTraffic?.current ?? 0;
+      const impressions = r.gscTraffic?.impressions ?? 0;
+      const ctr = r.gscTraffic?.ctr ?? 0;
+      const position = r.gscTraffic?.position ?? 0;
+      const traffic = r.ga4Traffic?.current ?? 0;
+      const totalLeads = r.leads?.current ?? 0;
+      const legitLeads = r.leads?.legit ?? 0;
+      const phoneCalls = r.phoneCalls?.current ?? 0;
+      const dr = r.ahrefs?.dr ?? 0;
+      const backlinks = r.ahrefs?.backlinks ?? 0;
+      const refDomains = r.ahrefs?.refDomains ?? 0;
+      const status = r.status?.color || 'green';
+      const reason = r.status?.reason || '';
+
+      const newRowValues = [
+        clientName,
+        weekStart,
+        weekEnd,
+        clicks,
+        impressions,
+        ctr,
+        position,
+        traffic,
+        totalLeads,
+        legitLeads,
+        phoneCalls,
+        dr,
+        backlinks,
+        refDomains,
+        status,
+        reason
+      ];
+
+      let foundIndex = -1;
+      for (let i = 1; i < masterRows.length; i++) {
+        if (masterRows[i][0] === clientName && masterRows[i][1] === weekStart) {
+          foundIndex = i;
+          break;
+        }
+      }
+
+      if (foundIndex !== -1) {
+        masterRows[foundIndex] = newRowValues;
+      } else {
+        masterRows.push(newRowValues);
+      }
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: "'Master Dashboard'!A1",
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: masterRows }
+    });
+
+    // 5. Refresh 'Goals and Targets' Tab (overall goals/actual status)
+    // Clear first to prevent stale rows
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: sheetId,
+      range: "'Goals and Targets'!A1:M200"
+    });
+
+    const goalsHeaders = [
+      "Client Name", "Weekly Clicks Target (Monthly/4)", "Actual Clicks", "Clicks Achieved %",
+      "Weekly Sessions Target (Monthly/4)", "Actual Sessions", "Sessions Achieved %",
+      "Weekly Leads Target (Monthly/4)", "Actual Leads (Legit)", "Leads Achieved %",
+      "Target DR", "Actual DR", "Overall Status"
+    ];
+
+    const goalsRows = [goalsHeaders];
+
+    // Query clients DB to get monthly targets
+    const { data: dbClients } = await supabase.from('clients').select('*');
+    const dbClientsMap = new Map<string, any>();
+    if (dbClients) {
+      dbClients.forEach(c => dbClientsMap.set(c.name, c));
+    }
+
+    for (const r of rows) {
+      const clientName = r.client?.name || '';
+      const dbClient = dbClientsMap.get(clientName) || r.client || {};
+
+      const targetClicks = dbClient.target_monthly_clicks ? (dbClient.target_monthly_clicks / 4) : 0;
+      const actualClicks = r.gscTraffic?.current ?? 0;
+      const clicksPct = targetClicks > 0 ? ((actualClicks / targetClicks) * 100) : 0;
+
+      const targetSessions = dbClient.target_monthly_sessions ? (dbClient.target_monthly_sessions / 4) : 0;
+      const actualSessions = r.ga4Traffic?.current ?? 0;
+      const sessionsPct = targetSessions > 0 ? ((actualSessions / targetSessions) * 100) : 0;
+
+      const targetLeads = dbClient.lead_target_monthly ? (dbClient.lead_target_monthly / 4) : 0;
+      const actualLeads = r.leads?.legit ?? 0;
+      const leadsPct = targetLeads > 0 ? ((actualLeads / targetLeads) * 100) : 0;
+
+      const targetDr = dbClient.target_dr ?? 0;
+      const actualDr = r.ahrefs?.dr ?? 0;
+
+      // Status logic
+      let clicksOk = targetClicks === 0 || clicksPct >= 100;
+      let sessionsOk = targetSessions === 0 || sessionsPct >= 100;
+      let leadsOk = targetLeads === 0 || leadsPct >= 100;
+
+      let overallStatus = 'Achieved';
+      if (clicksOk && sessionsOk && leadsOk) {
+        overallStatus = 'Achieved';
+      } else if ((clicksPct >= 100 || clicksOk) || (sessionsPct >= 100 || sessionsOk) || (leadsPct >= 100 || leadsOk)) {
+        overallStatus = 'Partially Achieved';
+      } else {
+        overallStatus = 'Not Achieved';
+      }
+
+      goalsRows.push([
+        clientName,
+        Math.round(targetClicks),
+        actualClicks,
+        targetClicks > 0 ? `${clicksPct.toFixed(1)}%` : 'N/A',
+        Math.round(targetSessions),
+        actualSessions,
+        targetSessions > 0 ? `${sessionsPct.toFixed(1)}%` : 'N/A',
+        Math.round(targetLeads),
+        actualLeads,
+        targetLeads > 0 ? `${leadsPct.toFixed(1)}%` : 'N/A',
+        targetDr,
+        actualDr,
+        overallStatus
+      ]);
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: "'Goals and Targets'!A1",
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: goalsRows }
+    });
+
+    res.json({ success: true, sheetId });
+  } catch (error: any) {
+    console.error('Sync to Sheets Error:', error);
+    res.status(500).json({ error: error.message || String(error) });
   }
 });
 

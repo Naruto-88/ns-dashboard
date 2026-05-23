@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle2, XCircle, RefreshCw, Unlink, Globe, Lock, AlertCircle, ExternalLink, Palette, Monitor, Zap, BrainCircuit } from 'lucide-react';
+import { Shield, CheckCircle2, XCircle, RefreshCw, Unlink, Globe, Lock, AlertCircle, ExternalLink, Palette, Monitor, Zap, BrainCircuit, FileSpreadsheet } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
 
@@ -62,6 +62,7 @@ export default function GlobalSettings() {
   const [claudeKey, setClaudeKey] = useState('');
   const [gptKey, setGptKey] = useState('');
   const [ahrefsKey, setAhrefsKey] = useState('');
+  const [googleSheetId, setGoogleSheetId] = useState('');
 
   const fetchKeys = async () => {
     try {
@@ -81,10 +82,12 @@ export default function GlobalSettings() {
         const claude = data.keys.find((k: any) => k.id === 'claude');
         const gpt = data.keys.find((k: any) => k.id === 'gpt');
         const ahrefs = data.keys.find((k: any) => k.id === 'ahrefs');
+        const sheet = data.keys.find((k: any) => k.id === 'google_sheet_id');
         if (gemini) setGeminiKey(gemini.key_value);
         if (claude) setClaudeKey(claude.key_value);
         if (gpt) setGptKey(gpt.key_value);
         if (ahrefs) setAhrefsKey(ahrefs.key_value);
+        if (sheet) setGoogleSheetId(sheet.key_value);
       }
     } catch (e) {
       console.error('Error fetching API keys:', e);
@@ -349,6 +352,54 @@ export default function GlobalSettings() {
                         }`}
                       >
                         {savingKeyId === 'ahrefs' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
+                      </button>
+                    </div>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* GOOGLE SHEETS INTEGRATION */}
+          <section className={`rounded-[40px] border shadow-2xl p-10 backdrop-blur-xl relative overflow-hidden group transition-all duration-300 ${
+            theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+          }`}>
+            <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:opacity-10 transition-opacity">
+              <FileSpreadsheet size={120} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-8">
+                <div className={`p-3 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-blue-600/10 text-blue-500 border-blue-500/20'}`}>
+                  <FileSpreadsheet size={24} />
+                </div>
+                <div>
+                  <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Google Sheets Sync Protocol</h3>
+                  <p className={`text-[10px] uppercase tracking-widest font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Set global target Google Sheet URL or ID</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Target Google Sheet ID / URL</label>
+                  <Tooltip content="Paste the complete URL of your Google Sheet or its ID. Weekly data will be synced directly to this document." className="w-full mt-2">
+                    <div className="flex gap-3 w-full">
+                      <input 
+                        type="text" 
+                        placeholder="e.g. https://docs.google.com/spreadsheets/d/1A2B3C... or Sheet ID"
+                        value={googleSheetId}
+                        onChange={(e) => setGoogleSheetId(e.target.value)}
+                        className={`flex-1 border rounded-2xl px-4 py-2.5 text-xs font-mono focus:outline-none transition-colors ${
+                          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600 focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-zinc-400 focus:border-blue-500'
+                        }`}
+                      />
+                      <button 
+                        onClick={() => handleSaveKey('google_sheet_id', googleSheetId)}
+                        disabled={savingKeyId === 'google_sheet_id'}
+                        className={`px-5 rounded-2xl text-[9px] font-black transition-all border uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1 ${
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                        }`}
+                      >
+                        {savingKeyId === 'google_sheet_id' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
                       </button>
                     </div>
                   </Tooltip>
