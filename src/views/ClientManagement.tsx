@@ -84,10 +84,38 @@ export default function ClientManagement() {
   const fetchData = () => {
     logDebug('Fetching clients...');
     setLoading(true);
-    getClients().then(data => {
+    getClients().then(async (data) => {
       logDebug(`Fetched ${data.length} clients`);
       setClients(data);
       setLoading(false);
+
+      // Restore GSC and GA4 test access results from Supabase import logs
+      try {
+        const { data: logs, error } = await supabase
+          .from('import_logs')
+          .select('*')
+          .eq('operation_type', 'access_test')
+          .order('imported_at', { ascending: false });
+
+        if (!error && logs) {
+          const latestLogs: Record<string, any> = {};
+          logs.forEach(log => {
+            if (!latestLogs[log.client_id]) {
+              const errors = log.message ? log.message.split('; ').filter(Boolean) : [];
+              const ga4Status = errors.some((e: string) => e.toLowerCase().includes('ga4')) ? 'Failed' : 'Success';
+              const gscStatus = errors.some((e: string) => e.toLowerCase().includes('gsc')) ? 'Failed' : 'Success';
+              latestLogs[log.client_id] = {
+                ga4Status,
+                gscStatus,
+                errors
+              };
+            }
+          });
+          setTestResults(latestLogs);
+        }
+      } catch (logErr) {
+        console.error('Failed to load cached access logs:', logErr);
+      }
     }).catch(err => {
       logDebug('Fetch Error: ' + err.message);
       setLoading(false);
