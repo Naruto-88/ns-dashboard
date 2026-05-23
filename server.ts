@@ -513,6 +513,7 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
 
     // 1. Fetch GA4 Data
     let ga4Data = { traffic: 0, newUsers: 0, returningUsers: 0 };
+    let phoneCallsCount = 0;
     if (auth && client?.ga4_property_id) {
       try {
         const analytics = google.analyticsdata({ version: 'v1beta', auth });
@@ -534,6 +535,34 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
           ga4Data.newUsers = parseInt(row.metricValues[1].value || '0');
           const activeUsers = parseInt(row.metricValues[2].value || '0');
           ga4Data.returningUsers = Math.max(0, activeUsers - ga4Data.newUsers);
+        }
+
+        // Fetch click-to-call / phone call event count
+        try {
+          const eventResponse = await analytics.properties.runReport({
+            property: `properties/${client.ga4_property_id}`,
+            requestBody: {
+              dateRanges: [{ startDate, endDate }],
+              dimensions: [{ name: 'eventName' }],
+              metrics: [{ name: 'eventCount' }]
+            }
+          });
+
+          const eventRows = eventResponse.data.rows || [];
+          for (const erow of eventRows) {
+            const eventName = (erow.dimensionValues?.[0]?.value || '').toLowerCase();
+            const count = parseInt(erow.metricValues?.[0]?.value || '0');
+            if (
+              eventName.includes('call') || 
+              eventName.includes('phone') || 
+              eventName === 'click_to_call' || 
+              eventName === 'phone_click'
+            ) {
+              phoneCallsCount += count;
+            }
+          }
+        } catch (eventErr) {
+          console.error('GA4 Event Sync (phone calls) error:', eventErr);
         }
       } catch (e) {
         console.error('GA4 Sync error:', e);
@@ -581,6 +610,9 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
       ga4Data.newUsers = fallback.ga4_new_users;
       ga4Data.returningUsers = fallback.ga4_returning_users;
     }
+    if (phoneCallsCount === 0) {
+      phoneCallsCount = fallback.phone_calls;
+    }
 
     res.json({
       gsc_clicks: gscData.clicks,
@@ -589,7 +621,8 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
       gsc_position: parseFloat(gscData.position.toFixed(2)),
       ga4_traffic: ga4Data.traffic,
       ga4_new_users: ga4Data.newUsers,
-      ga4_returning_users: ga4Data.returningUsers
+      ga4_returning_users: ga4Data.returningUsers,
+      phone_calls: phoneCallsCount
     });
   } catch (error: any) {
     const errorMsg = error.response?.data?.error?.message || error.message || String(error);
