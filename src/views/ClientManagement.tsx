@@ -838,93 +838,86 @@ NOTIFY pgrst, 'reload schema';
                   </td>
                   <td className="px-8 py-2 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1.5 grayscale group-hover:grayscale-0 transition-all">
-                      <button 
-                        onClick={() => handleSyncWeekly(client.id)}
-                        disabled={testingId === client.id}
-                        className={`p-2 rounded-xl transition-all disabled:opacity-50 border border-transparent shadow-sm group relative ${
-                            isWhite ? 'bg-[#76c9be]/5 text-[#76c9be] hover:bg-[#76c9be] hover:text-white hover:border-[#76c9be]' : 'text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/20'
-                        }`}
-                      >
-                        {testingId === client.id ? <RefreshCw className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-                        <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                          isWhite ? 'bg-white/95 border-zinc-200 text-zinc-900' : 'bg-black/95 text-white border-white/10'
-                        }`}>Sync Current Week</span>
-                      </button>
-                      <button 
-                        onClick={() => handleTestAccess(client.id)}
-                        disabled={testingId === client.id}
-                        className={`p-2 rounded-xl transition-all disabled:opacity-50 border border-transparent shadow-sm group relative ${
-                            isWhite ? 'bg-[#76c9be]/5 text-[#082a36] hover:bg-[#082a36] hover:text-white hover:border-[#082a36]' : 'text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/20'
-                        }`}
-                      >
-                        {testingId === client.id ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
-                        <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                          isWhite ? 'bg-white/95 border-zinc-200 text-zinc-900' : 'bg-black/95 text-white border-white/10'
-                        }`}>Test API Access</span>
-                      </button>
-                      <button 
-                        onClick={() => openEditModal(client)}
-                        className={`p-2 rounded-xl transition-all border border-transparent shadow-sm group relative ${
-                          isWhite ? 'bg-[#76c9be]/5 text-[#607a80] hover:bg-[#082a36] hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
-                        }`}
-                      >
-                        <SettingsIcon size={16} />
-                        <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                          isWhite ? 'bg-white/95 border-zinc-200 text-zinc-900' : 'bg-black/95 text-white border-white/10'
-                        }`}>Edit Client</span>
-                      </button>
-                      <button 
-                        onClick={() => setShowKeywordsModal(client)}
-                        className={`p-2 rounded-xl transition-all border border-transparent shadow-sm group relative ${
-                          isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-900 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
-                        }`}
-                      >
-                        <KeyIcon size={16} />
-                        <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                          isWhite ? 'bg-white/95 border-zinc-200 text-zinc-900' : 'bg-black/95 text-white border-white/10'
-                        }`}>Manage Keywords</span>
-                      </button>
-                      {client.gsc_site_url && (
-                        <a 
-                          href={`https://search.google.com/search-console?resource_id=${encodeURIComponent(client.gsc_site_url)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`p-2 rounded-xl transition-all border border-transparent shadow-sm flex items-center justify-center group relative ${
-                            isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-blue-600 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                      <Tooltip content="Sync Current Week">
+                        <button 
+                          onClick={() => handleSyncWeekly(client.id)}
+                          disabled={testingId === client.id}
+                          className={`p-2 rounded-xl transition-all disabled:opacity-50 border border-transparent shadow-sm ${
+                              isWhite ? 'bg-[#76c9be]/5 text-[#76c9be] hover:bg-[#76c9be] hover:text-white hover:border-[#76c9be]' : 'text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/20'
                           }`}
                         >
-                          <TableIcon size={16} />
-                          <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                            isWhite ? 'bg-white/95 border-zinc-200 text-zinc-900' : 'bg-black/95 text-white border-white/10'
-                          }`}>Open Search Console</span>
-                        </a>
+                          {testingId === client.id ? <RefreshCw className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Test API Access">
+                        <button 
+                          onClick={() => handleTestAccess(client.id)}
+                          disabled={testingId === client.id}
+                          className={`p-2 rounded-xl transition-all disabled:opacity-50 border border-transparent shadow-sm ${
+                              isWhite ? 'bg-[#76c9be]/5 text-[#082a36] hover:bg-[#082a36] hover:text-white hover:border-[#082a36]' : 'text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/20'
+                          }`}
+                        >
+                          {testingId === client.id ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Edit Client">
+                        <button 
+                          onClick={() => openEditModal(client)}
+                          className={`p-2 rounded-xl transition-all border border-transparent shadow-sm ${
+                            isWhite ? 'bg-[#76c9be]/5 text-[#607a80] hover:bg-[#082a36] hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                          }`}
+                        >
+                          <SettingsIcon size={16} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Manage Keywords">
+                        <button 
+                          onClick={() => setShowKeywordsModal(client)}
+                          className={`p-2 rounded-xl transition-all border border-transparent shadow-sm ${
+                            isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-900 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                          }`}
+                        >
+                          <KeyIcon size={16} />
+                        </button>
+                      </Tooltip>
+                      {client.gsc_site_url && (
+                        <Tooltip content="Open Search Console">
+                          <a 
+                            href={`https://search.google.com/search-console?resource_id=${encodeURIComponent(client.gsc_site_url)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`p-2 rounded-xl transition-all border border-transparent shadow-sm flex items-center justify-center ${
+                              isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-blue-600 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                            }`}
+                          >
+                            <TableIcon size={16} />
+                          </a>
+                        </Tooltip>
                       )}
                       {client.ga4_property_id && (
-                        <a 
-                          href={`https://analytics.google.com/analytics/web/#/p${client.ga4_property_id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`p-2 rounded-xl transition-all border border-transparent shadow-sm flex items-center justify-center group relative ${
-                            isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-orange-500 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                        <Tooltip content="Open Analytics">
+                          <a 
+                            href={`https://analytics.google.com/analytics/web/#/p${client.ga4_property_id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`p-2 rounded-xl transition-all border border-transparent shadow-sm flex items-center justify-center ${
+                              isWhite ? 'bg-zinc-100 text-zinc-600 hover:bg-orange-500 hover:text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                            }`}
+                          >
+                            <Activity size={16} />
+                          </a>
+                        </Tooltip>
+                      )}
+                      <Tooltip content="Delete Client">
+                        <button 
+                          onClick={() => handleDeleteClient(client.id)}
+                          className={`p-2 rounded-xl transition-all border border-transparent shadow-sm ${
+                              isWhite ? 'bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white' : 'text-zinc-500 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20'
                           }`}
                         >
-                          <Activity size={16} />
-                          <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                            isWhite ? 'bg-white/95 border-zinc-200 text-zinc-900' : 'bg-black/95 text-white border-white/10'
-                          }`}>Open Analytics</span>
-                        </a>
-                      )}
-                      <button 
-                        onClick={() => handleDeleteClient(client.id)}
-                        className={`p-2 rounded-xl transition-all border border-transparent shadow-sm group relative ${
-                            isWhite ? 'bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white' : 'text-zinc-500 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20'
-                        }`}
-                      >
-                        <Trash2 size={16} />
-                        <span className={`absolute bottom-full right-0 mb-2 hidden group-hover:block w-32 p-2.5 text-[9px] rounded-xl font-black z-[110] shadow-2xl border uppercase tracking-widest backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 text-center ${
-                          isWhite ? 'bg-white/95 border-rose-600 text-rose-600' : 'bg-black/95 text-rose-400 border-white/10 text-center'
-                        }`}>Delete Client</span>
-                      </button>
+                          <Trash2 size={16} />
+                        </button>
+                      </Tooltip>
                     </div>
                   </td>
                 </tr>
