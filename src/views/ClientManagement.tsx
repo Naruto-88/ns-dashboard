@@ -351,6 +351,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='phone_calls') THEN
     ALTER TABLE public.weekly_data ADD COLUMN phone_calls INTEGER DEFAULT 0;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ga4_organic_traffic') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ga4_organic_traffic INTEGER DEFAULT 0;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_dr') THEN
     ALTER TABLE public.weekly_data ADD COLUMN ahrefs_dr INTEGER DEFAULT 0;
   END IF;
@@ -412,6 +415,7 @@ CREATE TABLE IF NOT EXISTS public.weekly_data (
   ga4_traffic INTEGER DEFAULT 0,
   ga4_new_users INTEGER DEFAULT 0,
   ga4_returning_users INTEGER DEFAULT 0,
+  ga4_organic_traffic INTEGER DEFAULT 0,
   gsc_clicks INTEGER DEFAULT 0,
   gsc_impressions INTEGER DEFAULT 0,
   gsc_ctr NUMERIC DEFAULT 0,

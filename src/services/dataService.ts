@@ -36,6 +36,7 @@ export interface WeeklyData {
   ga4_traffic: number;
   ga4_new_users: number;
   ga4_returning_users: number;
+  ga4_organic_traffic: number;
   leads_total: number;
   leads_legit: number;
   target_leads: number;
@@ -383,6 +384,7 @@ export const syncWeeklyData = async (clientId: string, data: Partial<WeeklyData>
       'internal_links',
       'ga4_new_users',
       'ga4_returning_users',
+      'ga4_organic_traffic',
       'technical_score',
       'top_3_count',
       'top_10_count',
@@ -419,6 +421,12 @@ export const syncWeeklyData = async (clientId: string, data: Partial<WeeklyData>
     if (result.error && result.error.message.includes('phone_calls')) {
       console.warn('[DB WARNING] phone_calls column missing. Retrying save without it...', result.error.message);
       delete saveData.phone_calls;
+      result = await performSave(saveData);
+    }
+
+    if (result.error && result.error.message.includes('ga4_organic_traffic')) {
+      console.warn('[DB WARNING] ga4_organic_traffic column missing. Retrying save without it...', result.error.message);
+      delete saveData.ga4_organic_traffic;
       result = await performSave(saveData);
     }
 

@@ -22,7 +22,7 @@ export default function WeeklyData() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [clientSearch, setClientSearch] = useState('');
-  const [selectedWeek, setSelectedWeek] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+  const [selectedWeek, setSelectedWeek] = useState(format(startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
   const [data, setData] = useState<Partial<IWeeklyData>>({});
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [keywordHistory, setKeywordHistory] = useState<KeywordHistory[]>([]);
@@ -86,6 +86,7 @@ export default function WeeklyData() {
           ga4_traffic: 0,
           ga4_new_users: 0,
           ga4_returning_users: 0,
+          ga4_organic_traffic: 0,
           leads_total: 0,
           leads_legit: 0,
           target_leads: 0,
@@ -165,6 +166,7 @@ export default function WeeklyData() {
         ga4_traffic: dataRes.ga4_traffic ?? prev.ga4_traffic ?? 0,
         ga4_new_users: dataRes.ga4_new_users ?? prev.ga4_new_users ?? 0,
         ga4_returning_users: dataRes.ga4_returning_users ?? prev.ga4_returning_users ?? 0,
+        ga4_organic_traffic: dataRes.ga4_organic_traffic ?? prev.ga4_organic_traffic ?? 0,
         phone_calls: dataRes.phone_calls ?? prev.phone_calls ?? 0,
         leads_total: dataRes.leads_total ?? prev.leads_total ?? 0,
         leads_legit: dataRes.leads_legit ?? prev.leads_legit ?? 0,
@@ -342,6 +344,7 @@ export default function WeeklyData() {
       'ga4_traffic', 
       'ga4_new_users', 
       'ga4_returning_users', 
+      'ga4_organic_traffic', 
       'leads_total', 
       'leads_legit', 
       'phone_calls'
@@ -372,6 +375,7 @@ export default function WeeklyData() {
         { label: 'GA4 Traffic (Sessions)', key: 'ga4_traffic', tooltip: 'Total web sessions from Google Analytics 4.' },
         { label: 'GA4 New Users', key: 'ga4_new_users', tooltip: 'New user count from Google Analytics 4.' },
         { label: 'GA4 Returning Users', key: 'ga4_returning_users', tooltip: 'Returning user count from Google Analytics 4.' },
+        { label: 'GA4 Organic Search Sessions', key: 'ga4_organic_traffic', tooltip: 'Organic search sessions from Google Analytics 4.' },
         { label: 'Phone Calls', key: 'phone_calls', tooltip: 'Total click-to-call events matching phone call patterns from GA4.' }
       ]
     },

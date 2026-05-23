@@ -23,7 +23,7 @@ import {
   TrendingDown,
   FileSpreadsheet
 } from 'lucide-react';
-import { getClients, getWeeklyData, getAllWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails } from '../services/dataService';
+import { getClients, getWeeklyData, getAllWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
@@ -46,7 +46,7 @@ interface DashboardRow {
     top3: number;
     top10: number;
   };
-  ga4Traffic: { current: number; previous: number; change: number };
+  ga4Traffic: { current: number; previous: number; change: number; organic: number; prevOrganic: number };
   leads: { current: number; change: number; legit: number };
   phoneCalls: { current: number; previous: number; change: number };
   ahrefs: { 
@@ -154,25 +154,41 @@ export default function MasterDashboard() {
 
       if (viewMode === 'custom') {
         currentStart = parseISO(dateRange.start);
+        currentStart.setHours(0, 0, 0, 0);
         currentEnd = parseISO(dateRange.end);
+        currentEnd.setHours(23, 59, 59, 999);
         const duration = currentEnd.getTime() - currentStart.getTime();
-        prevStart = new Date(currentStart.getTime() - duration - (24 * 60 * 60 * 1000));
-        prevEnd = new Date(currentEnd.getTime() - duration - (24 * 60 * 60 * 1000));
+        prevStart = new Date(currentStart.getTime() - duration);
+        prevStart.setHours(0, 0, 0, 0);
+        prevEnd = new Date(currentEnd.getTime() - duration);
+        prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === 'rolling') {
-        currentEnd = today;
-        currentStart = subDays(today, 6);
+        currentEnd = subDays(today, 2);
+        currentEnd.setHours(23, 59, 59, 999);
+        currentStart = subDays(currentEnd, 6);
+        currentStart.setHours(0, 0, 0, 0);
         prevEnd = subDays(currentStart, 1);
+        prevEnd.setHours(23, 59, 59, 999);
         prevStart = subDays(prevEnd, 6);
+        prevStart.setHours(0, 0, 0, 0);
       } else if (viewMode === 'weekly') {
         currentStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
+        currentStart.setHours(0, 0, 0, 0);
         currentEnd = endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
+        currentEnd.setHours(23, 59, 59, 999);
         prevStart = startOfWeek(subWeeks(today, 2), { weekStartsOn: 1 });
+        prevStart.setHours(0, 0, 0, 0);
         prevEnd = endOfWeek(subWeeks(today, 2), { weekStartsOn: 1 });
+        prevEnd.setHours(23, 59, 59, 999);
       } else {
         currentStart = startOfMonth(subMonths(today, 1));
+        currentStart.setHours(0, 0, 0, 0);
         currentEnd = endOfMonth(subMonths(today, 1));
+        currentEnd.setHours(23, 59, 59, 999);
         prevStart = startOfMonth(subMonths(today, 2));
+        prevStart.setHours(0, 0, 0, 0);
         prevEnd = endOfMonth(subMonths(today, 2));
+        prevEnd.setHours(23, 59, 59, 999);
       }
 
       setViewingPeriod({ start: currentStart, end: currentEnd });
@@ -195,8 +211,64 @@ export default function MasterDashboard() {
               getLiveMetrics(client.id, { startDate: format(currentStart, 'yyyy-MM-dd'), endDate: format(currentEnd, 'yyyy-MM-dd') }),
               getLiveMetrics(client.id, { startDate: format(prevStart, 'yyyy-MM-dd'), endDate: format(prevEnd, 'yyyy-MM-dd') })
             ]);
-            if (results[0].status === 'fulfilled') liveCurrent = (results[0] as any).value;
-            if (results[1].status === 'fulfilled') livePrevious = (results[1] as any).value;
+            if (results[0].status === 'fulfilled') {
+              liveCurrent = (results[0] as any).value;
+              try {
+                const weekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+                const existingRow = weeklyData.find(d => d.week_start_date === weekStartStr);
+                
+                await syncWeeklyData(client.id, {
+                  id: existingRow?.id,
+                  week_start_date: weekStartStr,
+                  gsc_clicks: liveCurrent.gsc_clicks,
+                  gsc_impressions: liveCurrent.gsc_impressions,
+                  gsc_ctr: liveCurrent.gsc_ctr,
+                  gsc_position: liveCurrent.gsc_position,
+                  ga4_traffic: liveCurrent.ga4_traffic,
+                  ga4_new_users: liveCurrent.ga4_new_users,
+                  ga4_returning_users: liveCurrent.ga4_returning_users,
+                  ga4_organic_traffic: liveCurrent.ga4_organic_traffic,
+                  phone_calls: liveCurrent.phone_calls,
+                  leads_total: liveCurrent.leads_total,
+                  leads_legit: liveCurrent.leads_legit,
+                  top_3_count: liveCurrent.gsc_top3,
+                  top_10_count: liveCurrent.gsc_top10,
+                  import_source: 'live_sync',
+                  imported_at: new Date().toISOString()
+                });
+              } catch (saveErr) {
+                console.error(`Error autosaving live current data for ${client.name}:`, saveErr);
+              }
+            }
+            if (results[1].status === 'fulfilled') {
+              livePrevious = (results[1] as any).value;
+              try {
+                const prevStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+                const existingRowPrev = weeklyData.find(d => d.week_start_date === prevStartStr);
+                
+                await syncWeeklyData(client.id, {
+                  id: existingRowPrev?.id,
+                  week_start_date: prevStartStr,
+                  gsc_clicks: livePrevious.gsc_clicks,
+                  gsc_impressions: livePrevious.gsc_impressions,
+                  gsc_ctr: livePrevious.gsc_ctr,
+                  gsc_position: livePrevious.gsc_position,
+                  ga4_traffic: livePrevious.ga4_traffic,
+                  ga4_new_users: livePrevious.ga4_new_users,
+                  ga4_returning_users: livePrevious.ga4_returning_users,
+                  ga4_organic_traffic: livePrevious.ga4_organic_traffic,
+                  phone_calls: livePrevious.phone_calls,
+                  leads_total: livePrevious.leads_total,
+                  leads_legit: livePrevious.leads_legit,
+                  top_3_count: livePrevious.gsc_top3,
+                  top_10_count: livePrevious.gsc_top10,
+                  import_source: 'live_sync',
+                  imported_at: new Date().toISOString()
+                });
+              } catch (saveErr) {
+                console.error(`Error autosaving live previous data for ${client.name}:`, saveErr);
+              }
+            }
           }
 
         } catch (e) {
@@ -235,11 +307,15 @@ export default function MasterDashboard() {
 
         const resolvedCurrentTraffic = liveCurrent?.ga4_traffic || currentWeekData?.ga4_traffic || 0;
         const resolvedPreviousTraffic = livePrevious?.ga4_traffic || prevWeekData?.ga4_traffic || 0;
+        const resolvedCurrentOrganic = liveCurrent?.ga4_organic_traffic ?? currentWeekData?.ga4_organic_traffic ?? 0;
+        const resolvedPreviousOrganic = livePrevious?.ga4_organic_traffic ?? prevWeekData?.ga4_organic_traffic ?? 0;
 
         const ga4Traffic = {
           current: resolvedCurrentTraffic,
           previous: resolvedPreviousTraffic,
-          change: calculateChange(resolvedCurrentTraffic, resolvedPreviousTraffic)
+          change: calculateChange(resolvedCurrentTraffic, resolvedPreviousTraffic),
+          organic: resolvedCurrentOrganic,
+          prevOrganic: resolvedPreviousOrganic
         };
 
         const leads = {
@@ -834,9 +910,38 @@ export default function MasterDashboard() {
                   </td>
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
-                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
-                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
+                      <div className="space-y-1.5 p-1 min-w-[200px] text-left">
+                        <div className={`font-black border-b pb-1.5 uppercase tracking-wider text-[8.5px] text-center ${
+                          theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
+                        }`}>
+                          GA4 Traffic Breakdown
+                        </div>
+                        <div className="space-y-1.5 text-[9px] font-black uppercase tracking-[0.05em]">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#607a80]">Total Sessions:</span>
+                            <span className={theme === 'white' ? 'text-zinc-900' : 'text-white'}>{row.ga4Traffic.current.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-emerald-500 font-black">Organic Search:</span>
+                            <div className="flex gap-1.5 items-center">
+                              <span className="text-emerald-400 font-heading tracking-tighter">{row.ga4Traffic.organic.toLocaleString()}</span>
+                              <span className="text-[7.5px] opacity-70">
+                                ({row.ga4Traffic.current > 0 ? ((row.ga4Traffic.organic / row.ga4Traffic.current) * 100).toFixed(0) : 0}%)
+                              </span>
+                            </div>
+                          </div>
+                          <div className={`flex justify-between items-center border-t pt-1 ${
+                            theme === 'white' ? 'border-zinc-200' : 'border-white/5'
+                          }`}>
+                            <span className="text-zinc-500">Other Channels:</span>
+                            <span className="opacity-80 text-zinc-400">{Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div className={`border-t pt-1 text-[7.5px] text-zinc-500 text-center uppercase tracking-widest italic ${
+                          theme === 'white' ? 'border-zinc-200' : 'border-white/5'
+                        }`}>
+                          <span>Period: {row.currentRangeStr}</span>
+                        </div>
                       </div>
                     }>
                       <div className="flex flex-col items-center">
