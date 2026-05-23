@@ -17,7 +17,9 @@ import {
   TrendingUp,
   Activity,
   AlertCircle,
-  Lock
+  Lock,
+  BrainCircuit,
+  Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Dashboard from './views/Dashboard';
@@ -26,6 +28,9 @@ import KeywordDashboard from './views/KeywordDashboard';
 import WeeklyData from './views/WeeklyData';
 import ClientManagement from './views/ClientManagement';
 import GlobalSettings from './views/GlobalSettings';
+import GoalsAndTargets from './views/GoalsAndTargets';
+import AiStrategicAnalysis from './views/AiStrategicAnalysis';
+import ActionCenter from './views/ActionCenter';
 import Tooltip from './components/Tooltip';
 import { useState, useEffect } from 'react';
 import React from 'react';
@@ -40,6 +45,9 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Master Dashboard', icon: LayoutDashboard, path: '/' },
     { name: 'Agency Dashboard', icon: BarChart3, path: '/agency' },
     { name: 'Client Scoreboard', icon: Users, path: '/scoreboard' },
+    { name: 'Goals & Targets', icon: Target, path: '/goals-targets' },
+    { name: 'AI Analysis', icon: BrainCircuit, path: '/strategic-analysis' },
+    { name: 'Action Center', icon: Target, path: '/action-center' },
     { name: 'Keyword Tracking', icon: Key, path: '/keywords' },
     { name: 'Weekly Data', icon: Calendar, path: '/weekly' },
   ];
@@ -66,7 +74,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
           } />
           {!isCollapsed && (
             <span className="tracking-tight uppercase text-sm font-black italic">
-              {theme === 'mission' ? 'Mission Control' : theme === 'white' ? 'White Boutique' : 'Midnight Boutique'}
+              NS Dashboard
             </span>
           )}
         </h1>
@@ -471,6 +479,14 @@ BEGIN
     ALTER TABLE public.clients ADD COLUMN top_10_target INTEGER DEFAULT 0;
   END IF;
 
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='lead_api_url') THEN
+    ALTER TABLE public.clients ADD COLUMN lead_api_url TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='target_dr') THEN
+    ALTER TABLE public.clients ADD COLUMN target_dr INTEGER DEFAULT 0;
+  END IF;
+
   -- Fix Weekly Data
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='week_start_date') THEN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='week_start') THEN
@@ -517,6 +533,18 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='leads_legit') THEN
     ALTER TABLE public.weekly_data ADD COLUMN leads_legit INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='phone_calls') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN phone_calls INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_dr') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ahrefs_dr INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_backlinks') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ahrefs_backlinks INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_ref_domains') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ahrefs_ref_domains INTEGER DEFAULT 0;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='pages_optimized') THEN
     ALTER TABLE public.weekly_data ADD COLUMN pages_optimized INTEGER DEFAULT 0;
@@ -565,6 +593,8 @@ CREATE TABLE IF NOT EXISTS public.clients (
   ga4_property_id TEXT,
   gsc_site_url TEXT,
   lead_event_names TEXT DEFAULT 'generate_lead',
+  lead_api_url TEXT,
+  target_dr INTEGER DEFAULT 0,
   keyword_tracking_enabled BOOLEAN DEFAULT true,
   api_import_enabled BOOLEAN DEFAULT true,
   notes TEXT,
@@ -587,6 +617,10 @@ CREATE TABLE IF NOT EXISTS public.weekly_data (
   leads_total INTEGER DEFAULT 0,
   leads_legit INTEGER DEFAULT 0,
   target_leads INTEGER DEFAULT 0,
+  phone_calls INTEGER DEFAULT 0,
+  ahrefs_dr INTEGER DEFAULT 0,
+  ahrefs_backlinks INTEGER DEFAULT 0,
+  ahrefs_ref_domains INTEGER DEFAULT 0,
   top_3_count INTEGER DEFAULT 0,
   top_10_count INTEGER DEFAULT 0,
   tracked_keywords_avg_position NUMERIC DEFAULT 0,
@@ -730,6 +764,9 @@ export default function App() {
           <Route path="/" element={<MasterDashboard />} />
           <Route path="/agency" element={<Dashboard />} />
           <Route path="/scoreboard" element={<ClientScoreboard />} />
+          <Route path="/goals-targets" element={<GoalsAndTargets />} />
+          <Route path="/strategic-analysis" element={<AiStrategicAnalysis />} />
+          <Route path="/action-center" element={<ActionCenter />} />
           <Route path="/keywords" element={<KeywordDashboard />} />
           <Route path="/weekly" element={<WeeklyData />} />
           {isAdmin && (

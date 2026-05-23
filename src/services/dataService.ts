@@ -18,6 +18,11 @@ export interface Client {
   project_owner_name: string;
   project_owner_code: string;
   top_10_target: number;
+  target_monthly_clicks?: number;
+  target_monthly_sessions?: number;
+  target_monthly_blogs?: number;
+  lead_api_url?: string;
+  target_dr?: number;
 }
 
 export interface WeeklyData {
@@ -34,6 +39,10 @@ export interface WeeklyData {
   leads_total: number;
   leads_legit: number;
   target_leads: number;
+  phone_calls: number;
+  ahrefs_dr: number;
+  ahrefs_backlinks: number;
+  ahrefs_ref_domains: number;
   top_3_count: number;
   top_10_count: number;
   tracked_keywords_avg_position: number;
@@ -81,6 +90,30 @@ export const getWeeklyData = async (clientId: string, range: DateRange): Promise
   } catch (error) {
     console.error('Error fetching weekly data:', error);
     return [];
+  }
+};
+
+export const getAllWeeklyData = async (range: DateRange): Promise<Record<string, WeeklyData[]>> => {
+  try {
+    const { data, error } = await supabase
+      .from('weekly_data')
+      .select('*')
+      .gte('week_start_date', range.startDate)
+      .lte('week_start_date', range.endDate)
+      .order('week_start_date', { ascending: false });
+    
+    if (error) throw error;
+    
+    const grouped: Record<string, WeeklyData[]> = {};
+    (data || []).forEach(row => {
+      if (!grouped[row.client_id]) grouped[row.client_id] = [];
+      grouped[row.client_id].push(row);
+    });
+    
+    return grouped;
+  } catch (error) {
+    console.error('Error fetching all weekly data:', error);
+    return {};
   }
 };
 
@@ -157,26 +190,26 @@ export const aggregateMetrics = async (clientId: string, current: DateRange, pre
   };
 
   const currSum = {
-    clicks: currentLive?.gsc_clicks || 0,
-    impressions: currentLive?.gsc_impressions || 0,
-    ctr: currentLive?.gsc_ctr || 0,
-    position: currentLive?.gsc_position || 0,
-    traffic: currentLive?.ga4_traffic || 0,
+    clicks: currentLive?.gsc_clicks || sumWeekly(currentWeekly, 'gsc_clicks') || 0,
+    impressions: currentLive?.gsc_impressions || sumWeekly(currentWeekly, 'gsc_impressions') || 0,
+    ctr: currentLive?.gsc_ctr || (currentWeekly.length ? (sumWeekly(currentWeekly, 'gsc_ctr') / currentWeekly.length) : 0) || 0,
+    position: currentLive?.gsc_position || (currentWeekly.length ? (sumWeekly(currentWeekly, 'gsc_position') / currentWeekly.length) : 0) || 0,
+    traffic: currentLive?.ga4_traffic || sumWeekly(currentWeekly, 'ga4_traffic') || 0,
     leads: sumWeekly(currentWeekly, 'leads_total'),
     activity: sumWeekly(currentWeekly, 'pages_optimized') + sumWeekly(currentWeekly, 'blogs_published') + sumWeekly(currentWeekly, 'backlinks_built')
   };
 
   const prevSum = {
-    clicks: previousLive?.gsc_clicks || 0,
-    impressions: previousLive?.gsc_impressions || 0,
-    ctr: previousLive?.gsc_ctr || 0,
-    position: previousLive?.gsc_position || 0,
-    traffic: previousLive?.ga4_traffic || 0,
+    clicks: previousLive?.gsc_clicks || sumWeekly(previousWeekly, 'gsc_clicks') || 0,
+    impressions: previousLive?.gsc_impressions || sumWeekly(previousWeekly, 'gsc_impressions') || 0,
+    ctr: previousLive?.gsc_ctr || (previousWeekly.length ? (sumWeekly(previousWeekly, 'gsc_ctr') / previousWeekly.length) : 0) || 0,
+    position: previousLive?.gsc_position || (previousWeekly.length ? (sumWeekly(previousWeekly, 'gsc_position') / previousWeekly.length) : 0) || 0,
+    traffic: previousLive?.ga4_traffic || sumWeekly(previousWeekly, 'ga4_traffic') || 0,
     leads: sumWeekly(previousWeekly, 'leads_total'),
     activity: sumWeekly(previousWeekly, 'pages_optimized') + sumWeekly(previousWeekly, 'blogs_published') + sumWeekly(previousWeekly, 'backlinks_built')
   };
 
-  const hasPrev = !!previousLive;
+  const hasPrev = !!previousLive || previousWeekly.length > 0;
 
   return {
     clicks: calculateMetricComparison(currSum.clicks, hasPrev ? prevSum.clicks : null),
@@ -186,8 +219,8 @@ export const aggregateMetrics = async (clientId: string, current: DateRange, pre
     traffic: calculateMetricComparison(currSum.traffic, hasPrev ? prevSum.traffic : null),
     leads: calculateMetricComparison(currSum.leads, hasPrev ? prevSum.leads : null),
     activityTotal: calculateMetricComparison(currSum.activity, hasPrev ? prevSum.activity : null),
-    top3: currentLive?.gsc_top3 || 0,
-    top10: currentLive?.gsc_top10 || 0
+    top3: currentLive?.gsc_top3 || sumWeekly(currentWeekly, 'top_3_count') || 0,
+    top10: currentLive?.gsc_top10 || sumWeekly(currentWeekly, 'top_10_count') || 0
   };
 };
 
@@ -277,9 +310,27 @@ export const addClient = async (client: Omit<Client, 'id'>): Promise<string> => 
 
 export const updateClient = async (id: string, data: Partial<Client>): Promise<void> => {
   try {
+    const cleanData = { ...data };
+    
+    const integerFields: (keyof Client)[] = [
+      'lead_target_monthly',
+      'technical_score_target',
+      'top_10_target',
+      'target_monthly_clicks',
+      'target_monthly_sessions',
+      'target_monthly_blogs',
+      'target_dr'
+    ];
+
+    integerFields.forEach(field => {
+      if (cleanData[field] !== undefined && cleanData[field] !== null) {
+        (cleanData as any)[field] = Math.round(Number(cleanData[field]) || 0);
+      }
+    });
+
     const { error } = await supabase
       .from('clients')
-      .update(data)
+      .update(cleanData)
       .eq('id', id);
     
     if (error) throw error;
@@ -319,18 +370,59 @@ export const addKeyword = async (clientId: string, keyword: any): Promise<void> 
 export const syncWeeklyData = async (clientId: string, data: Partial<WeeklyData>): Promise<void> => {
   try {
     const { id, ...saveData } = data;
-    if (id) {
-      const { error } = await supabase
-        .from('weekly_data')
-        .update(saveData)
-        .eq('id', id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from('weekly_data')
-        .insert({ ...saveData, client_id: clientId });
-      if (error) throw error;
+    
+    const integerFields: (keyof WeeklyData)[] = [
+      'backlinks_built',
+      'target_leads',
+      'leads_total',
+      'leads_legit',
+      'pages_optimized',
+      'blogs_published',
+      'tech_fixes',
+      'schema_updates',
+      'internal_links',
+      'ga4_new_users',
+      'ga4_returning_users',
+      'technical_score',
+      'top_3_count',
+      'top_10_count',
+      'ga4_traffic',
+      'gsc_clicks',
+      'gsc_impressions',
+      'ahrefs_dr',
+      'ahrefs_backlinks',
+      'ahrefs_ref_domains',
+      'phone_calls'
+    ];
+
+    integerFields.forEach(field => {
+      if (saveData[field] !== undefined && saveData[field] !== null) {
+        (saveData as any)[field] = Math.round(Number(saveData[field]) || 0);
+      }
+    });
+
+    const performSave = async (payload: any) => {
+      if (id) {
+        return await supabase
+          .from('weekly_data')
+          .update(payload)
+          .eq('id', id);
+      } else {
+        return await supabase
+          .from('weekly_data')
+          .insert({ ...payload, client_id: clientId });
+      }
+    };
+
+    let result = await performSave(saveData);
+
+    if (result.error && result.error.message.includes('phone_calls')) {
+      console.warn('[DB WARNING] phone_calls column missing. Retrying save without it...', result.error.message);
+      delete saveData.phone_calls;
+      result = await performSave(saveData);
     }
+
+    if (result.error) throw result.error;
   } catch (error) {
     console.error('Error saving weekly data:', error);
     throw error;
@@ -346,6 +438,70 @@ export const deleteKeyword = async (clientId: string, id: string): Promise<void>
     if (error) throw error;
   } catch (error) {
     console.error('Error deleting keyword:', error);
+    throw error;
+  }
+};
+
+export const getApiKeys = async (): Promise<any[]> => {
+  try {
+    const response = await fetch('/api/admin/keys');
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}: ${response.statusText}`);
+    }
+    const text = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('Invalid JSON response from server');
+    }
+    return data.keys || [];
+  } catch (error) {
+    console.error('Error fetching API keys:', error);
+    return [];
+  }
+};
+
+export const saveApiKey = async (id: string, keyValue: string): Promise<void> => {
+  try {
+    const response = await fetch('/api/admin/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, key_value: keyValue })
+    });
+    const text = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Server returned status ${response.status}: ${response.statusText || 'Unknown Error'}`);
+    }
+    if (!response.ok) throw new Error(data.error || 'Failed to save API key');
+  } catch (error) {
+    console.error('Error saving API key:', error);
+    throw error;
+  }
+};
+
+export const runAiAnalysis = async (params: {
+  clientId: string;
+  model: string;
+  analysisType: string;
+  startDate: string;
+  endDate: string;
+  simulate?: boolean;
+}): Promise<any> => {
+  try {
+    const response = await fetch('/api/ai/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'AI Analysis failed');
+    return data;
+  } catch (error) {
+    console.error('Error in runAiAnalysis:', error);
     throw error;
   }
 };

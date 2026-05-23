@@ -12,10 +12,13 @@ import {
   Maximize2,
   X,
   FileText,
-  Shield
+  Shield,
+  Activity
 } from 'lucide-react';
 import Tooltip from '../components/Tooltip';
+import NextActionModal from '../components/NextActionModal';
 import { getClients, Client, getWeeklyData, WeeklyData, getKeywords, KeywordHistory, getKeywordHistory, getLiveMetrics } from '../services/dataService';
+import { supabase } from '../lib/supabase';
 import { format, startOfWeek, subWeeks, startOfMonth, subMonths, endOfMonth, endOfWeek, parseISO } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -26,45 +29,63 @@ export default function ClientScoreboard() {
   const [allData, setAllData] = useState<Record<string, WeeklyData[]>>({});
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
   const [showFullReport, setShowFullReport] = useState<any | null>(null);
+  const [addingActionFor, setAddingActionFor] = useState<Client | null>(null);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (forceLive = false) => {
+    if (forceLive) setIsLiveSyncing(true);
     setLoading(true);
-    const clientList = await getClients();
-    setClients(clientList);
-
-    const today = new Date();
-    const currentStart = subWeeks(today, 1);
-    const currentEnd = today;
-    const previousStart = subWeeks(today, 2);
-    const previousEnd = subWeeks(today, 1);
-
-    const currentRange = {
-      startDate: format(currentStart, 'yyyy-MM-dd'),
-      endDate: format(currentEnd, 'yyyy-MM-dd')
-    };
     
-    const previousRange = {
-      startDate: format(previousStart, 'yyyy-MM-dd'),
-      endDate: format(previousEnd, 'yyyy-MM-dd')
-    };
+    try {
+      const clientList = await getClients();
+      setClients(clientList);
 
-    const dataMap: Record<string, any> = {};
-    const weeklyDataMap: Record<string, WeeklyData[]> = {};
+      const today = new Date();
+      const currentStart = subWeeks(today, 1);
+      const currentEnd = today;
+      const previousStart = subWeeks(today, 2);
+      const previousEnd = subWeeks(today, 1);
 
-    await Promise.all(clientList.map(async (client) => {
-      const [liveCurrent, livePrevious, dbData] = await Promise.all([
-        getLiveMetrics(client.id, currentRange),
-        getLiveMetrics(client.id, previousRange),
-        getWeeklyData(client.id, { startDate: format(subMonths(today, 6), 'yyyy-MM-dd'), endDate: format(today, 'yyyy-MM-dd') })
-      ]);
+      const currentRange = {
+        startDate: format(currentStart, 'yyyy-MM-dd'),
+        endDate: format(currentEnd, 'yyyy-MM-dd')
+      };
       
-      dataMap[client.id] = { liveCurrent, livePrevious };
-      weeklyDataMap[client.id] = dbData;
-    }));
+      const previousRange = {
+        startDate: format(previousStart, 'yyyy-MM-dd'),
+        endDate: format(previousEnd, 'yyyy-MM-dd')
+      };
 
-    setAllData(weeklyDataMap as any);
-    (window as any).__liveData = dataMap; // Store for useMemo
-    setLoading(false);
+      const dataMap: Record<string, any> = {};
+      const weeklyDataMap: Record<string, WeeklyData[]> = {};
+
+      const actionsData = await supabase.from('client_actions').select('*').eq('status', 'pending');
+      const pendingActionsData = actionsData.data || [];
+
+      await Promise.all(clientList.map(async (client) => {
+        const [liveCurrent, livePrevious, dbData] = await Promise.all([
+          forceLive ? getLiveMetrics(client.id, currentRange) : Promise.resolve(null),
+          forceLive ? getLiveMetrics(client.id, previousRange) : Promise.resolve(null),
+          getWeeklyData(client.id, { startDate: format(subMonths(today, 6), 'yyyy-MM-dd'), endDate: format(today, 'yyyy-MM-dd') })
+        ]);
+        
+        dataMap[client.id] = { 
+          liveCurrent, 
+          livePrevious,
+          pendingActions: pendingActionsData.filter(a => a.client_id === client.id)
+        };
+        weeklyDataMap[client.id] = dbData;
+      }));
+
+      setAllData(weeklyDataMap as any);
+      (window as any).__liveData = dataMap; // Store for useMemo
+      setLoading(false);
+      setIsLiveSyncing(false);
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+      setIsLiveSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -76,14 +97,14 @@ export default function ClientScoreboard() {
     return clients.map(client => {
       const data = allData[client.id] || [];
       const latestDb = data[0];
-      const { liveCurrent, livePrevious } = liveData[client.id] || {};
+      const { liveCurrent, livePrevious, pendingActions } = liveData[client.id] || {};
 
       // Merge DB data with Live data
       const latest = {
         ...(latestDb || {}),
-        gsc_clicks: liveCurrent?.gsc_clicks ?? latestDb?.gsc_clicks ?? 0,
-        gsc_position: liveCurrent?.gsc_position ?? latestDb?.gsc_position ?? 0,
-        ga4_traffic: liveCurrent?.ga4_traffic ?? latestDb?.ga4_traffic ?? 0,
+        gsc_clicks: liveCurrent?.gsc_clicks || latestDb?.gsc_clicks || 0,
+        gsc_position: liveCurrent?.gsc_position || latestDb?.gsc_position || 0,
+        ga4_traffic: liveCurrent?.ga4_traffic || latestDb?.ga4_traffic || 0,
       };
 
   const getHealth = () => {
@@ -108,12 +129,13 @@ export default function ClientScoreboard() {
         health: getHealth(),
         trafficChange,
         leadsChange,
+        pendingActions,
         trend: liveCurrent && livePrevious ? (liveCurrent.gsc_clicks >= livePrevious.gsc_clicks ? 'up' : 'down') : 'stable'
       };
     });
   }, [clients, allData, loading]);
 
-  if (loading) return <div className="h-screen flex items-center justify-center">Loading scoreboard...</div>;
+  if (loading && !isLiveSyncing) return <div className="h-screen flex items-center justify-center">Loading scoreboard...</div>;
 
   return (
     <div className="space-y-8 pb-12">
@@ -150,6 +172,17 @@ export default function ClientScoreboard() {
             Monthly Goals
           </button>
         </div>
+        <button
+          onClick={() => fetchData(true)}
+          className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl backdrop-blur-xl border ${
+            theme === 'white' 
+              ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20 border-transparent' 
+              : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 border-white/5'
+          }`}
+        >
+          <Activity size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
+          Live Sync
+        </button>
       </div>
 
     <div className="grid grid-cols-1 gap-4">
@@ -173,6 +206,18 @@ export default function ClientScoreboard() {
                   </span>
                   <span className={`text-[9px] font-black uppercase tracking-widest truncate ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-600'}`}>ID: {client.ga4_property_id}</span>
                 </div>
+                {client.pendingActions && client.pendingActions.length > 0 && (
+                  <div className="flex flex-col gap-0.5 mt-2 max-h-16 overflow-y-auto pr-2 custom-scrollbar">
+                    {client.pendingActions.map((action: any) => (
+                      <div key={action.id} className="flex items-start gap-1">
+                        <Target size={8} className={`mt-0.5 shrink-0 ${theme === 'white' ? 'text-[#76c9be]' : 'text-amber-500'}`} />
+                        <span className={`text-[9px] leading-tight font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'} line-clamp-1`} title={action.action_text}>
+                          {action.action_text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -219,15 +264,24 @@ export default function ClientScoreboard() {
             </div>
 
             {/* Actions Section - Fixed Width End */}
-            <div className="lg:col-span-3 flex items-center gap-4 justify-end">
+            <div className="lg:col-span-3 flex items-center gap-2 justify-end">
               <button 
                 onClick={() => setShowFullReport(client)}
-                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center gap-2 whitespace-nowrap ${
+                className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center gap-2 whitespace-nowrap ${
                   theme === 'white' ? 'bg-[#f47b20] text-white shadow-[#f47b20]/20 hover:bg-[#f47b20]/90' : 'bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500'
                 }`}
               >
                 <Maximize2 size={16} />
-                Generate Deep Detail
+                Deep Detail
+              </button>
+              <button
+                onClick={() => setAddingActionFor(client)}
+                className={`p-3 rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center gap-2 ${
+                  theme === 'white' ? 'bg-[#76c9be] text-white shadow-[#76c9be]/20 hover:bg-[#5bb8ad]' : 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500'
+                }`}
+                title="Log Next Action"
+              >
+                <Target size={16} />
               </button>
             </div>
           </div>
@@ -386,6 +440,17 @@ export default function ClientScoreboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {addingActionFor && (
+        <NextActionModal
+          client={addingActionFor}
+          onClose={() => setAddingActionFor(null)}
+          onSuccess={() => {
+            setAddingActionFor(null);
+            fetchData();
+          }}
+        />
       )}
     </div>
   );

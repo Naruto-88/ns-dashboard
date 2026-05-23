@@ -22,6 +22,7 @@ import {
 import { auth, supabase } from '../lib/supabase';
 import { getClients, addClient, updateClient, deleteClient, addKeyword, Client } from '../services/dataService';
 import { useTheme } from '../contexts/ThemeContext';
+import Tooltip from '../components/Tooltip';
 
 export default function ClientManagement() {
   const { theme } = useTheme();
@@ -53,7 +54,12 @@ export default function ClientManagement() {
     technical_score_target: 90,
     project_owner_name: 'Melaka',
     project_owner_code: 'MW',
-    top_10_target: 0
+    top_10_target: 0,
+    target_monthly_clicks: 0,
+    target_monthly_sessions: 0,
+    target_monthly_blogs: 0,
+    lead_api_url: '',
+    target_dr: 0
   };
 
   const owners = [
@@ -168,7 +174,7 @@ export default function ClientManagement() {
   };
 
   const handleBulkRepairGsc = async () => {
-    if (!window.confirm('This will scan all clients and try to automatically fix their GSC URLs to match your authorized properties. Proceed?')) return;
+    if (!window.confirm('This will scan all clients and try to automatically fix their GSC URLs to match your authorised properties. Proceed?')) return;
     
     setRepairing(true);
     try {
@@ -251,7 +257,6 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='lead_event_names') THEN
     ALTER TABLE public.clients ADD COLUMN lead_event_names TEXT DEFAULT 'generate_lead, form_submission';
   END IF;
-  
   -- Targets & Owners
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='lead_target_monthly') THEN
     ALTER TABLE public.clients ADD COLUMN lead_target_monthly INTEGER DEFAULT 0;
@@ -267,6 +272,14 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='project_owner_code') THEN
     ALTER TABLE public.clients ADD COLUMN project_owner_code TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='lead_api_url') THEN
+    ALTER TABLE public.clients ADD COLUMN lead_api_url TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='target_dr') THEN
+    ALTER TABLE public.clients ADD COLUMN target_dr INTEGER DEFAULT 0;
   END IF;
 
   -- Fix Weekly Data table columns
@@ -307,6 +320,18 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='leads_legit') THEN
     ALTER TABLE public.weekly_data ADD COLUMN leads_legit INTEGER DEFAULT 0;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='phone_calls') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN phone_calls INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_dr') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ahrefs_dr INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_backlinks') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ahrefs_backlinks INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='ahrefs_ref_domains') THEN
+    ALTER TABLE public.weekly_data ADD COLUMN ahrefs_ref_domains INTEGER DEFAULT 0;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='weekly_data' AND column_name='pages_optimized') THEN
     ALTER TABLE public.weekly_data ADD COLUMN pages_optimized INTEGER DEFAULT 0;
   END IF;
@@ -342,6 +367,8 @@ CREATE TABLE IF NOT EXISTS public.clients (
   ga4_property_id TEXT,
   gsc_site_url TEXT,
   lead_event_names TEXT DEFAULT 'generate_lead, form_submission',
+  lead_api_url TEXT,
+  target_dr INTEGER DEFAULT 0,
   keyword_tracking_enabled BOOLEAN DEFAULT true,
   api_import_enabled BOOLEAN DEFAULT true,
   notes TEXT,
@@ -364,6 +391,10 @@ CREATE TABLE IF NOT EXISTS public.weekly_data (
   leads_total INTEGER DEFAULT 0,
   leads_legit INTEGER DEFAULT 0,
   target_leads INTEGER DEFAULT 0,
+  phone_calls INTEGER DEFAULT 0,
+  ahrefs_dr INTEGER DEFAULT 0,
+  ahrefs_backlinks INTEGER DEFAULT 0,
+  ahrefs_ref_domains INTEGER DEFAULT 0,
   pages_optimized INTEGER DEFAULT 0,
   blogs_published INTEGER DEFAULT 0,
   backlinks_built INTEGER DEFAULT 0,
@@ -493,7 +524,7 @@ NOTIFY pgrst, 'reload schema';
       const { data, error } = await supabase.from('clients').select('*');
       if (error) throw error;
       logDebug(`DB Success: Found ${data.length} docs`);
-      alert(`Database Success!\n\n- Current Client Count: ${data.length}\n- Connection: Active and Authorized as ${user.email}`);
+      alert(`Database Success!\n\n- Current Client Count: ${data.length}\n- Connection: Active and Authorised as ${user.email}`);
     } catch (e: any) {
       logDebug('DB Error: ' + e.message);
       alert(`Database Connection Failed!\n\nError: ${e.message}`);
@@ -559,6 +590,11 @@ NOTIFY pgrst, 'reload schema';
       project_owner_name: client.project_owner_name || 'Melaka',
       project_owner_code: client.project_owner_code || 'MW',
       top_10_target: client.top_10_target || 0,
+      target_monthly_clicks: client.target_monthly_clicks || 0,
+      target_monthly_sessions: client.target_monthly_sessions || 0,
+      target_monthly_blogs: client.target_monthly_blogs || 0,
+      lead_api_url: client.lead_api_url || '',
+      target_dr: client.target_dr || 0,
       initial_keywords: ''
     } as any);
     setShowModal('edit');
@@ -893,76 +929,146 @@ NOTIFY pgrst, 'reload schema';
             <form onSubmit={handleSaveClient} className="p-10 space-y-8 max-h-[70vh] overflow-y-auto">
               {/* officer and target */}
               <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Assigned Officer</label>
-                  <select 
-                    value={formData.project_owner_name}
-                    onChange={(e) => {
-                      const owner = owners.find(o => o.name === e.target.value);
-                      setFormData({
-                        ...formData, 
-                        project_owner_name: e.target.value,
-                        project_owner_code: owner?.code || 'MW'
-                      });
-                    }}
-                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 appearance-none uppercase tracking-widest ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`}
-                  >
-                    {owners.map(o => <option key={o.code} value={o.name}>{o.name} ({o.code})</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Monthly Lead Target</label>
-                  <input 
-                    type="number" 
-                    value={formData.lead_target_monthly}
-                    onChange={(e) => setFormData({...formData, lead_target_monthly: parseInt(e.target.value) || 0})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`} 
-                  />
-                </div>
+                <Tooltip content="Select the primary campaign manager owning this client project node" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Assigned Officer</label>
+                    <select 
+                      value={formData.project_owner_name}
+                      onChange={(e) => {
+                        const owner = owners.find(o => o.name === e.target.value);
+                        setFormData({
+                          ...formData, 
+                          project_owner_name: e.target.value,
+                          project_owner_code: owner?.code || 'MW'
+                        });
+                      }}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 appearance-none uppercase tracking-widest ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`}
+                    >
+                      {owners.map(o => <option key={o.code} value={o.name}>{o.name} ({o.code})</option>)}
+                    </select>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Set the targeted number of qualified organic leads to generate for this client per calendar month" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Monthly Lead Target</label>
+                    <input 
+                      type="number" 
+                      value={formData.lead_target_monthly}
+                      onChange={(e) => setFormData({...formData, lead_target_monthly: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
               </div>
 
               <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Rank Benchmark (Avg Pos)</label>
-                  <input 
-                    type="number" 
-                    step="0.1"
-                    value={formData.avg_position_target}
-                    onChange={(e) => setFormData({...formData, avg_position_target: parseFloat(e.target.value) || 0})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`} 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Tech Health Target (%)</label>
-                  <input 
-                    type="number" 
-                    value={formData.technical_score_target}
-                    onChange={(e) => setFormData({...formData, technical_score_target: parseInt(e.target.value) || 0})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`} 
-                  />
-                </div>
+                <Tooltip content="Target average ranking position across all tracked keywords in Google Search Console" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Rank Benchmark (Avg Pos)</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      value={formData.avg_position_target}
+                      onChange={(e) => setFormData({...formData, avg_position_target: parseFloat(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
+                <Tooltip content="Desired minimum target percentage score for technical site performance and SEO health checks" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Tech Health Target (%)</label>
+                    <input 
+                      type="number" 
+                      value={formData.technical_score_target}
+                      onChange={(e) => setFormData({...formData, technical_score_target: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
+              </div>
+              <div className="grid grid-cols-2 gap-8">
+                <Tooltip content="Set the targeted number of Google Search Console organic clicks to achieve per calendar month" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Monthly Clicks (GSC)</label>
+                    <input 
+                      type="number" 
+                      value={formData.target_monthly_clicks}
+                      onChange={(e) => setFormData({...formData, target_monthly_clicks: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
+                <Tooltip content="Set the targeted number of Google Analytics 4 sessions to achieve per calendar month" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Monthly Sessions (GA4)</label>
+                    <input 
+                      type="number" 
+                      value={formData.target_monthly_sessions}
+                      onChange={(e) => setFormData({...formData, target_monthly_sessions: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
               </div>
 
               <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>T10 Visibility Goal</label>
-                  <input 
-                    type="number" 
-                    value={formData.top_10_target}
-                    onChange={(e) => setFormData({...formData, top_10_target: parseInt(e.target.value) || 0})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`} 
-                  />
-                </div>
+                <Tooltip content="Set the monthly content production goal for blogs and article nodes" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-[#607a80]'}`}>Target Blogs Published</label>
+                    <input 
+                      type="number" 
+                      value={formData.target_monthly_blogs}
+                      onChange={(e) => setFormData({...formData, target_monthly_blogs: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
+                <Tooltip content="Target number of keywords to rank in Google's top 10 organic search results" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>T10 Visibility Goal</label>
+                    <input 
+                      type="number" 
+                      value={formData.top_10_target}
+                      onChange={(e) => setFormData({...formData, top_10_target: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
+              </div>
+
+              <div className="grid grid-cols-2 gap-8">
+                <Tooltip content="Set the target Ahrefs Domain Rating (DR) to track for this client node" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Domain Rating (DR)</label>
+                    <input 
+                      type="number" 
+                      value={formData.target_dr}
+                      onChange={(e) => setFormData({...formData, target_dr: parseInt(e.target.value) || 0})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
+              </div>
+
+              <div className="grid grid-cols-1 gap-8">
                 <div className="space-y-2">
                   <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Property Name</label>
                   <input 
@@ -1033,7 +1139,7 @@ NOTIFY pgrst, 'reload schema';
                       className="text-[8px] font-black text-blue-500 uppercase tracking-widest hover:underline flex items-center gap-1"
                     >
                       {loadingSites ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
-                      Scan Authorized properties
+                      Scan Authorised properties
                     </button>
                   ) : (
                     <button 
@@ -1098,6 +1204,19 @@ NOTIFY pgrst, 'reload schema';
                   type="text" 
                   value={formData.lead_event_names}
                   onChange={(e) => setFormData({...formData, lead_event_names: e.target.value})}
+                  className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
+                    theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                  }`} 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Genuine Leads Filtering API URL (Optional)</label>
+                <input 
+                  type="text" 
+                  value={formData.lead_api_url}
+                  onChange={(e) => setFormData({...formData, lead_api_url: e.target.value})}
+                  placeholder="https://your-custom-app.com/api/genuine-leads"
                   className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`} 

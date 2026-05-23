@@ -22,7 +22,7 @@ import {
   TrendingUp,
   TrendingDown
 } from 'lucide-react';
-import { getClients, getWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails } from '../services/dataService';
+import { getClients, getWeeklyData, getAllWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
@@ -47,6 +47,17 @@ interface DashboardRow {
   };
   ga4Traffic: { current: number; previous: number; change: number };
   leads: { current: number; change: number; legit: number };
+  phoneCalls: { current: number; previous: number; change: number };
+  ahrefs: { 
+    dr: number; 
+    backlinks: number; 
+    refDomains: number; 
+    targetDr: number;
+    prevDr: number;
+    prevBacklinks: number;
+    prevRefDomains: number;
+    hasPrev: boolean;
+  };
   status: { color: 'green' | 'orange' | 'red'; reason: string };
 }
 
@@ -62,7 +73,8 @@ export default function MasterDashboard() {
     return ((c - p) / p) * 100;
   };
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'weekly' | 'monthly' | 'rolling' | 'custom'>('weekly');
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly' | 'rolling' | 'custom'>('rolling');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
     end: format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
@@ -87,8 +99,12 @@ export default function MasterDashboard() {
 
   const [viewingPeriod, setViewingPeriod] = useState<{ start: Date; end: Date } | null>(null);
 
-  const fetchData = async (silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchData = async (silent = false, forceLive = false) => {
+    if (forceLive) {
+      setIsLiveSyncing(true);
+    } else if (!silent) {
+      setLoading(true);
+    }
     try {
       const allClients = await getClients();
       setClients(allClients);
@@ -103,10 +119,10 @@ export default function MasterDashboard() {
         prevStart = new Date(currentStart.getTime() - duration - (24 * 60 * 60 * 1000));
         prevEnd = new Date(currentEnd.getTime() - duration - (24 * 60 * 60 * 1000));
       } else if (viewMode === 'rolling') {
-        currentEnd = subDays(today, 3); // May 4
-        currentStart = subDays(currentEnd, 6); // April 28
-        prevEnd = subDays(currentStart, 1); // April 27
-        prevStart = subDays(prevEnd, 6); // April 21
+        currentEnd = today;
+        currentStart = subDays(today, 6);
+        prevEnd = subDays(currentStart, 1);
+        prevStart = subDays(prevEnd, 6);
       } else if (viewMode === 'weekly') {
         currentStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
         currentEnd = endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
@@ -123,24 +139,26 @@ export default function MasterDashboard() {
       const currentRangeStr = `${format(currentStart, 'MMM dd')} - ${format(currentEnd, 'MMM dd')}`;
       const prevRangeStr = `${format(prevStart, 'MMM dd')} - ${format(prevEnd, 'MMM dd')}`;
 
+      const allWeeklyData = await getAllWeeklyData({
+        startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
+        endDate: format(today, 'yyyy-MM-dd')
+      });
+
       const dashboardRows: DashboardRow[] = await Promise.all(allClients.map(async (client) => {
-        let weeklyData: WeeklyData[] = [];
+        let weeklyData: WeeklyData[] = allWeeklyData[client.id] || [];
         let liveCurrent: any = null;
         let livePrevious: any = null;
 
         try {
-          const results = await Promise.allSettled([
-            getWeeklyData(client.id, {
-              startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
-              endDate: format(today, 'yyyy-MM-dd')
-            }),
-            getLiveMetrics(client.id, { startDate: format(currentStart, 'yyyy-MM-dd'), endDate: format(currentEnd, 'yyyy-MM-dd') }),
-            getLiveMetrics(client.id, { startDate: format(prevStart, 'yyyy-MM-dd'), endDate: format(prevEnd, 'yyyy-MM-dd') })
-          ]);
+          if (forceLive) {
+            const results = await Promise.allSettled([
+              getLiveMetrics(client.id, { startDate: format(currentStart, 'yyyy-MM-dd'), endDate: format(currentEnd, 'yyyy-MM-dd') }),
+              getLiveMetrics(client.id, { startDate: format(prevStart, 'yyyy-MM-dd'), endDate: format(prevEnd, 'yyyy-MM-dd') })
+            ]);
+            if (results[0].status === 'fulfilled') liveCurrent = (results[0] as any).value;
+            if (results[1].status === 'fulfilled') livePrevious = (results[1] as any).value;
+          }
 
-          if (results[0].status === 'fulfilled') weeklyData = (results[0] as any).value;
-          if (results[1].status === 'fulfilled') liveCurrent = (results[1] as any).value;
-          if (results[2].status === 'fulfilled') livePrevious = (results[2] as any).value;
         } catch (e) {
           console.error(`Error fetching data for ${client.name}:`, e);
         }
@@ -155,31 +173,72 @@ export default function MasterDashboard() {
 
         const prevWeekData = weeklyData
           .filter(d => parseISO(d.week_start_date) >= prevStart && parseISO(d.week_start_date) <= prevEnd)
-          .sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime())[0];
+          .sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime())[0]
+          || sortedWeekly[1] || null;
+
+        const resolvedCurrentClicks = liveCurrent?.gsc_clicks || currentWeekData?.gsc_clicks || 0;
+        const resolvedPreviousClicks = livePrevious?.gsc_clicks || prevWeekData?.gsc_clicks || 0;
 
         const gscTraffic = {
-          current: liveCurrent?.gsc_clicks || 0,
-          previous: livePrevious?.gsc_clicks || 0,
-          change: liveCurrent && livePrevious ? ((liveCurrent.gsc_clicks - livePrevious.gsc_clicks) / (livePrevious.gsc_clicks || 1)) * 100 : 0,
-          ctr: liveCurrent?.gsc_ctr || 0,
-          prevCtr: livePrevious?.gsc_ctr || 0,
-          position: liveCurrent?.gsc_position || 0,
-          impressions: liveCurrent?.gsc_impressions || 0,
-          prevImpressions: livePrevious?.gsc_impressions || 0,
-          top3: liveCurrent?.gsc_top3 || 0,
-          top10: liveCurrent?.gsc_top10 || 0
+          current: resolvedCurrentClicks,
+          previous: resolvedPreviousClicks,
+          change: ((resolvedCurrentClicks - resolvedPreviousClicks) / (resolvedPreviousClicks || 1)) * 100,
+          ctr: liveCurrent?.gsc_ctr || currentWeekData?.gsc_ctr || 0,
+          prevCtr: livePrevious?.gsc_ctr || prevWeekData?.gsc_ctr || 0,
+          position: liveCurrent?.gsc_position || currentWeekData?.gsc_position || 0,
+          prevPosition: livePrevious?.gsc_position || prevWeekData?.gsc_position || 0,
+          impressions: liveCurrent?.gsc_impressions || currentWeekData?.gsc_impressions || 0,
+          prevImpressions: livePrevious?.gsc_impressions || prevWeekData?.gsc_impressions || 0,
+          top3: liveCurrent?.gsc_top3 || currentWeekData?.top_3_count || 0,
+          top10: liveCurrent?.gsc_top10 || currentWeekData?.top_10_count || 0
         };
 
+        const resolvedCurrentTraffic = liveCurrent?.ga4_traffic || currentWeekData?.ga4_traffic || 0;
+        const resolvedPreviousTraffic = livePrevious?.ga4_traffic || prevWeekData?.ga4_traffic || 0;
+
         const ga4Traffic = {
-          current: liveCurrent?.ga4_traffic || 0,
-          previous: livePrevious?.ga4_traffic || 0,
-          change: calculateChange(liveCurrent?.ga4_traffic || 0, livePrevious?.ga4_traffic || 0)
+          current: resolvedCurrentTraffic,
+          previous: resolvedPreviousTraffic,
+          change: calculateChange(resolvedCurrentTraffic, resolvedPreviousTraffic)
         };
 
         const leads = {
           current: currentWeekData?.leads_total || 0,
           legit: currentWeekData?.leads_legit || 0,
           change: calculateChange(currentWeekData?.leads_total || 0, prevWeekData?.leads_total || 0)
+        };
+
+        const resolvedCurrentPhoneCalls = liveCurrent?.phone_calls ?? currentWeekData?.phone_calls ?? 0;
+        const resolvedPreviousPhoneCalls = livePrevious?.phone_calls ?? prevWeekData?.phone_calls ?? 0;
+
+        const phoneCalls = {
+          current: resolvedCurrentPhoneCalls,
+          previous: resolvedPreviousPhoneCalls,
+          change: calculateChange(resolvedCurrentPhoneCalls, resolvedPreviousPhoneCalls)
+        };
+
+        // Calculate historical previous data for Ahrefs comparison
+        let historicalPrev = prevWeekData;
+        if (!historicalPrev && sortedWeekly.length > 1) {
+          if (currentWeekData?.id === sortedWeekly[0].id) {
+            historicalPrev = sortedWeekly[1];
+          } else {
+            const currentIndex = sortedWeekly.findIndex(d => d.id === currentWeekData?.id);
+            if (currentIndex !== -1 && currentIndex + 1 < sortedWeekly.length) {
+              historicalPrev = sortedWeekly[currentIndex + 1];
+            }
+          }
+        }
+
+        const ahrefs = {
+          dr: latestData?.ahrefs_dr || currentWeekData?.ahrefs_dr || 0,
+          backlinks: latestData?.ahrefs_backlinks || currentWeekData?.ahrefs_backlinks || 0,
+          refDomains: latestData?.ahrefs_ref_domains || currentWeekData?.ahrefs_ref_domains || 0,
+          targetDr: client.target_dr || 0,
+          prevDr: historicalPrev?.ahrefs_dr || 0,
+          prevBacklinks: historicalPrev?.ahrefs_backlinks || 0,
+          prevRefDomains: historicalPrev?.ahrefs_ref_domains || 0,
+          hasPrev: !!historicalPrev
         };
 
         let score = 0;
@@ -205,6 +264,8 @@ export default function MasterDashboard() {
           },
           ga4Traffic,
           leads,
+          phoneCalls,
+          ahrefs,
           status,
           currentRangeStr,
           prevRangeStr
@@ -212,10 +273,11 @@ export default function MasterDashboard() {
       }));
 
       setRows(dashboardRows);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+    } catch (e) {
+      console.error('Error fetching dashboard data:', e);
     } finally {
       if (!silent) setLoading(false);
+      setIsLiveSyncing(false);
     }
   };
 
@@ -270,6 +332,18 @@ export default function MasterDashboard() {
           case 'leads':
             aValue = a.leads.legit;
             bValue = b.leads.legit;
+            break;
+          case 'phone_calls':
+            aValue = a.phoneCalls.current;
+            bValue = b.phoneCalls.current;
+            break;
+          case 'dr':
+            aValue = a.ahrefs.dr;
+            bValue = b.ahrefs.dr;
+            break;
+          case 'backlinks':
+            aValue = a.ahrefs.backlinks;
+            bValue = b.ahrefs.backlinks;
             break;
           case 'top10':
             aValue = a.gscTraffic.top10 || a.currentData?.top_10_count || 0;
@@ -435,6 +509,17 @@ export default function MasterDashboard() {
                 } w-48`}
             />
           </div>
+          <button
+            onClick={() => fetchData(false, true)}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+              theme === 'white' 
+                ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20' 
+                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20'
+            }`}
+          >
+            <RefreshCcw size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
+            Live Sync
+          </button>
         </div>
       </div>
 
@@ -466,6 +551,12 @@ export default function MasterDashboard() {
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Verified high-quality leads" position="bottom">Legit Leads</Tooltip>
                     {sortConfig?.key === 'leads' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                  </div>
+                </th>
+                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
+                  <div className="flex items-center justify-center gap-2">
+                    <Tooltip content="Current vs Previous GA4 Phone Calls" position="bottom">Phone Calls (C/P)</Tooltip>
+                    {sortConfig?.key === 'phone_calls' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
                 <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
@@ -507,6 +598,12 @@ export default function MasterDashboard() {
                     {sortConfig?.key === 'ga4' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
+                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
+                  <div className="flex items-center justify-center gap-2">
+                    <Tooltip content="Ahrefs Domain Rating & Backlinks" position="bottom">Ahrefs DR & BL</Tooltip>
+                    {sortConfig?.key === 'dr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                  </div>
+                </th>
                 <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
                   <Tooltip content="Weekly production activities" position="bottom">Activity</Tooltip>
                 </th>
@@ -525,12 +622,12 @@ export default function MasterDashboard() {
               {loading ? (
                 Array(5).fill(0).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={12} className={`px-6 py-8 ${theme === 'white' ? 'bg-zinc-50' : 'bg-white/5'}`} />
+                    <td colSpan={15} className={`px-6 py-8 ${theme === 'white' ? 'bg-zinc-50' : 'bg-white/5'}`} />
                   </tr>
                 ))
-              ) : filteredRows.map((row) => (
+              ) : filteredRows.map((row, rowIndex) => (
                 <tr key={row.client.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
-                  <td className={`px-6 py-2 sticky left-0 z-[19] border-r transition-colors ${theme === 'white' ? 'bg-white border-zinc-100 group-hover:bg-zinc-50' : 'bg-zinc-900 group-hover:bg-zinc-800 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)]'
+                  <td className={`px-6 py-2 sticky left-0 z-[19] hover:z-[50] border-r transition-colors ${theme === 'white' ? 'bg-white border-zinc-100 group-hover:bg-zinc-50' : 'bg-zinc-900 group-hover:bg-zinc-800 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)]'
                     }`}>
                     <Tooltip content={row.client.name} position="right">
                       <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs uppercase ring-1 transition-all ${theme === 'white'
@@ -541,8 +638,8 @@ export default function MasterDashboard() {
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-4 py-4">
-                    <Tooltip content={`Project Officer: ${row.client.project_owner_name}`} className="flex justify-center">
+                  <td className="px-4 py-4 relative hover:z-[50]">
+                    <Tooltip content={`Project Officer: ${row.client.project_owner_name}`} position={rowIndex < 2 ? 'bottom' : 'top'} className="flex justify-center">
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black border transition-colors ${theme === 'white' ? 'bg-[#76c9be]/5 text-[#607a80] border-[#163f4d]/10 group-hover:bg-[#76c9be]/10' : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:bg-zinc-700 group-hover:text-white'
                         }`}>
                         {row.client.project_owner_code}
@@ -576,6 +673,22 @@ export default function MasterDashboard() {
                         </div>
                       </div>
                     )}
+                  </td>
+                  <td className="px-4 py-2 text-center relative hover:z-[50]">
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
+                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
+                      </div>
+                    }>
+                      <div className="flex flex-col items-center">
+                        <div className="flex items-baseline gap-1">
+                          <span className={`font-black font-heading text-xs tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.phoneCalls.current.toLocaleString()}</span>
+                          <span className="text-[9px] text-[#607a80] font-bold opacity-60">/ {row.phoneCalls.previous.toLocaleString()}</span>
+                        </div>
+                        <TrendIndicator value={row.phoneCalls.change} theme={theme} />
+                      </div>
+                    </Tooltip>
                   </td>
                   <td className="px-4 py-2 text-center">
                     <div 
@@ -629,17 +742,32 @@ export default function MasterDashboard() {
                   </td>
                   <td className="px-4 py-2 text-center">
                     <div className="flex flex-col items-center">
-                      <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
-                        {(row.currentData?.tracked_keywords_avg_position || row.gscTraffic.position || 0).toFixed(1)}
-                      </span>
-                      <TrendIndicator value={calculatePosChange(row.currentData?.tracked_keywords_avg_position, row.prevData?.tracked_keywords_avg_position)} theme={theme} inverse />
+                      {(() => {
+                        const currentPos = row.currentData?.tracked_keywords_avg_position || row.gscTraffic.position || 0;
+                        const prevPos = row.prevData?.tracked_keywords_avg_position || row.gscTraffic.prevPosition || 0;
+                        return (
+                          <>
+                            <div className="flex items-baseline justify-center gap-0.5">
+                              <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                {currentPos > 0 ? currentPos.toFixed(1) : '-'}
+                              </span>
+                              {prevPos > 0 && (
+                                <span className="text-[9px] text-[#607a80] font-bold opacity-60">
+                                  / {prevPos.toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                            <TrendIndicator value={calculatePosChange(currentPos, prevPos)} theme={theme} inverse />
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-center">
-                    <Tooltip content={
-                      <div className="space-y-1">
-                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span>{row.currentRangeStr}</span></div>
-                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span>{row.prevRangeStr}</span></div>
+                  <td className="px-4 py-2 text-center relative hover:z-[50]">
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
+                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
                       </div>
                     }>
                       <div className="flex flex-col items-center">
@@ -651,11 +779,11 @@ export default function MasterDashboard() {
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-4 py-2 text-center">
-                    <Tooltip content={
-                      <div className="space-y-1">
-                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span>{row.currentRangeStr}</span></div>
-                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span>{row.prevRangeStr}</span></div>
+                  <td className="px-4 py-2 text-center relative hover:z-[50]">
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
+                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
                       </div>
                     }>
                       <div className="flex flex-col items-center">
@@ -667,6 +795,118 @@ export default function MasterDashboard() {
                       </div>
                     </Tooltip>
                   </td>
+                  <td className="px-4 py-2 text-center relative hover:z-[50]">
+                    <Tooltip content={
+                      <div className="space-y-1.5 p-0.5">
+                        <div className={`font-black border-b pb-1.5 uppercase tracking-wider text-[9px] flex justify-between items-center gap-4 ${
+                          theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
+                        }`}>
+                          <span>Ahrefs Comparison</span>
+                          <span className="text-[7.5px] font-normal lowercase tracking-normal opacity-80">
+                            ({row.ahrefs.hasPrev ? 'vs previous period' : 'no previous data'})
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-left min-w-[180px]">
+                          <div className="flex justify-between items-center text-[9.5px]">
+                            <span className={`font-semibold ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
+                              {row.ahrefs.hasPrev && (
+                                <span className={`text-[8.5px] font-black ${
+                                  row.ahrefs.dr - row.ahrefs.prevDr > 0 
+                                    ? 'text-emerald-500' 
+                                    : row.ahrefs.dr - row.ahrefs.prevDr < 0 
+                                      ? 'text-red-500' 
+                                      : 'text-zinc-500'
+                                }`}>
+                                  {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center text-[9.5px]">
+                            <span className={`font-semibold ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Backlinks:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
+                              {row.ahrefs.hasPrev && (
+                                <span className={`text-[8.5px] font-black ${
+                                  row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
+                                    ? 'text-emerald-500' 
+                                    : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
+                                      ? 'text-red-500' 
+                                      : 'text-zinc-500'
+                                }`}>
+                                  {row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
+                                    ? `▲ +${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` 
+                                    : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
+                                      ? `▼ ${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` 
+                                      : '• 0'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-[9.5px]">
+                            <span className={`font-semibold ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Referring Domains:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
+                              {row.ahrefs.hasPrev && (
+                                <span className={`text-[8.5px] font-black ${
+                                  row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
+                                    ? 'text-emerald-500' 
+                                    : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
+                                      ? 'text-red-500' 
+                                      : 'text-zinc-500'
+                                }`}>
+                                  {row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
+                                    ? `▲ +${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` 
+                                    : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
+                                      ? `▼ ${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` 
+                                      : '• 0'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {row.ahrefs.hasPrev && (
+                          <div className={`text-[8px] pt-1.5 border-t flex flex-col gap-0.5 ${
+                            theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-500'
+                          }`}>
+                            <div className="flex justify-between"><span>Current:</span> <span className={`font-semibold ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.currentRangeStr}</span></div>
+                            <div className="flex justify-between"><span>Previous:</span> <span className={`font-semibold ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.prevRangeStr}</span></div>
+                          </div>
+                        )}
+                      </div>
+                    } position={rowIndex < 2 ? 'bottom' : 'top'}>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className={`font-black text-xs tracking-tighter ${theme === 'white' ? 'text-purple-600' : 'text-purple-400'}`}>
+                            DR: {row.ahrefs.dr || '-'}
+                            {row.ahrefs.hasPrev && row.ahrefs.dr - row.ahrefs.prevDr !== 0 && (
+                              <span className={`text-[9px] font-black ml-1 select-none ${
+                                row.ahrefs.dr - row.ahrefs.prevDr > 0 
+                                  ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') 
+                                  : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')
+                              }`}>
+                                {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? '▲' : '▼'}
+                              </span>
+                            )}
+                          </span>
+                          {row.ahrefs.targetDr > 0 && (
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest opacity-80">
+                              / {row.ahrefs.targetDr}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`flex items-center gap-1.5 text-[9px] font-bold ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                          <span>BL: {row.ahrefs.backlinks >= 1000 ? `${(row.ahrefs.backlinks / 1000).toFixed(1)}K` : row.ahrefs.backlinks}</span>
+                          <span className="opacity-30">|</span>
+                          <span>RD: {row.ahrefs.refDomains}</span>
+                        </div>
+                      </div>
+                    </Tooltip>
+                  </td>
                   <td className="px-4 py-2 text-center">
                     <div className={`flex items-center justify-center gap-2 translate-y-1 border-t pt-2 ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
                       <MiniMetric
@@ -675,6 +915,7 @@ export default function MasterDashboard() {
                         theme={theme}
                         tooltip="Blogs Published"
                         prefix="B"
+                        position={rowIndex < 2 ? 'bottom' : 'top'}
                       />
                       <MiniMetric
                         count={row.latestData?.backlinks_built || row.currentData?.backlinks_built || 0}
@@ -682,6 +923,7 @@ export default function MasterDashboard() {
                         theme={theme}
                         tooltip="Backlinks Built"
                         prefix="BL"
+                        position={rowIndex < 2 ? 'bottom' : 'top'}
                       />
                     </div>
                   </td>
@@ -700,8 +942,8 @@ export default function MasterDashboard() {
                       <Activity size={18} />
                     </button>
                   </td>
-                  <td className="px-8 py-2 text-center sticky right-0 z-[19] border-l bg-inherit shadow-[-2px_0_10px_rgba(3,7,18,0.5)]">
-                    <Tooltip content={`Performance Status: ${row.status.reason}`} position="top" align="end">
+                  <td className="px-8 py-2 text-center sticky right-0 z-[19] hover:z-[50] border-l bg-inherit shadow-[-2px_0_10px_rgba(3,7,18,0.5)]">
+                    <Tooltip content={`Performance Status: ${row.status.reason}`} position={rowIndex < 2 ? 'bottom' : 'top'} align="end">
                       <div className={`w-3 h-3 rounded-full mx-auto ring-4 ${theme === 'white' ? 'ring-zinc-100' : 'ring-zinc-900'
                         } ${row.status.color === 'green' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' :
                           row.status.color === 'orange' ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' :
@@ -739,12 +981,13 @@ export default function MasterDashboard() {
   );
 }
 
-function MiniMetric({ count, color, theme, tooltip, prefix }: {
+function MiniMetric({ count, color, theme, tooltip, prefix, position = 'top' }: {
   count: number;
   color: 'blue' | 'purple' | 'amber';
   theme: string;
   tooltip: string;
   prefix: string;
+  position?: 'top' | 'bottom';
 }) {
   const colors = {
     blue: 'bg-[#76c9be]',
@@ -752,7 +995,7 @@ function MiniMetric({ count, color, theme, tooltip, prefix }: {
     amber: 'bg-[#f47b20]'
   };
   return (
-    <Tooltip content={tooltip}>
+    <Tooltip content={tooltip} position={position}>
       <div className="flex flex-col items-center gap-0.5 group/metric cursor-default">
         <div className={`w-1 h-3 rounded-full transition-all group-hover/metric:h-4 ${count > 0 ? colors[color] : theme === 'white' ? 'bg-[#163f4d]/10' : 'bg-zinc-800'}`} />
         <span className={`text-[8px] font-black ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'} group-hover/metric:text-[#76c9be] transition-colors`}>
@@ -993,7 +1236,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                     <p className={`text-xs font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Work Detail Notes</p>
                     <div className="space-y-3">
                       {(data.latestData?.weekly_activity_summary || data.currentData?.weekly_activity_summary || data.latestData?.notes || 'No detailed activity notes recorded for this period.')
-                        .split('\n')
+                        .split(/\r?\n|\\n/)
                         .filter(line => line.trim())
                         .map((point, i) => (
                           <div key={i} className="flex gap-3 group/point">
@@ -1041,18 +1284,28 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                     <ActivityItem label="Onsite" value={data.latestData?.pages_optimized || data.currentData?.pages_optimized || 0} theme={theme} />
                   </div>
 
-                  <div className={`pt-6 border-t ${theme === 'white' ? 'border-[#76c9be]/10' : 'border-emerald-500/10'}`}>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mb-4 italic ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>Next SEO Action Plan</p>
-                    <p className={`text-2xl font-black font-heading tracking-tighter uppercase italic leading-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
-                      {data.latestData?.next_seo_action || data.currentData?.next_seo_action || 'No operational action planned.'}
-                    </p>
+                  <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
+                    <p className={`text-xs font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>Next SEO Action Plan</p>
+                    <div className="space-y-3">
+                      {(data.latestData?.next_seo_action || data.currentData?.next_seo_action || 'No operational action planned.')
+                        .split(/\r?\n|\\n/)
+                        .filter((line: string) => line.trim() !== '')
+                        .map((line: string, i: number) => (
+                          <div key={i} className="flex gap-3 group/point">
+                            <div className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 transition-transform group-hover/point:scale-125 ${theme === 'white' ? 'bg-[#76c9be] shadow-[0_0_8px_rgba(118,201,190,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`} />
+                            <p className={`text-lg leading-relaxed font-medium break-words ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>
+                              {renderTextWithLinks(line.trim().charAt(0).toUpperCase() + line.trim().slice(1))}
+                            </p>
+                          </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className={`pt-8 border-t ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-3 h-3 rounded-full ${data.gsc.change >= 0 ? (theme === 'white' ? 'bg-[#76c9be] shadow-[0_0_8px_#76c9be]' : 'bg-emerald-500 animate-pulse') : (theme === 'white' ? 'bg-[#f47b20]' : 'bg-amber-500')}`} />
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">System Synchronized</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">System Synchronised</span>
                       </div>
                       <Tooltip content="Report is based on rolling search data and manual activity logs.">
                         <HelpCircle size={14} className="text-zinc-600" />

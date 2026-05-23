@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle2, XCircle, RefreshCw, Unlink, Globe, Lock, AlertCircle, ExternalLink, Palette, Monitor, Zap } from 'lucide-react';
+import { Shield, CheckCircle2, XCircle, RefreshCw, Unlink, Globe, Lock, AlertCircle, ExternalLink, Palette, Monitor, Zap, BrainCircuit } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import Tooltip from '../components/Tooltip';
 
 interface AuthStatus {
   connected: boolean;
@@ -56,9 +57,73 @@ export default function GlobalSettings() {
     }
   };
 
+  const [savingKeyId, setSavingKeyId] = useState<string | null>(null);
+  const [geminiKey, setGeminiKey] = useState('');
+  const [claudeKey, setClaudeKey] = useState('');
+  const [gptKey, setGptKey] = useState('');
+  const [ahrefsKey, setAhrefsKey] = useState('');
+
+  const fetchKeys = async () => {
+    try {
+      const res = await fetch('/api/admin/keys');
+      if (!res.ok) {
+        throw new Error(`Server returned status ${res.status}: ${res.statusText}`);
+      }
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error('Invalid JSON response from server');
+      }
+      if (data.keys) {
+        const gemini = data.keys.find((k: any) => k.id === 'gemini');
+        const claude = data.keys.find((k: any) => k.id === 'claude');
+        const gpt = data.keys.find((k: any) => k.id === 'gpt');
+        const ahrefs = data.keys.find((k: any) => k.id === 'ahrefs');
+        if (gemini) setGeminiKey(gemini.key_value);
+        if (claude) setClaudeKey(claude.key_value);
+        if (gpt) setGptKey(gpt.key_value);
+        if (ahrefs) setAhrefsKey(ahrefs.key_value);
+      }
+    } catch (e) {
+      console.error('Error fetching API keys:', e);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
+    fetchKeys();
   }, []);
+
+  const handleSaveKey = async (id: string, value: string) => {
+    setSavingKeyId(id);
+    try {
+      const res = await fetch('/api/admin/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, key_value: value })
+      });
+      if (res.ok) {
+        alert(`${id.toUpperCase()} Integration Key saved successfully!`);
+        fetchKeys();
+      } else {
+        const text = await res.text();
+        let errorMessage = 'Failed to save key';
+        try {
+          const data = JSON.parse(text);
+          errorMessage = data.error || errorMessage;
+        } catch (parseError) {
+          errorMessage = `Server returned status ${res.status}: ${res.statusText || 'Unknown Error'}`;
+        }
+        throw new Error(errorMessage);
+      }
+    } catch (e: any) {
+      alert('Save failed: ' + e.message);
+    } finally {
+      setSavingKeyId(null);
+    }
+  };
 
   const handleConnect = async () => {
     try {
@@ -162,6 +227,136 @@ export default function GlobalSettings() {
             </div>
           </section>
 
+          {/* AI INTEGRATION KEYS */}
+          <section className={`rounded-[40px] border shadow-2xl p-10 backdrop-blur-xl relative overflow-hidden group transition-all duration-300 ${
+            theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
+          }`}>
+            <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:opacity-10 transition-opacity">
+              <BrainCircuit size={120} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-8">
+                <div className={`p-3 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-blue-600/10 text-blue-500 border-blue-500/20'}`}>
+                  <BrainCircuit size={24} />
+                </div>
+                <div>
+                  <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>AI Synthesis Credentials</h3>
+                  <p className={`text-[10px] uppercase tracking-widest font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Manage LLM audit integrations</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Gemini Key */}
+                <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Google Gemini API Key</label>
+                  <Tooltip content="Secure key for Google Gemini 1.5 Pro integrations executing keyword intelligence analytics" className="w-full mt-2">
+                    <div className="flex gap-3 w-full">
+                      <input 
+                        type="text" 
+                        placeholder={geminiKey ? '••••••••••••••••••••' : 'Add Gemini API Key...'}
+                        value={geminiKey}
+                        onChange={(e) => setGeminiKey(e.target.value)}
+                        className={`flex-1 border rounded-2xl px-4 py-2.5 text-xs font-mono focus:outline-none transition-colors ${
+                          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600 focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-zinc-400 focus:border-blue-500'
+                        }`}
+                      />
+                      <button 
+                        onClick={() => handleSaveKey('gemini', geminiKey)}
+                        disabled={savingKeyId === 'gemini'}
+                        className={`px-5 rounded-2xl text-[9px] font-black transition-all border uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1 ${
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                        }`}
+                      >
+                        {savingKeyId === 'gemini' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
+                      </button>
+                    </div>
+                  </Tooltip>
+                </div>
+
+                {/* Claude Key */}
+                <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Anthropic Claude API Key</label>
+                  <Tooltip content="Secure key for Anthropic Claude 3.5 Sonnet synthesising premium content audits" className="w-full mt-2">
+                    <div className="flex gap-3 w-full">
+                      <input 
+                        type="text" 
+                        placeholder={claudeKey ? '••••••••••••••••••••' : 'Add Claude API Key...'}
+                        value={claudeKey}
+                        onChange={(e) => setClaudeKey(e.target.value)}
+                        className={`flex-1 border rounded-2xl px-4 py-2.5 text-xs font-mono focus:outline-none transition-colors ${
+                          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600 focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-zinc-400 focus:border-blue-500'
+                        }`}
+                      />
+                      <button 
+                        onClick={() => handleSaveKey('claude', claudeKey)}
+                        disabled={savingKeyId === 'claude'}
+                        className={`px-5 rounded-2xl text-[9px] font-black transition-all border uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1 ${
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                        }`}
+                      >
+                        {savingKeyId === 'claude' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
+                      </button>
+                    </div>
+                  </Tooltip>
+                </div>
+
+                {/* OpenAI Key */}
+                <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">OpenAI GPT API Key</label>
+                  <Tooltip content="Secure key for OpenAI GPT-4o compiling deep technical site audits and code plans" className="w-full mt-2">
+                    <div className="flex gap-3 w-full">
+                      <input 
+                        type="text" 
+                        placeholder={gptKey ? '••••••••••••••••••••' : 'Add GPT API Key...'}
+                        value={gptKey}
+                        onChange={(e) => setGptKey(e.target.value)}
+                        className={`flex-1 border rounded-2xl px-4 py-2.5 text-xs font-mono focus:outline-none transition-colors ${
+                          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600 focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-zinc-400 focus:border-blue-500'
+                        }`}
+                      />
+                      <button 
+                        onClick={() => handleSaveKey('gpt', gptKey)}
+                        disabled={savingKeyId === 'gpt'}
+                        className={`px-5 rounded-2xl text-[9px] font-black transition-all border uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1 ${
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                        }`}
+                      >
+                        {savingKeyId === 'gpt' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
+                      </button>
+                    </div>
+                  </Tooltip>
+                </div>
+
+                {/* Ahrefs Key */}
+                <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Ahrefs API Key</label>
+                  <Tooltip content="Secure API key for Ahrefs integrations executing site authority metrics queries" className="w-full mt-2">
+                    <div className="flex gap-3 w-full">
+                      <input 
+                        type="text" 
+                        placeholder={ahrefsKey ? '••••••••••••••••••••' : 'Add Ahrefs API Key...'}
+                        value={ahrefsKey}
+                        onChange={(e) => setAhrefsKey(e.target.value)}
+                        className={`flex-1 border rounded-2xl px-4 py-2.5 text-xs font-mono focus:outline-none transition-colors ${
+                          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600 focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-zinc-400 focus:border-blue-500'
+                        }`}
+                      />
+                      <button 
+                        onClick={() => handleSaveKey('ahrefs', ahrefsKey)}
+                        disabled={savingKeyId === 'ahrefs'}
+                        className={`px-5 rounded-2xl text-[9px] font-black transition-all border uppercase tracking-widest active:scale-95 flex items-center justify-center gap-1 ${
+                          theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                        }`}
+                      >
+                        {savingKeyId === 'ahrefs' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
+                      </button>
+                    </div>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className={`rounded-[24px] border shadow-2xl backdrop-blur-xl transition-all duration-300 overflow-hidden group ${
             theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
           }`}>
@@ -255,8 +450,8 @@ export default function GlobalSettings() {
                       </h4>
                       <ul className={`text-[10px] space-y-3 uppercase tracking-widest font-black leading-relaxed ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>
                         <li className="flex gap-3"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Set state to <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>"Production"</span> in OAuth Consent Screen (Fixes 403).</span></li>
-                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Add your email to <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>"Authorized Test Users"</span>.</span></li>
-                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Whitelist <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>run.app</span> as an Authorized Domain.</span></li>
+                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Add your email to <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>"Authorised Test Users"</span>.</span></li>
+                        <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Whitelist <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>run.app</span> as an Authorised Domain.</span></li>
                         <li className="flex gap-3 items-start"><span className={theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}>→</span> <span>Initiate link via <span className={theme === 'white' ? 'text-[#082a36] italic' : 'text-white italic'}>Incognito Node</span> to prevent session collisions.</span></li>
                       </ul>
                     </div>
@@ -312,7 +507,7 @@ export default function GlobalSettings() {
                         }`}
                       >
                         {loadingSites ? <RefreshCw size={14} className="animate-spin" /> : <Monitor size={14} />}
-                        Scan Authorized Sites
+                        Scan Authorised Sites
                       </button>
                       <button 
                         onClick={async () => {
@@ -384,8 +579,8 @@ export default function GlobalSettings() {
                     <Monitor size={24} />
                   </div>
                   <div>
-                    <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Asset Synchronization</h3>
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Authorized GSC Properties Detected</p>
+                    <h3 className={`text-xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Asset Synchronisation</h3>
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Authorised GSC Properties Detected</p>
                   </div>
                 </div>
                 <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">

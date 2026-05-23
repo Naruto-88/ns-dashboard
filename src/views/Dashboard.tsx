@@ -35,6 +35,7 @@ import { getClients, aggregateMetrics, Client, DashboardMetrics, getInsights, ge
 import DateRangeSelector from '../components/DateRangeSelector';
 import ClientSelector from '../components/ClientSelector';
 import Tooltip from '../components/Tooltip';
+import NextActionModal from '../components/NextActionModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
   AreaChart, 
@@ -117,6 +118,8 @@ export default function Dashboard() {
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [strategicKeywords, setStrategicKeywords] = useState<Keyword[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'clicks', direction: 'desc' });
+  const [addingActionFor, setAddingActionFor] = useState<Client | null>(null);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
 
   useEffect(() => {
     getClients().then(data => {
@@ -131,10 +134,16 @@ export default function Dashboard() {
     }
   }, [selectedClient]);
 
-  useEffect(() => {
-    if (selectedClient) {
+  const fetchData = async (forceLive = false) => {
+    if (!selectedClient) return;
+    
+    if (forceLive) {
+      setIsLiveSyncing(true);
+    } else {
       setLoading(true);
-      setError(null);
+    }
+    
+    setError(null);
       const prevRange = getPreviousPeriod(range);
       
       Promise.all([
@@ -146,12 +155,17 @@ export default function Dashboard() {
         setInsights(insightsData);
         setTrendData(trendDataRes);
         setLoading(false);
+        setIsLiveSyncing(false);
       }).catch(err => {
         console.error('Dashboard Data Fetch Error:', err);
         setError(err.message);
         setLoading(false);
+        setIsLiveSyncing(false);
       });
-    }
+  };
+
+  useEffect(() => {
+    fetchData(false);
   }, [selectedClient, range]);
 
   const filteredQueries = useMemo(() => {
@@ -251,14 +265,37 @@ export default function Dashboard() {
               clients={clients} 
               selectedId={selectedClient} 
               onSelect={setSelectedClient} 
-              theme={theme}
             />
             <DateRangeSelector 
               currentRange={range} 
               currentPreset={preset} 
               onRangeChange={(r, p) => { setRange(r); setPreset(p); }} 
-              theme={theme}
             />
+            <button
+              onClick={() => {
+                const client = clients.find(c => c.id === selectedClient);
+                if (client) setAddingActionFor(client);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl ${
+                theme === 'white' 
+                  ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20' 
+                  : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20'
+              }`}
+            >
+              <Target size={14} />
+              Next Action
+            </button>
+            <button
+              onClick={() => fetchData(true)}
+              className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl ${
+                theme === 'white' 
+                  ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20' 
+                  : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20'
+              }`}
+            >
+              <Activity size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
+              Live Sync
+            </button>
           </div>
         </div>
       </div>
@@ -282,11 +319,21 @@ export default function Dashboard() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !metrics ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
-          {[1,2,3,4].map(i => <div key={i} className="h-40 bg-zinc-900/50 rounded-[32px] border border-white/5" />)}
+          {[1,2,3,4].map(i => <div key={i} className={`h-40 rounded-[32px] border ${theme === 'white' ? 'bg-zinc-100 border-zinc-200' : 'bg-zinc-900/50 border-white/5'}`} />)}
         </div>
-      ) : metrics && (
+      ) : !metrics ? (
+        <div className={`p-20 rounded-[40px] border border-dashed text-center space-y-4 ${
+          theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/30 border-white/10'
+        }`}>
+          <BarChart3 className={`mx-auto ${theme === 'white' ? 'text-zinc-300' : 'text-zinc-800'}`} size={64} />
+          <div className="space-y-1">
+            <p className={`font-black uppercase tracking-tighter text-xl italic ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Click Live Sync</p>
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Connect to live metrics to populate your agency dashboard</p>
+          </div>
+        </div>
+      ) : (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           
           {/* OVERVIEW TAB */}
@@ -753,6 +800,14 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {addingActionFor && (
+        <NextActionModal
+          client={addingActionFor}
+          onClose={() => setAddingActionFor(null)}
+          onSuccess={() => setAddingActionFor(null)}
+        />
       )}
     </div>
   );

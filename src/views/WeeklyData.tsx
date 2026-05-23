@@ -31,6 +31,14 @@ export default function WeeklyData() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [syncingMetrics, setSyncingMetrics] = useState(false);
+  const [syncingAhrefs, setSyncingAhrefs] = useState(false);
+  const [syncingAllAhrefs, setSyncingAllAhrefs] = useState(false);
+  const [syncAllProgress, setSyncAllProgress] = useState<{
+    total: number;
+    current: number;
+    statusList: { clientName: string; status: 'pending' | 'syncing' | 'success' | 'failed'; error?: string }[];
+  } | null>(null);
 
   useEffect(() => {
     getClients().then(d => {
@@ -81,6 +89,10 @@ export default function WeeklyData() {
           leads_total: 0,
           leads_legit: 0,
           target_leads: 0,
+          phone_calls: 0,
+          ahrefs_dr: 0,
+          ahrefs_backlinks: 0,
+          ahrefs_ref_domains: 0,
           technical_score: 90,
           primary_issue_type: '',
           primary_insight: '',
@@ -93,6 +105,8 @@ export default function WeeklyData() {
           schema_updates: 0,
           internal_links: 0
         });
+        // Auto-sync GSC/GA4/Leads API free metrics in the background
+        autoSyncMetrics(selectedClient, selectedWeek);
       }
 
       // Fetch keywords for the week
@@ -127,6 +141,156 @@ export default function WeeklyData() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const autoSyncMetrics = async (clientId: string, weekStart: string) => {
+    if (!clientId) return;
+    setSyncingMetrics(true);
+    setMessage(null);
+    try {
+      const startDate = weekStart;
+      const endDate = format(endOfWeek(parseISO(weekStart), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      
+      const res = await fetch(`/api/clients/${clientId}/live-metrics?startDate=${startDate}&endDate=${endDate}`);
+      const dataRes = await res.json();
+      if (!res.ok) throw new Error(dataRes.error || 'Auto-sync failed');
+      
+      setData(prev => ({
+        ...prev,
+        gsc_clicks: dataRes.gsc_clicks ?? prev.gsc_clicks ?? 0,
+        gsc_impressions: dataRes.gsc_impressions ?? prev.gsc_impressions ?? 0,
+        gsc_ctr: dataRes.gsc_ctr ?? prev.gsc_ctr ?? 0,
+        gsc_position: dataRes.gsc_position ?? prev.gsc_position ?? 0,
+        ga4_traffic: dataRes.ga4_traffic ?? prev.ga4_traffic ?? 0,
+        ga4_new_users: dataRes.ga4_new_users ?? prev.ga4_new_users ?? 0,
+        ga4_returning_users: dataRes.ga4_returning_users ?? prev.ga4_returning_users ?? 0,
+        phone_calls: dataRes.phone_calls ?? prev.phone_calls ?? 0,
+        leads_total: dataRes.leads_total ?? prev.leads_total ?? 0,
+        leads_legit: dataRes.leads_legit ?? prev.leads_legit ?? 0,
+        top_3_count: dataRes.gsc_top3 ?? prev.top_3_count ?? 0,
+        top_10_count: dataRes.gsc_top10 ?? prev.top_10_count ?? 0
+      }));
+      setMessage({ type: 'success', text: 'Free metrics auto-filled in background' });
+    } catch (e: any) {
+      console.error('Background Sync Error:', e);
+    } finally {
+      setSyncingMetrics(false);
+    }
+  };
+
+  const handleAhrefsSync = async () => {
+    if (!selectedClient) return;
+    setSyncingAhrefs(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/clients/${selectedClient}/sync-ahrefs-data?date=${selectedWeek}`);
+      const dataRes = await res.json();
+      if (!res.ok) throw new Error(dataRes.error || 'Ahrefs sync failed');
+      
+      setData(prev => ({
+        ...prev,
+        ahrefs_dr: dataRes.dr ?? prev.ahrefs_dr ?? 0,
+        ahrefs_backlinks: dataRes.backlinks ?? prev.ahrefs_backlinks ?? 0,
+        ahrefs_ref_domains: dataRes.ref_domains ?? prev.ahrefs_ref_domains ?? 0
+      }));
+      setMessage({ type: 'success', text: `Ahrefs data synchronised successfully${dataRes._simulated ? ' (simulated fallback)' : ''}` });
+    } catch (e: any) {
+      console.error('Ahrefs Sync Error:', e);
+      setMessage({ type: 'error', text: `Ahrefs Sync failed: ${e.message}` });
+    } finally {
+      setSyncingAhrefs(false);
+    }
+  };
+
+  const handleSyncAllAhrefs = async () => {
+    if (clients.length === 0) return;
+    setSyncingAllAhrefs(true);
+    setMessage(null);
+    
+    // Initialize progress tracking
+    const initialStatusList = clients.map(c => ({
+      clientName: c.name,
+      status: 'pending' as const
+    }));
+    
+    setSyncAllProgress({
+      total: clients.length,
+      current: 0,
+      statusList: initialStatusList
+    });
+
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    try {
+      for (let i = 0; i < clients.length; i++) {
+        const client = clients[i];
+        
+        // Update status to syncing
+        setSyncAllProgress(prev => {
+          if (!prev) return null;
+          const newList = [...prev.statusList];
+          newList[i] = { ...newList[i], status: 'syncing' };
+          return { ...prev, statusList: newList };
+        });
+
+        try {
+          const res = await fetch(`/api/clients/${client.id}/sync-ahrefs-data?date=${selectedWeek}`);
+          const dataRes = await res.json();
+          
+          if (!res.ok) {
+            throw new Error(dataRes.error || 'Sync failed');
+          }
+          
+          // Update status to success
+          setSyncAllProgress(prev => {
+            if (!prev) return null;
+            const newList = [...prev.statusList];
+            newList[i] = { ...newList[i], status: 'success' };
+            return {
+              ...prev,
+              current: prev.current + 1,
+              statusList: newList
+            };
+          });
+
+          // If the synced client is the currently selected client, reload the local data view
+          if (client.id === selectedClient) {
+            setData(prev => ({
+              ...prev,
+              ahrefs_dr: dataRes.dr ?? prev.ahrefs_dr ?? 0,
+              ahrefs_backlinks: dataRes.backlinks ?? prev.ahrefs_backlinks ?? 0,
+              ahrefs_ref_domains: dataRes.ref_domains ?? prev.ahrefs_ref_domains ?? 0
+            }));
+          }
+
+        } catch (err: any) {
+          console.error(`Error syncing Ahrefs for ${client.name}:`, err);
+          // Update status to failed
+          setSyncAllProgress(prev => {
+            if (!prev) return null;
+            const newList = [...prev.statusList];
+            newList[i] = { ...newList[i], status: 'failed', error: err.message };
+            return {
+              ...prev,
+              current: prev.current + 1,
+              statusList: newList
+            };
+          });
+        }
+
+        // Apply a strict 4-second gap delay between Ahrefs queries (except for the last one) to prevent 429 rate limiting
+        if (i < clients.length - 1) {
+          await sleep(4000);
+        }
+      }
+      
+      setMessage({ type: 'success', text: 'All clients Ahrefs sync completed successfully!' });
+    } catch (e: any) {
+      console.error('Batch Sync Error:', e);
+      setMessage({ type: 'error', text: `Batch sync failed: ${e.message}` });
+    } finally {
+      setSyncingAllAhrefs(false);
     }
   };
 
@@ -167,7 +331,24 @@ export default function WeeklyData() {
   };
 
   const updateField = (field: keyof IWeeklyData, value: any) => {
-    setData(prev => ({ ...prev, [field]: Number(value) || 0 }));
+    let parsedValue = Number(value);
+    // Explicitly round integer-only fields to prevent PostgreSQL type crashes when entering decimal inputs
+    if ([
+      'ahrefs_dr', 
+      'ahrefs_backlinks', 
+      'ahrefs_ref_domains', 
+      'gsc_clicks', 
+      'gsc_impressions', 
+      'ga4_traffic', 
+      'ga4_new_users', 
+      'ga4_returning_users', 
+      'leads_total', 
+      'leads_legit', 
+      'phone_calls'
+    ].includes(field)) {
+      parsedValue = Math.round(parsedValue) || 0;
+    }
+    setData(prev => ({ ...prev, [field]: parsedValue || 0 }));
   };
 
   const keywordStats = useMemo(() => {
@@ -182,6 +363,19 @@ export default function WeeklyData() {
 
   const sections = [
     {
+      title: 'Search & Traffic Performance',
+      fields: [
+        { label: 'GSC Clicks', key: 'gsc_clicks', tooltip: 'Total organic clicks from Google Search Console for this week.' },
+        { label: 'GSC Impressions', key: 'gsc_impressions', tooltip: 'Total organic search impressions from Google Search Console.' },
+        { label: 'GSC CTR (%)', key: 'gsc_ctr', tooltip: 'Average click-through rate percentage from Google Search Console.' },
+        { label: 'GSC Avg Position', key: 'gsc_position', tooltip: 'Average organic ranking position from Google Search Console.' },
+        { label: 'GA4 Traffic (Sessions)', key: 'ga4_traffic', tooltip: 'Total web sessions from Google Analytics 4.' },
+        { label: 'GA4 New Users', key: 'ga4_new_users', tooltip: 'New user count from Google Analytics 4.' },
+        { label: 'GA4 Returning Users', key: 'ga4_returning_users', tooltip: 'Returning user count from Google Analytics 4.' },
+        { label: 'Phone Calls', key: 'phone_calls', tooltip: 'Total click-to-call events matching phone call patterns from GA4.' }
+      ]
+    },
+    {
       title: 'Leads & Conversions',
       fields: [
         { label: 'Total Leads', key: 'leads_total', tooltip: 'Total goal completions (raw count).' },
@@ -192,7 +386,7 @@ export default function WeeklyData() {
     {
       title: 'Activity & Technical',
       fields: [
-        { label: 'Pages Optimized', key: 'pages_optimized', tooltip: 'Existing pages updated for SEO.' },
+        { label: 'Pages Optimised', key: 'pages_optimized', tooltip: 'Existing pages updated for SEO.' },
         { label: 'Blogs Published', key: 'blogs_published', tooltip: 'New blog posts or articles created.' },
         { label: 'Backlinks Built', key: 'backlinks_built', tooltip: 'Inbound links acquired this week.' },
         { label: 'Technical Fixes', key: 'tech_fixes', tooltip: 'Structural/code SEO issues resolved.' },
@@ -208,7 +402,7 @@ export default function WeeklyData() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-12">
+    <div className="max-w-7xl mx-auto space-y-8 pb-12">
       <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-8 rounded-[40px] border backdrop-blur-xl relative z-50 ${
         theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
       }`}>
@@ -258,6 +452,16 @@ export default function WeeklyData() {
             }`}
           >
             {syncing ? 'Scanning...' : 'Auto-fill Intelligence'}
+          </button>
+          <button 
+            onClick={handleSyncAllAhrefs}
+            disabled={syncingAllAhrefs || clients.length === 0}
+            className={`mt-5 flex items-center gap-2 px-6 py-2.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 ${
+              theme === 'white' ? 'bg-[#f47b20]/10 border-[#f47b20]/20 text-[#f47b20] hover:bg-[#f47b20]/20' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
+            }`}
+            title="Sync Ahrefs authority metrics (DR, Backlinks, Ref Domains) sequentially for all active clients"
+          >
+            {syncingAllAhrefs ? 'Syncing...' : 'Sync All Ahrefs'}
           </button>
         </div>
       </div>
@@ -348,6 +552,84 @@ export default function WeeklyData() {
                   </div>
                 </div>
               ))}
+
+              {/* Ahrefs Authority Card */}
+              <div className={`p-8 rounded-[40px] border backdrop-blur-xl space-y-6 ${
+                theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-xl' : 'bg-zinc-900/50 border-white/5'
+              }`}>
+                <h3 className={`text-lg font-black font-heading border-b pb-4 flex items-center justify-between uppercase tracking-tight ${
+                  theme === 'white' ? 'text-[#082a36] border-[#163f4d]/5' : 'text-white border-white/5'
+                }`}>
+                  <span>Ahrefs Authority</span>
+                  <Tooltip content="Syncing Ahrefs data queries the Ahrefs API Explorer and consumes API credits (metered/cost-sensitive). Only sync on-demand.">
+                    <button
+                      type="button"
+                      onClick={handleAhrefsSync}
+                      disabled={syncingAhrefs}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                        theme === 'white' 
+                          ? 'bg-[#76c9be]/10 border-[#76c9be]/20 text-[#082a36] hover:bg-[#76c9be]/20' 
+                          : 'bg-zinc-800 border-white/5 text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      {syncingAhrefs ? 'Syncing...' : 'Sync Ahrefs'}
+                    </button>
+                  </Tooltip>
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                      Domain Rating (DR)
+                      <Tooltip content="Ahrefs Domain Rating (DR) score (0-100).">
+                        <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
+                      </Tooltip>
+                    </label>
+                    <input
+                      type="number"
+                      value={data.ahrefs_dr === undefined ? '' : data.ahrefs_dr}
+                      onChange={(e) => updateField('ahrefs_dr', e.target.value)}
+                      className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                        theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                      }`}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                      Backlinks
+                      <Tooltip content="Total number of external backlinks pointing to this website domain.">
+                        <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
+                      </Tooltip>
+                    </label>
+                    <input
+                      type="number"
+                      value={data.ahrefs_backlinks === undefined ? '' : data.ahrefs_backlinks}
+                      onChange={(e) => updateField('ahrefs_backlinks', e.target.value)}
+                      className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                        theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="space-y-2 col-span-2">
+                    <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                      Referring Domains
+                      <Tooltip content="Total number of unique domains linking to this website.">
+                        <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
+                      </Tooltip>
+                    </label>
+                    <input
+                      type="number"
+                      value={data.ahrefs_ref_domains === undefined ? '' : data.ahrefs_ref_domains}
+                      onChange={(e) => updateField('ahrefs_ref_domains', e.target.value)}
+                      className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                        theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className={`p-8 rounded-[40px] border backdrop-blur-xl space-y-8 ${
@@ -388,12 +670,11 @@ export default function WeeklyData() {
                 <div className="space-y-6">
                   <div className="space-y-2">
                     <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Correction Directive (Next Action)</label>
-                    <input 
-                      type="text"
+                    <textarea 
                       placeholder="e.g. Publish pillar page for keyword X..."
                       value={data.next_seo_action || ''}
                       onChange={(e) => updateTextField('next_seo_action', e.target.value)}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-bold outline-none transition-all placeholder:text-[#607a80]/50 uppercase ${
+                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-bold outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none uppercase tracking-tight ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
@@ -512,6 +793,138 @@ export default function WeeklyData() {
                 }`}
               >
                 Exit View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {syncAllProgress && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-3xl animate-in fade-in duration-300">
+          <div className={`rounded-[40px] w-full max-w-2xl shadow-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${
+             theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900 border-white/5'
+          }`}>
+            <div className={`p-8 border-b flex items-center justify-between backdrop-blur-xl sticky top-0 z-10 ${
+              theme === 'white' ? 'bg-zinc-50/80 border-zinc-100' : 'bg-zinc-900/80 border-white/5'
+            }`}>
+              <div>
+                <h3 className={`text-xl font-black font-heading uppercase tracking-tight italic flex items-center gap-2.5 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                  Batch Ahrefs Sync
+                  <span className={`px-2 py-0.5 text-[8px] font-black border rounded-md uppercase tracking-widest animate-pulse ${
+                    syncingAllAhrefs 
+                      ? (theme === 'white' ? 'bg-[#f47b20]/10 text-[#f47b20] border-[#f47b20]/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20')
+                      : (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20')
+                  }`}>
+                    {syncingAllAhrefs ? 'Rate-Limit Sentinel Active (4s Gap)' : 'Complete'}
+                  </span>
+                </h3>
+                <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                  Syncing Ahrefs v3 stats for all client nodes sequentially
+                </p>
+              </div>
+              {!syncingAllAhrefs && (
+                <button 
+                  onClick={() => setSyncAllProgress(null)}
+                  className={`p-3 rounded-2xl transition-all ${
+                    theme === 'white' ? 'bg-[#76c9be]/10 text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/20' : 'bg-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-700'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            {/* Progress Bar & Summary Stats */}
+            <div className="p-8 space-y-4">
+              <div className="flex items-center justify-between text-xs font-black uppercase tracking-widest">
+                <span className={theme === 'white' ? 'text-zinc-500' : 'text-zinc-400'}>
+                  Overall Progress ({syncAllProgress.current} / {syncAllProgress.total})
+                </span>
+                <span className={theme === 'white' ? 'text-[#082a36]' : 'text-white'}>
+                  {Math.round((syncAllProgress.current / syncAllProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className={`h-3 rounded-full overflow-hidden ${theme === 'white' ? 'bg-zinc-100' : 'bg-zinc-950'}`}>
+                <div 
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    theme === 'white' ? 'bg-[#f47b20]' : 'bg-blue-600'
+                  }`}
+                  style={{ width: `${(syncAllProgress.current / syncAllProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Client Status List */}
+            <div className="max-h-[40vh] overflow-y-auto px-8 pb-8 space-y-3">
+              {syncAllProgress.statusList.map((item, idx) => (
+                <div 
+                  key={idx} 
+                  className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
+                    item.status === 'syncing' 
+                      ? (theme === 'white' ? 'bg-[#f47b20]/5 border-[#f47b20]/30 shadow-md' : 'bg-blue-500/5 border-blue-500/20 shadow-md')
+                      : item.status === 'success'
+                        ? (theme === 'white' ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-emerald-500/5 border-emerald-500/10')
+                        : item.status === 'failed'
+                          ? (theme === 'white' ? 'bg-red-500/5 border-red-500/10' : 'bg-red-500/5 border-red-500/10')
+                          : (theme === 'white' ? 'bg-zinc-50/50 border-zinc-100' : 'bg-zinc-800/20 border-white/5 opacity-50')
+                  }`}
+                >
+                  <div className="flex flex-col">
+                    <span className={`text-xs font-black uppercase tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                      {item.clientName}
+                    </span>
+                    {item.error && (
+                      <span className="text-[9px] text-red-400 font-bold uppercase tracking-tight mt-0.5">
+                        Error: {item.error}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    {item.status === 'pending' && (
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                        theme === 'white' ? 'bg-zinc-100 text-zinc-400 border border-zinc-200' : 'bg-zinc-800 text-zinc-500 border border-white/5'
+                      }`}>
+                        Pending
+                      </span>
+                    )}
+                    {item.status === 'syncing' && (
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse ${
+                        theme === 'white' ? 'bg-[#f47b20]/10 text-[#f47b20] border border-[#f47b20]/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      }`}>
+                        Syncing...
+                      </span>
+                    )}
+                    {item.status === 'success' && (
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                        theme === 'white' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      }`}>
+                        Success
+                      </span>
+                    )}
+                    {item.status === 'failed' && (
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                        theme === 'white' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        Failed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className={`p-8 border-t flex justify-end ${
+              theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-950 border-white/5'
+            }`}>
+              <button 
+                onClick={() => setSyncAllProgress(null)}
+                disabled={syncingAllAhrefs}
+                className={`px-10 py-3 rounded-2xl font-black text-xs transition-all uppercase tracking-widest disabled:opacity-50 ${
+                   theme === 'white' ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-white text-black hover:bg-zinc-200'
+                }`}
+              >
+                {syncingAllAhrefs ? 'Syncing...' : 'Done'}
               </button>
             </div>
           </div>

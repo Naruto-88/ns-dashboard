@@ -16,13 +16,16 @@ import {
   XCircle,
   Search,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Settings,
+  Target
 } from 'lucide-react';
 import { DateRange, DatePreset, getDatePresetRange, getPreviousPeriod, calculatePositionComparison, calculateMetricComparison } from '../lib/seoUtils';
 import { getClients, Client, Keyword, KeywordHistory, getKeywords, getKeywordHistory, addKeyword, deleteKeyword, getInsights } from '../services/dataService';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ClientSelector from '../components/ClientSelector';
 import Tooltip from '../components/Tooltip';
+import NextActionModal from '../components/NextActionModal';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -30,8 +33,8 @@ export default function KeywordDashboard() {
   const { theme } = useTheme();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<string>('');
-  const [range, setRange] = useState<DateRange>(getDatePresetRange('last_7_days'));
-  const [preset, setPreset] = useState<DatePreset>('last_7_days');
+  const [range, setRange] = useState<DateRange>(getDatePresetRange('rolling_7d'));
+  const [preset, setPreset] = useState<DatePreset>('rolling_7d');
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [history, setHistory] = useState<KeywordHistory[]>([]);
   const [prevHistory, setPrevHistory] = useState<KeywordHistory[]>([]);
@@ -41,6 +44,8 @@ export default function KeywordDashboard() {
   const [bulkInput, setBulkInput] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'query', direction: 'asc' });
+  const [addingActionFor, setAddingActionFor] = useState<Client | null>(null);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
 
   useEffect(() => {
     getClients().then(data => {
@@ -58,8 +63,32 @@ export default function KeywordDashboard() {
     );
   }, [clients, clientSearch]);
 
-  const fetchData = async () => {
+  const fetchData = async (forceLive = false) => {
     if (!selectedClient) return;
+
+    const cacheKey = `gsc_insights_${selectedClient}_${range.startDate}_${range.endDate}`;
+
+    // 1. Check browser Session Storage cache first (if not a manual forced live refresh)
+    if (!forceLive) {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setLoading(true);
+          const k = await getKeywords(selectedClient);
+          setKeywords(k);
+          setGscData(parsed);
+          setHistory([]);
+          setPrevHistory([]);
+          setLoading(false);
+          return;
+        } catch (e) {
+          console.error("Failed to parse cached GSC insights:", e);
+        }
+      }
+    }
+
+    if (forceLive) setIsLiveSyncing(true);
     setLoading(true);
     try {
       const [k, h, ph, gsc] = await Promise.all([
@@ -72,10 +101,16 @@ export default function KeywordDashboard() {
       setHistory(h);
       setPrevHistory(ph);
       setGscData(gsc);
+
+      // 2. Cache the loaded GSC results in browser storage to prevent repeat API calls
+      if (gsc) {
+        sessionStorage.setItem(cacheKey, JSON.stringify(gsc));
+      }
     } catch (error) {
       console.error("Failed to fetch keyword intelligence:", error);
     }
     setLoading(false);
+    setIsLiveSyncing(false);
   };
 
   useEffect(() => {
@@ -94,16 +129,19 @@ export default function KeywordDashboard() {
 
       const currPos = avg(h, 'position');
       const prevPos = avg(ph, 'position');
-      const comp = calculatePositionComparison(currPos || 0, prevPos);
 
       // Match with Live GSC Data
       const gscMatch = gscData?.queries?.find((q: any) => q.keys[0].toLowerCase() === kw.query.toLowerCase());
       const prevGscMatch = gscData?.prevQueries?.find((q: any) => q.keys[0].toLowerCase() === kw.query.toLowerCase());
 
+      const resolvedCurrentPos = currPos || gscMatch?.position || null;
+      const resolvedPreviousPos = prevPos || prevGscMatch?.position || null;
+      const comp = calculatePositionComparison(resolvedCurrentPos || 0, resolvedPreviousPos);
+
       return {
         ...kw,
-        currentPos: currPos,
-        previousPos: prevPos,
+        currentPos: resolvedCurrentPos,
+        previousPos: resolvedPreviousPos,
         status: comp.status,
         diff: comp.difference,
         gscClicks: gscMatch?.clicks || 0,
@@ -206,8 +244,19 @@ export default function KeywordDashboard() {
             currentRange={range} 
             currentPreset={preset} 
             onRangeChange={(r, p) => { setRange(r); setPreset(p); }} 
-            theme={theme}
           />
+          <button
+            onClick={() => {
+              const client = clients.find(c => c.id === selectedClient);
+              if (client) setAddingActionFor(client);
+            }}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+              theme === 'white' ? 'bg-[#76c9be] text-white shadow-[#76c9be]/20 hover:bg-[#5bb8ad]' : 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500'
+            }`}
+          >
+            <Target size={18} />
+            Next Action
+          </button>
           <button 
             onClick={() => setShowAddModal(true)}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
@@ -216,6 +265,15 @@ export default function KeywordDashboard() {
           >
             <Plus size={18} />
             Bulk Inject
+          </button>
+          <button 
+            onClick={() => fetchData(true)}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+              theme === 'white' ? 'bg-zinc-800 text-white shadow-zinc-800/20 hover:bg-zinc-700' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
+          >
+            <Search size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
+            Live Sync
           </button>
         </div>
       </div>
@@ -439,6 +497,14 @@ export default function KeywordDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {addingActionFor && (
+        <NextActionModal
+          client={addingActionFor}
+          onClose={() => setAddingActionFor(null)}
+          onSuccess={() => setAddingActionFor(null)}
+        />
       )}
     </div>
   );
