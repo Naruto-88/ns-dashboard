@@ -801,11 +801,18 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
           );
 
           const keywordRows = keywordsRes.data.rows || [];
-          gscData.top3 = keywordRows.filter((r: any) => r.position <= 3).length;
-          gscData.top10 = keywordRows.filter((r: any) => r.position <= 10).length;
+          gscData.top3 = keywordRows.filter((r: any) => r.position !== undefined && Number(r.position) <= 3).length;
+          gscData.top10 = keywordRows.filter((r: any) => r.position !== undefined && Number(r.position) <= 10).length;
 
         } catch (e: any) {
           console.error('GSC Live Fetch self-heal failure:', e.message);
+          // Log the error to Supabase import_logs for easy remote debugging
+          await supabase.from('import_logs').insert({
+            client_id: clientId,
+            operation_type: 'live_metrics_gsc_keywords',
+            status: 'Failed',
+            message: `GSC keywords fetch failed: ${e.message || String(e)}`
+          }).catch(() => null);
         }
       }
     }
