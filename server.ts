@@ -91,11 +91,13 @@ app.get('/api/health', (req, res) => {
 });
 
 const getAppUrl = (req: express.Request) => {
-  if (process.env.APP_URL) return process.env.APP_URL;
-  const host = req.get('host');
-  // AI Studio env runs behind an HTTPS proxy - force https for the redirect URI
+  const host = req.get('host') || '';
+  if (host.includes('localhost') || host.includes('127.0.0.1')) {
+    return process.env.APP_URL || `http://${host}`;
+  }
+  // On live production servers, dynamically force HTTPS and use the actual host header
   const appUrl = `https://${host}`;
-  console.log('[DEBUG] Calculated App URL:', appUrl);
+  console.log('[DEBUG] Calculated Live App URL:', appUrl);
   return appUrl;
 };
 
