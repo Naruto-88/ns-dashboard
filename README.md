@@ -20,4 +20,4 @@ View your app in AI Studio: https://ai.studio/apps/90cb8856-587d-4171-ae9c-73858
    `npm run dev`
 
 ## Automated cPanel Deployment
-This repository is configured with GitHub Actions for automated deployment to **seodashboard.netstripes.au** on cPanel. Every push to `v2-upgrades` will automatically compile and deploy the latest build.
+This repository is configured with GitHub Actions for automated deployment to **seodashboard.netstripes.au** on cPanel. Every push to `v2-upgrades` will automatically compile and deploy the latest build directly to `public_html`.
