@@ -18,3 +18,6 @@ View your app in AI Studio: https://ai.studio/apps/90cb8856-587d-4171-ae9c-73858
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Automated cPanel Deployment
+This repository is configured with GitHub Actions for automated deployment to **seodashboard.netstripes.au** on cPanel. Every push to `v2-upgrades` will automatically compile and deploy the latest build.
