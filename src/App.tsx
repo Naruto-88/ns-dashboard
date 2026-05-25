@@ -158,7 +158,6 @@ function Login() {
   const { theme } = useTheme();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'google' | 'email'>('google');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -170,29 +169,6 @@ function Login() {
         setSupabaseReady(!readyError || readyError.code === 'PGRST301');
       });
   }, []);
-
-  const handleGoogleLogin = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const { error: loginError } = await auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin }
-      });
-      if (loginError) throw loginError;
-    } catch (e: any) {
-      console.error('Google login error:', e);
-      let msg = e.message || 'Login failed';
-      if (msg.includes('provider is not enabled')) {
-        msg = 'Google Auth is not enabled in your Supabase Dashboard. Go to Auth -> Providers -> Google and enable it.';
-      } else if (msg.includes('redirect_uri_mismatch')) {
-        msg = 'Redirect URI mismatch. Ensure your Supabase Callback URL is added to the Google Cloud Console.';
-      }
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,87 +252,52 @@ function Login() {
           </div>
         )}
 
-        {mode === 'google' ? (
-          <div className="space-y-6">
-            <button
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className={`w-full flex items-center justify-center gap-4 px-6 py-4 border rounded-2xl font-black text-xs transition-all shadow-xl active:scale-95 disabled:opacity-50 uppercase tracking-widest ${
-                theme === 'white' ? 'bg-zinc-100 text-zinc-900 border-zinc-200 hover:bg-zinc-200' : 'bg-zinc-900 border-white/5 text-white hover:bg-zinc-800'
-              }`}
-            >
-              <img src="https://www.google.com/favicon.ico" className="w-5 h-5 grayscale group-hover:grayscale-0" alt="Google" />
-              {loading ? 'Initializing...' : 'Decrypt via Google'}
-            </button>
-            <p className="text-[10px] text-zinc-600 text-center px-6 leading-relaxed uppercase font-bold tracking-widest">
-              Centralized Auth Gateway. If unconfigured, utilize <span className="text-zinc-400">Team Vector</span>.
-            </p>
-            <button 
-              onClick={() => setMode('email')}
-              className={`w-full py-2 text-[10px] font-black transition-colors uppercase tracking-[0.2em] ${
-                theme === 'white' ? 'text-zinc-400 hover:text-zinc-900' : 'text-zinc-500 hover:text-white'
-              }`}
-            >
-              / Switch to Team Credentials
-            </button>
+        <form onSubmit={handleEmailLogin} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Vector Identity</label>
+            <div className="relative group">
+              <input 
+                type="text"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ID: AMIT, SAI, MELAKA..."
+                className={`w-full px-6 py-4 border rounded-2xl font-black text-xs outline-none focus:border-blue-500 transition-all pl-14 uppercase tracking-widest ${
+                  theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                }`}
+              />
+              <Users className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${
+                theme === 'white' ? 'text-zinc-300 group-focus-within:text-blue-500' : 'text-zinc-700 group-focus-within:text-blue-500'
+              }`} size={22} />
+            </div>
           </div>
-        ) : (
-          <form onSubmit={handleEmailLogin} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Vector Identity</label>
-              <div className="relative group">
-                <input 
-                  type="text"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ID: AMIT, SAI, MELAKA..."
-                  className={`w-full px-6 py-4 border rounded-2xl font-black text-xs outline-none focus:border-blue-500 transition-all pl-14 uppercase tracking-widest ${
-                    theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                  }`}
-                />
-                <Users className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${
-                  theme === 'white' ? 'text-zinc-300 group-focus-within:text-blue-500' : 'text-zinc-700 group-focus-within:text-blue-500'
-                }`} size={22} />
-              </div>
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Access Phrase</label>
+            <div className="relative group">
+              <input 
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className={`w-full px-6 py-4 border rounded-2xl font-black text-xs outline-none focus:border-blue-500 transition-all pl-14 tracking-widest ${
+                  theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                }`}
+              />
+              <Lock className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${
+                theme === 'white' ? 'text-zinc-300 group-focus-within:text-blue-500' : 'text-zinc-700 group-focus-within:text-blue-500'
+              }`} size={22} />
             </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Access Phrase</label>
-              <div className="relative group">
-                <input 
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className={`w-full px-6 py-4 border rounded-2xl font-black text-xs outline-none focus:border-blue-500 transition-all pl-14 tracking-widest ${
-                    theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                  }`}
-                />
-                <Lock className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${
-                  theme === 'white' ? 'text-zinc-300 group-focus-within:text-blue-500' : 'text-zinc-700 group-focus-within:text-blue-500'
-                }`} size={22} />
-              </div>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-5 ${theme === 'mission' ? 'bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 shadow-blue-500/30'} text-white rounded-2xl font-black text-xs shadow-2xl hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-[0.2em]`}
-            >
-              {loading ? 'Authenticating...' : 'Engage Dashboard'}
-              {!loading && <ChevronRight size={20} />}
-            </button>
-            <button 
-              type="button"
-              onClick={() => setMode('google')}
-              className={`w-full py-2 text-[10px] font-black transition-colors uppercase tracking-[0.2em] ${
-                theme === 'white' ? 'text-zinc-400 hover:text-zinc-900' : 'text-zinc-500 hover:text-white'
-              }`}
-            >
-              / Return to Global Auth
-            </button>
-          </form>
-        )}
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-5 ${theme === 'mission' ? 'bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 shadow-blue-500/30'} text-white rounded-2xl font-black text-xs shadow-2xl hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-[0.2em]`}
+          >
+            {loading ? 'Authenticating...' : 'Engage Dashboard'}
+            {!loading && <ChevronRight size={20} />}
+          </button>
+        </form>
       </div>
     </div>
   );
