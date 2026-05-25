@@ -2090,7 +2090,7 @@ app.get('/api/clients/:clientId/sync-ahrefs-data', async (req, res) => {
 // GA4 and GSC Integration helpers will go here...
 
 // Vite Middleware
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && !process.env.PASSENGER_APP_ENV) {
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: 'spa',
