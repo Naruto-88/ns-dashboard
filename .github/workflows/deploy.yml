@@ -35,7 +35,7 @@ jobs:
           key: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.CPANEL_SSH_PASSPHRASE }}
           port: ${{ secrets.CPANEL_SSH_PORT || 22 }}
-          source: "dist/,server.js,package.json,package-lock.json,tsconfig.json,vite.config.ts,workers/,src/"
+          source: "dist/,app.js,server.js,package.json,package-lock.json,tsconfig.json,vite.config.ts,workers/,src/"
           target: "${{ secrets.CPANEL_DEPLOY_PATH }}" # e.g. /home/username/seodashboard
           rm: false
 
