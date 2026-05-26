@@ -202,6 +202,9 @@ export default function MasterDashboard() {
 
       const dashboardRows: DashboardRow[] = await Promise.all(allClients.map(async (client) => {
         let weeklyData: WeeklyData[] = allWeeklyData[client.id] || [];
+        const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
+        const latestData = sortedWeekly.length > 0 ? sortedWeekly[0] : null;
+
         let currentWeekData: any = null;
         let previousWeekData: any = null;
         
@@ -212,8 +215,6 @@ export default function MasterDashboard() {
         } else {
            const currentWeekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
            const prevWeekStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-           const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
-           const latestData = sortedWeekly.length > 0 ? sortedWeekly[0] : null;
            currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;
            previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
         }
@@ -265,7 +266,6 @@ export default function MasterDashboard() {
 
         // Calculate historical previous data for Ahrefs comparison
         let historicalPrev = previousWeekData;
-        const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
         if (!historicalPrev && sortedWeekly.length > 1) {
           if (currentWeekData?.id === sortedWeekly[0].id) {
             historicalPrev = sortedWeekly[1];
@@ -1398,7 +1398,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                     <p className={`text-xs font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Work Detail Notes</p>
                     <div className="space-y-3">
                       {(data.latestData?.weekly_activity_summary || data.currentData?.weekly_activity_summary || data.latestData?.notes || 'No detailed activity notes recorded for this period.')
-                        .split(/\r?\n|\\n        let currentWeekData: any = null;\n        let previousWeekData: any = null;\n        \n        const cacheEntry = dashboardCache[client.id];\n        if (cacheEntry && cacheEntry.current_data && viewMode !== 'custom') {\n           currentWeekData = cacheEntry.current_data;\n           previousWeekData = cacheEntry.prev_data;\n        } else {\n           const currentWeekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');\n           const prevWeekStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');\n           const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());\n           const latestData = sortedWeekly.length > 0 ? sortedWeekly[0] : null;\n           currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;\n           previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;\n        }\n|\\n/)
+                        .split(/\r?\n|\n/)
                         .filter(line => line.trim())
                         .map((point, i) => (
                           <div key={i} className="flex gap-3 group/point">
