@@ -598,11 +598,14 @@ export const getDashboardCache = async (viewMode: string) => {
     if (viewMode === 'rolling') {
       tableName = 'dashboard_cache';
       query = supabase.from(tableName).select('*').eq('view_mode', 'rolling');
-    } else if (viewMode === 'weekly') {
+    } else if (viewMode === '28days') {
       tableName = 'dashboard_cache_weekly';
       query = supabase.from(tableName).select('*');
     } else if (viewMode === 'monthly') {
       tableName = 'dashboard_cache_monthly';
+      query = supabase.from(tableName).select('*');
+    } else if (viewMode === '3months') {
+      tableName = 'dashboard_cache_3m';
       query = supabase.from(tableName).select('*');
     }
     

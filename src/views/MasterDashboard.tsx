@@ -75,7 +75,7 @@ export default function MasterDashboard() {
   };
   const [loading, setLoading] = useState(true);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
-  const [viewMode, setViewMode] = useState<'weekly' | 'monthly' | 'rolling' | 'custom'>('rolling');
+  const [viewMode, setViewMode] = useState<'rolling' | '28days' | 'monthly' | '3months' | 'custom'>('rolling');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
     end: format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
@@ -142,7 +142,7 @@ export default function MasterDashboard() {
   const handleLiveSync = async () => {
     setIsLiveSyncing(true);
     try {
-      const res = await fetch('/api/cron/sync-dashboard-cache', { method: 'GET' });
+      const res = await fetch(`/api/cron/sync-dashboard-cache?mode=${viewMode}`, { method: 'GET' });
       if(!res.ok) throw new Error('Live Sync failed');
       await fetchData(true);
     } catch (err) {
@@ -175,24 +175,24 @@ export default function MasterDashboard() {
         prevEnd = new Date(currentEnd.getTime() - duration);
         prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === 'rolling') {
-        currentEnd = subDays(today, 2);
+        currentEnd = subDays(today, 3);
         currentEnd.setHours(23, 59, 59, 999);
-        currentStart = subDays(currentEnd, 6);
+        currentStart = subDays(today, 9);
         currentStart.setHours(0, 0, 0, 0);
         prevEnd = subDays(currentStart, 1);
         prevEnd.setHours(23, 59, 59, 999);
         prevStart = subDays(prevEnd, 6);
         prevStart.setHours(0, 0, 0, 0);
-      } else if (viewMode === 'weekly') {
-        currentStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
-        currentStart.setHours(0, 0, 0, 0);
-        currentEnd = endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
+      } else if (viewMode === '28days') {
+        currentEnd = subDays(today, 3);
         currentEnd.setHours(23, 59, 59, 999);
-        prevStart = startOfWeek(subWeeks(today, 2), { weekStartsOn: 1 });
-        prevStart.setHours(0, 0, 0, 0);
-        prevEnd = endOfWeek(subWeeks(today, 2), { weekStartsOn: 1 });
+        currentStart = subDays(today, 30);
+        currentStart.setHours(0, 0, 0, 0);
+        prevEnd = subDays(today, 31);
         prevEnd.setHours(23, 59, 59, 999);
-      } else {
+        prevStart = subDays(today, 58);
+        prevStart.setHours(0, 0, 0, 0);
+      } else if (viewMode === 'monthly') {
         currentStart = startOfMonth(subMonths(today, 1));
         currentStart.setHours(0, 0, 0, 0);
         currentEnd = endOfMonth(subMonths(today, 1));
@@ -201,6 +201,16 @@ export default function MasterDashboard() {
         prevStart.setHours(0, 0, 0, 0);
         prevEnd = endOfMonth(subMonths(today, 2));
         prevEnd.setHours(23, 59, 59, 999);
+      } else {
+        // 3months - Rolling 90 Days (ending 2 days ago to match GSC rolling 3M exactly)
+        currentEnd = subDays(today, 2);
+        currentEnd.setHours(23, 59, 59, 999);
+        currentStart = subDays(currentEnd, 89);
+        currentStart.setHours(0, 0, 0, 0);
+        prevEnd = subDays(currentStart, 1);
+        prevEnd.setHours(23, 59, 59, 999);
+        prevStart = subDays(prevEnd, 89);
+        prevStart.setHours(0, 0, 0, 0);
       }
 
       setViewingPeriod({ start: currentStart, end: currentEnd });
@@ -529,17 +539,30 @@ export default function MasterDashboard() {
         <div className="flex flex-wrap items-center gap-4">
           <div className={`p-1.5 rounded-2xl flex gap-1 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'
             }`}>
-            <Tooltip content="Week over Week Performance">
+            <Tooltip content="Rolling Last 7 Days vs Previous 7 Days">
               <button
-                onClick={() => setViewMode('weekly')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'weekly'
+                onClick={() => setViewMode('rolling')}
+                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'rolling'
                     ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
                       : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
                   }`}
               >
-                Weekly (WoW)
+                Rolling 7D
+              </button>
+            </Tooltip>
+            <Tooltip content="Last 28 Days vs Previous 28 Days">
+              <button
+                onClick={() => setViewMode('28days')}
+                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === '28days'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                    : theme === 'white'
+                      ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
+                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
+                  }`}
+              >
+                28 Days
               </button>
             </Tooltip>
             <Tooltip content="Month over Month Performance">
@@ -555,17 +578,17 @@ export default function MasterDashboard() {
                 Monthly (MoM)
               </button>
             </Tooltip>
-            <Tooltip content="Rolling Last 7 Days vs Previous 7 Days">
+            <Tooltip content="3 Months Performance vs Previous 3 Months">
               <button
-                onClick={() => setViewMode('rolling')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'rolling'
+                onClick={() => setViewMode('3months')}
+                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === '3months'
                     ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
                       : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
                   }`}
               >
-                Rolling 7D
+                3 Months
               </button>
             </Tooltip>
           </div>
@@ -586,7 +609,7 @@ export default function MasterDashboard() {
                 className={`bg-transparent text-[10px] font-black uppercase outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
               <button 
-                onClick={() => setViewMode('weekly')}
+                onClick={() => setViewMode('rolling')}
                 className="p-1 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
               >
                 <X size={14} />
