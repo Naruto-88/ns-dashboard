@@ -202,106 +202,43 @@ export default function MasterDashboard() {
 
       const dashboardRows: DashboardRow[] = await Promise.all(allClients.map(async (client) => {
         let weeklyData: WeeklyData[] = allWeeklyData[client.id] || [];
-        let liveCurrent: any = null;
-        let livePrevious: any = null;
-
-        try {
-          if (forceLive) {
-            const results = await Promise.allSettled([
-              getLiveMetrics(client.id, { startDate: format(currentStart, 'yyyy-MM-dd'), endDate: format(currentEnd, 'yyyy-MM-dd') }),
-              getLiveMetrics(client.id, { startDate: format(prevStart, 'yyyy-MM-dd'), endDate: format(prevEnd, 'yyyy-MM-dd') })
-            ]);
-            if (results[0].status === 'fulfilled') {
-              liveCurrent = (results[0] as any).value;
-              try {
-                const weekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-                const existingRow = weeklyData.find(d => d.week_start_date === weekStartStr);
-                
-                await syncWeeklyData(client.id, {
-                  id: existingRow?.id,
-                  week_start_date: weekStartStr,
-                  gsc_clicks: liveCurrent.gsc_clicks,
-                  gsc_impressions: liveCurrent.gsc_impressions,
-                  gsc_ctr: liveCurrent.gsc_ctr,
-                  gsc_position: liveCurrent.gsc_position,
-                  ga4_traffic: liveCurrent.ga4_traffic,
-                  ga4_new_users: liveCurrent.ga4_new_users,
-                  ga4_returning_users: liveCurrent.ga4_returning_users,
-                  ga4_organic_traffic: liveCurrent.ga4_organic_traffic,
-                  phone_calls: liveCurrent.phone_calls,
-                  leads_total: liveCurrent.leads_total,
-                  leads_legit: liveCurrent.leads_legit,
-                  top_3_count: liveCurrent.gsc_top3,
-                  top_10_count: liveCurrent.gsc_top10
-                });
-              } catch (saveErr) {
-                console.error(`Error autosaving live current data for ${client.name}:`, saveErr);
-              }
-            }
-            if (results[1].status === 'fulfilled') {
-              livePrevious = (results[1] as any).value;
-              try {
-                const prevStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-                const existingRowPrev = weeklyData.find(d => d.week_start_date === prevStartStr);
-                
-                await syncWeeklyData(client.id, {
-                  id: existingRowPrev?.id,
-                  week_start_date: prevStartStr,
-                  gsc_clicks: livePrevious.gsc_clicks,
-                  gsc_impressions: livePrevious.gsc_impressions,
-                  gsc_ctr: livePrevious.gsc_ctr,
-                  gsc_position: livePrevious.gsc_position,
-                  ga4_traffic: livePrevious.ga4_traffic,
-                  ga4_new_users: livePrevious.ga4_new_users,
-                  ga4_returning_users: livePrevious.ga4_returning_users,
-                  ga4_organic_traffic: livePrevious.ga4_organic_traffic,
-                  phone_calls: livePrevious.phone_calls,
-                  leads_total: livePrevious.leads_total,
-                  leads_legit: livePrevious.leads_legit,
-                  top_3_count: livePrevious.gsc_top3,
-                  top_10_count: livePrevious.gsc_top10
-                });
-              } catch (saveErr) {
-                console.error(`Error autosaving live previous data for ${client.name}:`, saveErr);
-              }
-            }
-          }
-
-        } catch (e) {
-          console.error(`Error fetching data for ${client.name}:`, e);
+        let currentWeekData: any = null;
+        let previousWeekData: any = null;
+        
+        const cacheEntry = dashboardCache[client.id];
+        if (cacheEntry && cacheEntry.current_data && viewMode !== 'custom') {
+           currentWeekData = cacheEntry.current_data;
+           previousWeekData = cacheEntry.prev_data;
+        } else {
+           const currentWeekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+           const prevWeekStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+           const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
+           const latestData = sortedWeekly.length > 0 ? sortedWeekly[0] : null;
+           currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;
+           previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
         }
 
-        const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
-        const latestData = sortedWeekly[0] || null;
-
-        // Fix: Use EXACT week_start_date matching instead of a broad filter to prevent picking up rogue rows (like Wednesday imports)
-        const currentWeekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        const prevWeekStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
-        const currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;
-        const previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
-
-        const resolvedCurrentClicks = liveCurrent?.gsc_clicks || currentWeekData?.gsc_clicks || 0;
-        const resolvedPreviousClicks = livePrevious?.gsc_clicks || previousWeekData?.gsc_clicks || 0;
+        const resolvedCurrentClicks = currentWeekData?.gsc_clicks || 0;
+        const resolvedPreviousClicks = previousWeekData?.gsc_clicks || 0;
 
         const gscTraffic = {
           current: resolvedCurrentClicks,
           previous: resolvedPreviousClicks,
           change: ((resolvedCurrentClicks - resolvedPreviousClicks) / (resolvedPreviousClicks || 1)) * 100,
-          ctr: liveCurrent?.gsc_ctr || currentWeekData?.gsc_ctr || 0,
-          prevCtr: livePrevious?.gsc_ctr || previousWeekData?.gsc_ctr || 0,
-          position: liveCurrent?.gsc_position || currentWeekData?.gsc_position || 0,
-          prevPosition: livePrevious?.gsc_position || previousWeekData?.gsc_position || 0,
-          impressions: liveCurrent?.gsc_impressions || currentWeekData?.gsc_impressions || 0,
-          prevImpressions: livePrevious?.gsc_impressions || previousWeekData?.gsc_impressions || 0,
-          top3: liveCurrent?.gsc_top3 || currentWeekData?.top_3_count || 0,
-          top10: liveCurrent?.gsc_top10 || currentWeekData?.top_10_count || 0
+          ctr: currentWeekData?.gsc_ctr || 0,
+          prevCtr: previousWeekData?.gsc_ctr || 0,
+          position: currentWeekData?.gsc_position || 0,
+          prevPosition: previousWeekData?.gsc_position || 0,
+          impressions: currentWeekData?.gsc_impressions || 0,
+          prevImpressions: previousWeekData?.gsc_impressions || 0,
+          top3: currentWeekData?.top_3_count || currentWeekData?.gsc_top3 || 0,
+          top10: currentWeekData?.top_10_count || currentWeekData?.gsc_top10 || 0
         };
 
-        const resolvedCurrentTraffic = liveCurrent?.ga4_traffic || currentWeekData?.ga4_traffic || 0;
-        const resolvedPreviousTraffic = livePrevious?.ga4_traffic || previousWeekData?.ga4_traffic || 0;
-        const resolvedCurrentOrganic = liveCurrent?.ga4_organic_traffic ?? currentWeekData?.ga4_organic_traffic ?? 0;
-        const resolvedPreviousOrganic = livePrevious?.ga4_organic_traffic ?? previousWeekData?.ga4_organic_traffic ?? 0;
+        const resolvedCurrentTraffic = currentWeekData?.ga4_traffic || 0;
+        const resolvedPreviousTraffic = previousWeekData?.ga4_traffic || 0;
+        const resolvedCurrentOrganic = currentWeekData?.ga4_organic_traffic ?? 0;
+        const resolvedPreviousOrganic = previousWeekData?.ga4_organic_traffic ?? 0;
 
         const ga4Traffic = {
           current: resolvedCurrentTraffic,
@@ -317,8 +254,8 @@ export default function MasterDashboard() {
           change: calculateChange(currentWeekData?.leads_total || 0, previousWeekData?.leads_total || 0)
         };
 
-        const resolvedCurrentPhoneCalls = liveCurrent?.phone_calls ?? currentWeekData?.phone_calls ?? 0;
-        const resolvedPreviousPhoneCalls = livePrevious?.phone_calls ?? previousWeekData?.phone_calls ?? 0;
+        const resolvedCurrentPhoneCalls = currentWeekData?.phone_calls ?? 0;
+        const resolvedPreviousPhoneCalls = previousWeekData?.phone_calls ?? 0;
 
         const phoneCalls = {
           current: resolvedCurrentPhoneCalls,
@@ -328,6 +265,7 @@ export default function MasterDashboard() {
 
         // Calculate historical previous data for Ahrefs comparison
         let historicalPrev = previousWeekData;
+        const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
         if (!historicalPrev && sortedWeekly.length > 1) {
           if (currentWeekData?.id === sortedWeekly[0].id) {
             historicalPrev = sortedWeekly[1];
