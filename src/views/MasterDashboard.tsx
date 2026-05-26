@@ -139,10 +139,22 @@ export default function MasterDashboard() {
     }
   };
 
-  const fetchData = async (silent = false, forceLive = false) => {
-    if (forceLive) {
-      setIsLiveSyncing(true);
-    } else if (!silent) {
+  const handleLiveSync = async () => {
+    setIsLiveSyncing(true);
+    try {
+      const res = await fetch('/api/cron/sync-dashboard-cache', { method: 'GET' });
+      if(!res.ok) throw new Error('Live Sync failed');
+      await fetchData(true);
+    } catch (err) {
+      console.error(err);
+      alert('Live sync failed');
+    } finally {
+      setIsLiveSyncing(false);
+    }
+  };
+
+  const fetchData = async (silent = false) => {
+    if (!silent) {
       setLoading(true);
     }
     try {
@@ -195,6 +207,7 @@ export default function MasterDashboard() {
       const currentRangeStr = `${format(currentStart, 'MMM dd')} - ${format(currentEnd, 'MMM dd')}`;
       const prevRangeStr = `${format(prevStart, 'MMM dd')} - ${format(prevEnd, 'MMM dd')}`;
 
+      const dashboardCache = await getDashboardCache(viewMode);
       const allWeeklyData = await getAllWeeklyData({
         startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
         endDate: format(today, 'yyyy-MM-dd')
@@ -376,7 +389,6 @@ export default function MasterDashboard() {
       console.error('Error fetching dashboard data:', e);
     } finally {
       if (!silent) setLoading(false);
-      setIsLiveSyncing(false);
     }
   };
 
@@ -609,7 +621,7 @@ export default function MasterDashboard() {
             />
           </div>
           <button
-            onClick={() => fetchData(false, true)}
+            onClick={handleLiveSync}
             className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
               theme === 'white' 
                 ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20' 
