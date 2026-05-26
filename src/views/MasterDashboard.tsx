@@ -175,7 +175,7 @@ export default function MasterDashboard() {
         prevEnd = new Date(currentEnd.getTime() - duration);
         prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === 'rolling') {
-        currentEnd = subDays(today, 1);
+        currentEnd = subDays(today, 2);
         currentEnd.setHours(23, 59, 59, 999);
         currentStart = subDays(currentEnd, 6);
         currentStart.setHours(0, 0, 0, 0);
