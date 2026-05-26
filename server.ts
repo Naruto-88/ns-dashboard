@@ -1785,8 +1785,8 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     let wPrevEnd = endOfWeek(subWeeks(today, 2)); wPrevEnd.setHours(23,59,59,999);
     periods['weekly'] = { curStart: wCurStart, curEnd: wCurEnd, prevStart: wPrevStart, prevEnd: wPrevEnd };
 
-    let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
-    let rCurStart = subDays(today, 9); rCurStart.setHours(0,0,0,0);
+    let rCurEnd = subDays(today, 1); rCurEnd.setHours(23,59,59,999);
+    let rCurStart = subDays(today, 7); rCurStart.setHours(0,0,0,0);
     let rPrevStart = subDays(rCurStart, 7);
     let rPrevEnd = subDays(rCurEnd, 7);
     periods['rolling'] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
@@ -2346,8 +2346,8 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     periods['weekly'] = { curStart: wCurStart, curEnd: wCurEnd, prevStart: wPrevStart, prevEnd: wPrevEnd };
 
     // Rolling 7D
-    let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
-    let rCurStart = subDays(today, 9); rCurStart.setHours(0,0,0,0);
+    let rCurEnd = subDays(today, 1); rCurEnd.setHours(23,59,59,999);
+    let rCurStart = subDays(today, 7); rCurStart.setHours(0,0,0,0);
     let rPrevStart = subDays(rCurStart, 7);
     let rPrevEnd = subDays(rCurEnd, 7);
     periods['rolling'] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
