@@ -94,6 +94,53 @@ export const getWeeklyData = async (clientId: string, range: DateRange): Promise
   }
 };
 
+export interface MonthlyCache {
+  id: string;
+  client_id: string;
+  month_start_date: string;
+  gsc_clicks: number;
+  gsc_impressions: number;
+  gsc_ctr: number;
+  gsc_position: number;
+  gsc_top3: number;
+  gsc_top10: number;
+  ga4_traffic: number;
+  ga4_new_users: number;
+  ga4_returning_users: number;
+  ga4_organic_traffic: number;
+  phone_calls: number;
+  leads_total: number;
+  leads_legit: number;
+  blogs_published: number;
+  ahrefs_dr: number;
+  last_updated: string;
+}
+
+export const getMonthlyCache = async (monthStartDate: string): Promise<MonthlyCache[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('monthly_data_cache')
+      .select('*')
+      .eq('month_start_date', monthStartDate);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching monthly data cache:', error);
+    return [];
+  }
+};
+
+export const triggerMonthlySync = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/cron/sync-monthly-cache');
+    return response.ok;
+  } catch (error) {
+    console.error('Error triggering monthly sync:', error);
+    return false;
+  }
+};
+
 export const getAllWeeklyData = async (range: DateRange): Promise<Record<string, WeeklyData[]>> => {
   try {
     const { data, error } = await supabase
@@ -545,13 +592,24 @@ export const runAiAnalysis = async (params: {
 
 export const getDashboardCache = async (viewMode: string) => {
   try {
-    const { data, error } = await supabase
-      .from('dashboard_cache')
-      .select('*')
-      .eq('view_mode', viewMode);
+    let tableName = 'dashboard_cache';
+    let query = supabase.from(tableName).select('*');
+    
+    if (viewMode === 'rolling') {
+      tableName = 'dashboard_cache';
+      query = supabase.from(tableName).select('*').eq('view_mode', 'rolling');
+    } else if (viewMode === 'weekly') {
+      tableName = 'dashboard_cache_weekly';
+      query = supabase.from(tableName).select('*');
+    } else if (viewMode === 'monthly') {
+      tableName = 'dashboard_cache_monthly';
+      query = supabase.from(tableName).select('*');
+    }
+    
+    const { data, error } = await query;
       
     if (error) {
-       console.error('Error fetching dashboard_cache:', error);
+       console.error('Error fetching dashboard cache:', error);
        return {};
     }
     

@@ -94,6 +94,19 @@ async function syncAllClients() {
       }
     }
 
+    // 4. Trigger the new Monthly Cache Sync
+    console.log(`\n[${new Date().toISOString()}] Triggering Monthly Cache Sync...`);
+    try {
+      const monthlyRes = await fetch(`${BACKEND_URL}/api/cron/sync-monthly-cache`);
+      if (monthlyRes.ok) {
+        console.log(`  -> Monthly Cache Sync completed successfully!`);
+      } else {
+        console.error(`  -> Monthly Cache Sync returned status ${monthlyRes.status}`);
+      }
+    } catch (monthlyErr: any) {
+      console.error(`  -> Failed to trigger Monthly Cache Sync:`, monthlyErr.message);
+    }
+
     console.log(`\n[${new Date().toISOString()}] Background Sync Complete!`);
   } catch (error: any) {
     console.error('Fatal Error during background sync:', error);

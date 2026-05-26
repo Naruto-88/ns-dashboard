@@ -18,7 +18,7 @@ import {
   User,
   Circle
 } from 'lucide-react';
-import { getClients, updateClient, Client, WeeklyData, getWeeklyData, getLiveMetrics } from '../services/dataService';
+import { getClients, updateClient, Client, WeeklyData, getWeeklyData, getLiveMetrics, getMonthlyCache, triggerMonthlySync } from '../services/dataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import Tooltip from '../components/Tooltip';
@@ -71,54 +71,34 @@ export default function GoalsAndTargets() {
     try {
       const clientList = await getClients();
       
-      // Calculate local timezone-independent date bounds
       const monthStr = String(currentMonth + 1).padStart(2, '0');
       const startOfMonth = `${currentYear}-${monthStr}-01`;
-      const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
-      const endOfMonth = `${currentYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
       
-      // Fetch live metrics and weekly database records in parallel for maximum efficiency
-      const [liveResults, { data: allWeeklyRecords, error: weeklyError }, actionsData] = await Promise.all([
-        forceLive ? Promise.allSettled(
-          clientList.map(client => 
-            getLiveMetrics(client.id, { startDate: startOfMonth, endDate: endOfMonth })
-          )
-        ) : Promise.resolve([]),
-        supabase
-          .from('weekly_data')
-          .select('client_id, week_start_date, gsc_clicks, ga4_traffic, blogs_published, leads_total, ahrefs_dr')
-          .gte('week_start_date', startOfMonth)
-          .lte('week_start_date', endOfMonth),
+      // If live sync requested, trigger the server-side cron first to refresh the monthly cache
+      if (forceLive) {
+        await triggerMonthlySync().catch(err => console.error("Error triggering sync:", err));
+      }
+      
+      // Fetch monthly cache records and pending actions in parallel
+      const [monthlyRecords, actionsData] = await Promise.all([
+        getMonthlyCache(startOfMonth),
         supabase
           .from('client_actions')
           .select('*')
           .eq('status', 'pending')
       ]);
 
-      if (weeklyError) {
-        console.error('Error fetching weekly data batch:', weeklyError);
-      }
-
-      const records = allWeeklyRecords || [];
       const pendingActionsData = actionsData?.data || [];
 
-      // Map and aggregate metrics inside memory
-      const enrichedClients = clientList.map((client, index) => {
-        const clientRecords = records.filter(r => r.client_id === client.id);
+      // Map monthly cache metrics directly
+      const enrichedClients = clientList.map((client) => {
+        const cacheRecord = monthlyRecords.find(r => r.client_id === client.id);
 
-        const dbClicksSum = clientRecords.reduce((sum, r) => sum + (r.gsc_clicks || 0), 0);
-        const dbSessionsSum = clientRecords.reduce((sum, r) => sum + (r.ga4_traffic || 0), 0);
-        const actualBlogs = clientRecords.reduce((sum, r) => sum + (r.blogs_published || 0), 0);
-        const actualLeads = clientRecords.reduce((sum, r) => sum + (r.leads_total || 0), 0);
-
-        const liveRes = liveResults[index];
-        const liveData = liveRes && liveRes.status === 'fulfilled' ? liveRes.value : null;
-
-        const actualClicks = liveData?.gsc_clicks || dbClicksSum || 0;
-        const actualSessions = liveData?.ga4_traffic || dbSessionsSum || 0;
-
-        const sortedRecords = [...clientRecords].sort((a, b) => b.week_start_date.localeCompare(a.week_start_date));
-        const actualDR = sortedRecords.find(r => r.ahrefs_dr > 0)?.ahrefs_dr || 0;
+        const actualClicks = cacheRecord?.gsc_clicks || 0;
+        const actualSessions = cacheRecord?.ga4_traffic || 0;
+        const actualBlogs = cacheRecord?.blogs_published || 0;
+        const actualLeads = cacheRecord?.leads_total || 0;
+        const actualDR = cacheRecord?.ahrefs_dr || 0;
         
         const pendingActions = pendingActionsData.filter(a => a.client_id === client.id);
 
