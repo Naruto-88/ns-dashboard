@@ -156,7 +156,9 @@ export const getKeywordRankingDetails = async (clientId: string, range: DateRang
 
 export const getPerformanceTrend = async (clientId: string, range: DateRange) => {
   try {
-    const response = await fetch(`/api/clients/${clientId}/performance-trend?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const response = await fetch(`/api/clients/${clientId}/performance-trend?startDate=${range.startDate}&endDate=${range.endDate}`, {
+      cache: 'no-store'
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to fetch trend');
     return data;
@@ -404,35 +406,61 @@ export const syncWeeklyData = async (clientId: string, data: Partial<WeeklyData>
     });
 
     const performSave = async (payload: any) => {
-      if (id) {
-        return await supabase
-          .from('weekly_data')
-          .update(payload)
-          .eq('id', id);
-      } else {
-        return await supabase
-          .from('weekly_data')
-          .insert({ ...payload, client_id: clientId });
-      }
+      return await supabase
+        .from('weekly_data')
+        .upsert({ ...payload, client_id: clientId }, { onConflict: 'client_id, week_start_date' });
     };
 
     let result = await performSave(saveData);
 
-    if (result.error && result.error.message.includes('phone_calls')) {
-      console.warn('[DB WARNING] phone_calls column missing. Retrying save without it...', result.error.message);
-      delete saveData.phone_calls;
-      result = await performSave(saveData);
+    // Retry loop for missing columns
+    while (result.error && (result.error.message.includes('column') || result.error.message.includes('Could not find'))) {
+      // Try to extract the missing column name from the error message. 
+      // Typical PostgREST error: "Could not find the 'column_name' column"
+      const match = result.error.message.match(/'([^']+)'/);
+      const missingCol = match ? match[1] : null;
+      
+      if (missingCol && Object.keys(saveData).includes(missingCol)) {
+        console.warn(`[DB WARNING] ${missingCol} column missing. Retrying save without it...`, result.error.message);
+        delete (saveData as any)[missingCol];
+        result = await performSave(saveData);
+      } else if (result.error.message.includes('phone_calls') && saveData.phone_calls !== undefined) {
+        console.warn('[DB WARNING] phone_calls missing. Retrying...');
+        delete saveData.phone_calls;
+        result = await performSave(saveData);
+      } else if (result.error.message.includes('ga4_organic_traffic') && saveData.ga4_organic_traffic !== undefined) {
+        console.warn('[DB WARNING] ga4_organic_traffic missing. Retrying...');
+        delete saveData.ga4_organic_traffic;
+        result = await performSave(saveData);
+      } else if (result.error.message.includes('ga4_new_users') && saveData.ga4_new_users !== undefined) {
+        delete saveData.ga4_new_users;
+        result = await performSave(saveData);
+      } else if (result.error.message.includes('ga4_returning_users') && saveData.ga4_returning_users !== undefined) {
+        delete saveData.ga4_returning_users;
+        result = await performSave(saveData);
+      } else if (result.error.message.includes('top_3_count') && saveData.top_3_count !== undefined) {
+        delete saveData.top_3_count;
+        result = await performSave(saveData);
+      } else if (result.error.message.includes('top_10_count') && saveData.top_10_count !== undefined) {
+        delete saveData.top_10_count;
+        result = await performSave(saveData);
+      } else {
+        // Unrecoverable or couldn't parse
+        break;
+      }
     }
 
-    if (result.error && result.error.message.includes('ga4_organic_traffic')) {
-      console.warn('[DB WARNING] ga4_organic_traffic column missing. Retrying save without it...', result.error.message);
-      delete saveData.ga4_organic_traffic;
-      result = await performSave(saveData);
+    if (result.error) {
+      if (typeof window !== 'undefined') {
+        alert('Supabase Save Error: ' + result.error.message);
+      }
+      throw result.error;
     }
-
-    if (result.error) throw result.error;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving weekly data:', error);
+    if (typeof window !== 'undefined') {
+      alert('Catch Error saving weekly data: ' + error.message);
+    }
     throw error;
   }
 };

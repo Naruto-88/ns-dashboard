@@ -232,9 +232,7 @@ export default function MasterDashboard() {
                   leads_total: liveCurrent.leads_total,
                   leads_legit: liveCurrent.leads_legit,
                   top_3_count: liveCurrent.gsc_top3,
-                  top_10_count: liveCurrent.gsc_top10,
-                  import_source: 'live_sync',
-                  imported_at: new Date().toISOString()
+                  top_10_count: liveCurrent.gsc_top10
                 });
               } catch (saveErr) {
                 console.error(`Error autosaving live current data for ${client.name}:`, saveErr);
@@ -261,9 +259,7 @@ export default function MasterDashboard() {
                   leads_total: livePrevious.leads_total,
                   leads_legit: livePrevious.leads_legit,
                   top_3_count: livePrevious.gsc_top3,
-                  top_10_count: livePrevious.gsc_top10,
-                  import_source: 'live_sync',
-                  imported_at: new Date().toISOString()
+                  top_10_count: livePrevious.gsc_top10
                 });
               } catch (saveErr) {
                 console.error(`Error autosaving live previous data for ${client.name}:`, saveErr);
@@ -278,37 +274,34 @@ export default function MasterDashboard() {
         const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
         const latestData = sortedWeekly[0] || null;
 
-        const currentWeekData = weeklyData
-          .filter(d => parseISO(d.week_start_date) >= currentStart && parseISO(d.week_start_date) <= currentEnd)
-          .sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime())[0] 
-          || latestData;
+        // Fix: Use EXACT week_start_date matching instead of a broad filter to prevent picking up rogue rows (like Wednesday imports)
+        const currentWeekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const prevWeekStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-        const prevWeekData = weeklyData
-          .filter(d => parseISO(d.week_start_date) >= prevStart && parseISO(d.week_start_date) <= prevEnd)
-          .sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime())[0]
-          || sortedWeekly[1] || null;
+        const currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;
+        const previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
 
         const resolvedCurrentClicks = liveCurrent?.gsc_clicks || currentWeekData?.gsc_clicks || 0;
-        const resolvedPreviousClicks = livePrevious?.gsc_clicks || prevWeekData?.gsc_clicks || 0;
+        const resolvedPreviousClicks = livePrevious?.gsc_clicks || previousWeekData?.gsc_clicks || 0;
 
         const gscTraffic = {
           current: resolvedCurrentClicks,
           previous: resolvedPreviousClicks,
           change: ((resolvedCurrentClicks - resolvedPreviousClicks) / (resolvedPreviousClicks || 1)) * 100,
           ctr: liveCurrent?.gsc_ctr || currentWeekData?.gsc_ctr || 0,
-          prevCtr: livePrevious?.gsc_ctr || prevWeekData?.gsc_ctr || 0,
+          prevCtr: livePrevious?.gsc_ctr || previousWeekData?.gsc_ctr || 0,
           position: liveCurrent?.gsc_position || currentWeekData?.gsc_position || 0,
-          prevPosition: livePrevious?.gsc_position || prevWeekData?.gsc_position || 0,
+          prevPosition: livePrevious?.gsc_position || previousWeekData?.gsc_position || 0,
           impressions: liveCurrent?.gsc_impressions || currentWeekData?.gsc_impressions || 0,
-          prevImpressions: livePrevious?.gsc_impressions || prevWeekData?.gsc_impressions || 0,
+          prevImpressions: livePrevious?.gsc_impressions || previousWeekData?.gsc_impressions || 0,
           top3: liveCurrent?.gsc_top3 || currentWeekData?.top_3_count || 0,
           top10: liveCurrent?.gsc_top10 || currentWeekData?.top_10_count || 0
         };
 
         const resolvedCurrentTraffic = liveCurrent?.ga4_traffic || currentWeekData?.ga4_traffic || 0;
-        const resolvedPreviousTraffic = livePrevious?.ga4_traffic || prevWeekData?.ga4_traffic || 0;
+        const resolvedPreviousTraffic = livePrevious?.ga4_traffic || previousWeekData?.ga4_traffic || 0;
         const resolvedCurrentOrganic = liveCurrent?.ga4_organic_traffic ?? currentWeekData?.ga4_organic_traffic ?? 0;
-        const resolvedPreviousOrganic = livePrevious?.ga4_organic_traffic ?? prevWeekData?.ga4_organic_traffic ?? 0;
+        const resolvedPreviousOrganic = livePrevious?.ga4_organic_traffic ?? previousWeekData?.ga4_organic_traffic ?? 0;
 
         const ga4Traffic = {
           current: resolvedCurrentTraffic,
@@ -321,11 +314,11 @@ export default function MasterDashboard() {
         const leads = {
           current: currentWeekData?.leads_total || 0,
           legit: currentWeekData?.leads_legit || 0,
-          change: calculateChange(currentWeekData?.leads_total || 0, prevWeekData?.leads_total || 0)
+          change: calculateChange(currentWeekData?.leads_total || 0, previousWeekData?.leads_total || 0)
         };
 
         const resolvedCurrentPhoneCalls = liveCurrent?.phone_calls ?? currentWeekData?.phone_calls ?? 0;
-        const resolvedPreviousPhoneCalls = livePrevious?.phone_calls ?? prevWeekData?.phone_calls ?? 0;
+        const resolvedPreviousPhoneCalls = livePrevious?.phone_calls ?? previousWeekData?.phone_calls ?? 0;
 
         const phoneCalls = {
           current: resolvedCurrentPhoneCalls,
@@ -334,7 +327,7 @@ export default function MasterDashboard() {
         };
 
         // Calculate historical previous data for Ahrefs comparison
-        let historicalPrev = prevWeekData;
+        let historicalPrev = previousWeekData;
         if (!historicalPrev && sortedWeekly.length > 1) {
           if (currentWeekData?.id === sortedWeekly[0].id) {
             historicalPrev = sortedWeekly[1];
@@ -358,20 +351,72 @@ export default function MasterDashboard() {
         };
 
         let score = 0;
-        if (gscTraffic.change > 5) score += 2;
-        if (ga4Traffic.change > 5) score += 2;
-        if (leads.legit >= (client.lead_target_monthly / 4)) score += 2;
+        const leadTargetWeekly = (client.lead_target_monthly || 0) / 4;
+        const reasons: string[] = [];
+
+        // Positive Points
+        if (gscTraffic.change > 5) {
+          score += 2;
+          reasons.push(`GSC Clicks up by ${gscTraffic.change.toFixed(1)}%`);
+        }
+        if (ga4Traffic.change > 5) {
+          score += 2;
+          reasons.push(`GA4 Traffic up by ${ga4Traffic.change.toFixed(1)}%`);
+        }
+        if (client.lead_target_monthly > 0 && leads.legit >= leadTargetWeekly) {
+          score += 2;
+          reasons.push(`Weekly Lead Target Hit`);
+        }
+        
+        const currentPos = gscTraffic.position;
+        const prevPos = gscTraffic.prevPosition;
+        if (currentPos > 0 && prevPos > 0 && currentPos < prevPos) {
+          score += 1;
+          reasons.push(`Avg Position improved to ${currentPos.toFixed(1)}`);
+        }
+        
+        const imprChange = calculateChange(gscTraffic.impressions, gscTraffic.prevImpressions);
+        if (imprChange > 10) {
+          score += 1;
+          reasons.push(`Impressions up by ${imprChange.toFixed(1)}%`);
+        }
+
+        // Negative Points
+        if (gscTraffic.change < -5) {
+          score -= 2;
+          reasons.push(`GSC Clicks dropped by ${Math.abs(gscTraffic.change).toFixed(1)}%`);
+        }
+        if (ga4Traffic.change < -5) {
+          score -= 2;
+          reasons.push(`GA4 Traffic dropped by ${Math.abs(ga4Traffic.change).toFixed(1)}%`);
+        }
+        if (client.lead_target_monthly > 0 && (leads.legit === 0 || leads.legit < (leadTargetWeekly / 2))) {
+          score -= 2;
+          reasons.push(`Missed Lead Targets`);
+        }
+        
+        if (currentPos > 0 && prevPos > 0 && currentPos >= prevPos + 3) {
+          score -= 1;
+          reasons.push(`Avg Position dropped to ${currentPos.toFixed(1)}`);
+        }
+        
+        if (imprChange < -10) {
+          score -= 1;
+          reasons.push(`Impressions dropped by ${Math.abs(imprChange).toFixed(1)}%`);
+        }
+
+        const reasonStr = reasons.length > 0 ? reasons.join(' | ') : 'Stable across metrics';
 
         const status: DashboardRow['status'] = score >= 3
-          ? { color: 'green', reason: 'Performing well across metrics.' }
-          : score >= 0
-            ? { color: 'orange', reason: 'Stable with mixed performance.' }
-            : { color: 'red', reason: 'Critical performance drop detected.' };
+          ? { color: 'green', reason: reasonStr }
+          : score <= -2
+            ? { color: 'red', reason: reasonStr }
+            : { color: 'orange', reason: reasonStr };
 
         return {
           client,
           currentData: currentWeekData || null,
-          prevData: prevWeekData || null,
+          prevData: previousWeekData || null,
           latestData: latestData,
           gscTraffic: {
             ...gscTraffic,
@@ -854,20 +899,34 @@ export default function MasterDashboard() {
                     </div>
                   </td>
                   <td className="px-4 py-2 text-center">
-                    <div className="flex flex-col items-center">
-                      <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
-                        {row.gscTraffic.ctr.toFixed(2)}%
-                      </span>
-                      <TrendIndicator value={calculateChange(row.gscTraffic.ctr, row.gscTraffic.prevCtr)} theme={theme} />
-                    </div>
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.gscTraffic.ctr.toFixed(2)}%)</span></div>
+                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({row.gscTraffic.prevCtr.toFixed(2)}%)</span></div>
+                      </div>
+                    }>
+                      <div className="flex flex-col items-center">
+                        <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                          {row.gscTraffic.ctr.toFixed(2)}%
+                        </span>
+                        <TrendIndicator value={calculateChange(row.gscTraffic.ctr, row.gscTraffic.prevCtr)} theme={theme} />
+                      </div>
+                    </Tooltip>
                   </td>
                   <td className="px-4 py-2 text-center">
-                    <div className="flex flex-col items-center">
-                      <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
-                        {(row.gscTraffic.impressions / 1000).toFixed(1)}K
-                      </span>
-                      <TrendIndicator value={calculateChange(row.gscTraffic.impressions, row.gscTraffic.prevImpressions)} theme={theme} />
-                    </div>
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({(row.gscTraffic.impressions / 1000).toFixed(1)}K)</span></div>
+                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({(row.gscTraffic.prevImpressions / 1000).toFixed(1)}K)</span></div>
+                      </div>
+                    }>
+                      <div className="flex flex-col items-center">
+                        <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                          {(row.gscTraffic.impressions / 1000).toFixed(1)}K
+                        </span>
+                        <TrendIndicator value={calculateChange(row.gscTraffic.impressions, row.gscTraffic.prevImpressions)} theme={theme} />
+                      </div>
+                    </Tooltip>
                   </td>
                   <td className="px-4 py-2 text-center">
                     <div className="flex flex-col items-center">
@@ -875,19 +934,26 @@ export default function MasterDashboard() {
                         const currentPos = row.currentData?.tracked_keywords_avg_position || row.gscTraffic.position || 0;
                         const prevPos = row.prevData?.tracked_keywords_avg_position || row.gscTraffic.prevPosition || 0;
                         return (
-                          <>
-                            <div className="flex items-baseline justify-center gap-0.5">
-                              <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
-                                {currentPos > 0 ? currentPos.toFixed(1) : '-'}
-                              </span>
-                              {prevPos > 0 && (
-                                <span className="text-[9px] text-[#607a80] font-bold opacity-60">
-                                  / {prevPos.toFixed(1)}
-                                </span>
-                              )}
+                          <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                            <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                              <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({currentPos > 0 ? currentPos.toFixed(1) : '-'})</span></div>
+                              <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({prevPos > 0 ? prevPos.toFixed(1) : '-'})</span></div>
                             </div>
-                            <TrendIndicator value={calculatePosChange(currentPos, prevPos)} theme={theme} inverse />
-                          </>
+                          }>
+                            <>
+                              <div className="flex items-baseline justify-center gap-0.5">
+                                <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                  {currentPos > 0 ? currentPos.toFixed(1) : '-'}
+                                </span>
+                                {prevPos > 0 && (
+                                  <span className="text-[9px] text-[#607a80] font-bold opacity-60">
+                                    / {prevPos.toFixed(1)}
+                                  </span>
+                                )}
+                              </div>
+                              <TrendIndicator value={calculatePosChange(currentPos, prevPos)} theme={theme} inverse />
+                            </>
+                          </Tooltip>
                         );
                       })()}
                     </div>
@@ -895,8 +961,8 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                       <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
-                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
-                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
+                        <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.gscTraffic.current.toLocaleString()})</span></div>
+                        <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({row.gscTraffic.previous.toLocaleString()})</span></div>
                       </div>
                     }>
                       <div className="flex flex-col items-center">

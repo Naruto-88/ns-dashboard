@@ -145,12 +145,67 @@ export default function Dashboard() {
     
     setError(null);
       const prevRange = getPreviousPeriod(range);
+
+      if (!forceLive) {
+        const cachedMetrics = sessionStorage.getItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`);
+        const cachedInsights = sessionStorage.getItem(`agency_dash_insights_${selectedClient}_${range.startDate}_${range.endDate}`);
+        const cachedTrend = sessionStorage.getItem(`agency_dash_trend_${selectedClient}_${range.startDate}_${range.endDate}`);
+
+        if (cachedMetrics && cachedInsights && cachedTrend) {
+          try {
+            setMetrics(JSON.parse(cachedMetrics));
+            setInsights(JSON.parse(cachedInsights));
+            setTrendData(JSON.parse(cachedTrend));
+            setLoading(false);
+            return;
+          } catch (e) {
+            console.error('Error parsing cached dashboard data', e);
+          }
+        }
+      }
       
       Promise.all([
         aggregateMetrics(selectedClient, range, prevRange),
         getInsights(selectedClient, range),
         getPerformanceTrend(selectedClient, range)
-      ]).then(([metricsData, insightsData, trendDataRes]) => {
+      ]).then(async ([metricsData, insightsData, trendDataRes]) => {
+        if (forceLive) {
+           sessionStorage.setItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(metricsData));
+           sessionStorage.setItem(`agency_dash_insights_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(insightsData));
+           sessionStorage.setItem(`agency_dash_trend_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(trendDataRes));
+           
+           try {
+             // Save to Database so that Refresh fetches it permanently
+             const { format, startOfWeek, parseISO } = await import('date-fns');
+             const { syncWeeklyData } = await import('../services/dataService');
+             
+             const endDateDate = parseISO(range.endDate);
+             const weekStartStr = format(startOfWeek(endDateDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+             
+             // Extract current values from the aggregated metrics (stripping away ComparisonResult)
+             const gsc_clicks = typeof metricsData.clicks === 'number' ? metricsData.clicks : metricsData.clicks.current;
+             const gsc_impressions = typeof metricsData.impressions === 'number' ? metricsData.impressions : metricsData.impressions.current;
+             const gsc_ctr = typeof metricsData.ctr === 'number' ? metricsData.ctr : metricsData.ctr.current;
+             const gsc_position = typeof metricsData.position === 'number' ? metricsData.position : metricsData.position.current;
+             const ga4_traffic = typeof metricsData.traffic === 'number' ? metricsData.traffic : metricsData.traffic.current;
+             const leads_total = typeof metricsData.leads === 'number' ? metricsData.leads : metricsData.leads.current;
+             
+             await syncWeeklyData(selectedClient, {
+               week_start_date: weekStartStr,
+               gsc_clicks,
+               gsc_impressions,
+               gsc_ctr,
+               gsc_position,
+               ga4_traffic,
+               leads_total,
+               top_3_count: metricsData.top3 || 0,
+               top_10_count: metricsData.top10 || 0
+             });
+           } catch (dbErr) {
+             console.error('Failed to sync to database from Dashboard:', dbErr);
+           }
+        }
+
         setMetrics(metricsData);
         setInsights(insightsData);
         setTrendData(trendDataRes);
