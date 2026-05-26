@@ -1752,6 +1752,200 @@ Do not return markdown code blocks in your JSON values. Make sure the JSON parse
   }
 });
 
+
+// ==========================================
+// BACKGROUND CRON JOB: SYNC DASHBOARD CACHE
+// ==========================================
+app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
+  console.log('[CRON] Starting Dashboard Cache Sync for all clients...');
+  
+  try {
+    // 1. Fetch all clients
+    const { data: clients, error: clientErr } = await supabase.from('clients').select('*');
+    if (clientErr) throw clientErr;
+
+    // Helper functions for date math
+    const startOfWeek = (d) => { const x=new Date(d); const day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1); return new Date(x.setDate(diff)); };
+    const endOfWeek = (d) => { const x=startOfWeek(d); x.setDate(x.getDate()+6); x.setHours(23,59,59,999); return x; };
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const endOfMonth = (d) => { const x=new Date(d.getFullYear(), d.getMonth()+1, 0); x.setHours(23,59,59,999); return x; };
+    const subWeeks = (d, w) => new Date(d.getTime() - w * 7 * 24 * 60 * 60 * 1000);
+    const subMonths = (d, m) => { const x=new Date(d); x.setMonth(x.getMonth()-m); return x; };
+    const subDays = (d, days) => new Date(d.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const today = new Date();
+
+    // Define periods for WoW, Rolling, MoM
+    const periods = {};
+    
+    // Weekly (WoW)
+    let wCurStart = startOfWeek(subWeeks(today, 1)); wCurStart.setHours(0,0,0,0);
+    let wCurEnd = endOfWeek(subWeeks(today, 1)); wCurEnd.setHours(23,59,59,999);
+    let wPrevStart = startOfWeek(subWeeks(today, 2)); wPrevStart.setHours(0,0,0,0);
+    let wPrevEnd = endOfWeek(subWeeks(today, 2)); wPrevEnd.setHours(23,59,59,999);
+    periods['weekly'] = { curStart: wCurStart, curEnd: wCurEnd, prevStart: wPrevStart, prevEnd: wPrevEnd };
+
+    // Rolling 7D
+    let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
+    let rCurStart = subDays(today, 9); rCurStart.setHours(0,0,0,0);
+    let rPrevStart = subDays(rCurStart, 7);
+    let rPrevEnd = subDays(rCurEnd, 7);
+    periods['rolling'] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
+
+    // Monthly (MoM)
+    let mCurStart = startOfMonth(subMonths(today, 1)); mCurStart.setHours(0,0,0,0);
+    let mCurEnd = endOfMonth(subMonths(today, 1)); mCurEnd.setHours(23,59,59,999);
+    let mPrevStart = startOfMonth(subMonths(today, 2)); mPrevStart.setHours(0,0,0,0);
+    let mPrevEnd = endOfMonth(subMonths(today, 2)); mPrevEnd.setHours(23,59,59,999);
+    periods['monthly'] = { curStart: mCurStart, curEnd: mCurEnd, prevStart: mPrevStart, prevEnd: mPrevEnd };
+
+    const formatDate = (d) => d.toISOString().split('T')[0];
+
+    // Minimal GSC fetching helper
+    const fetchGscLive = async (client, startDate, endDate) => {
+      let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
+      if (!client.gsc_site_url) return gsc;
+      try {
+        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', client.id).single();
+        if(!creds || !creds.tokens) return gsc;
+        const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
+        oAuth2Client.setCredentials(creds.tokens);
+        const searchconsole = google.searchconsole({ version: 'v1', auth: oAuth2Client });
+        
+        const response = await searchconsole.searchanalytics.query({
+          siteUrl: client.gsc_site_url,
+          requestBody: { startDate, endDate, dimensions: ['query'], rowLimit: 1000 }
+        });
+        
+        const rows = response.data.rows || [];
+        for (const r of rows) {
+          gsc.clicks += r.clicks || 0;
+          gsc.impressions += r.impressions || 0;
+          gsc.position += (r.position || 0) * (r.impressions || 0);
+          if (r.position <= 3) gsc.top3++;
+          if (r.position <= 10) gsc.top10++;
+        }
+        gsc.position = gsc.impressions > 0 ? gsc.position / gsc.impressions : 0;
+        gsc.ctr = gsc.impressions > 0 ? gsc.clicks / gsc.impressions : 0;
+      } catch(e) { console.error("GSC error for", client.name, e.message); }
+      return gsc;
+    };
+
+    // Minimal GA4 fetching helper
+    const fetchGa4Live = async (client, startDate, endDate) => {
+      let ga4 = { traffic: 0, organic_traffic: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
+      if (!client.ga4_property_id) return ga4;
+      try {
+        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', client.id).single();
+        if(!creds || !creds.tokens) return ga4;
+        const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
+        oAuth2Client.setCredentials(creds.tokens);
+        const analytics = google.analyticsdata({ version: 'v1beta', auth: oAuth2Client });
+        
+        const res = await analytics.properties.runReport({
+          property: `properties/${client.ga4_property_id}`,
+          requestBody: {
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+            metrics: [{ name: 'sessions' }]
+          }
+        });
+        const rows = res.data.rows || [];
+        for (const r of rows) {
+          const ch = (r.dimensionValues?.[0]?.value || '').toLowerCase();
+          const sess = parseInt(r.metricValues?.[0]?.value || '0');
+          ga4.traffic += sess;
+          if (ch === 'organic search') ga4.organic_traffic += sess;
+        }
+
+        const eventsRes = await analytics.properties.runReport({
+          property: `properties/${client.ga4_property_id}`,
+          requestBody: {
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'eventName' }],
+            metrics: [{ name: 'eventCount' }]
+          }
+        });
+        for (const r of (eventsRes.data.rows || [])) {
+          const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
+          const c = parseInt(r.metricValues?.[0]?.value || '0');
+          if (ev.includes('call') || ev.includes('phone') || ev === 'click_to_call') ga4.phone_calls += c;
+          if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(ev)) {
+             ga4.leads_total += c;
+          }
+        }
+      } catch(e) { console.error("GA4 error for", client.name, e.message); }
+      return ga4;
+    };
+
+    // We process clients sequentially to absolutely prevent rate limit 429
+    for (const client of clients || []) {
+      for (const mode of Object.keys(periods)) {
+        const p = periods[mode];
+        const [cStart, cEnd, pStart, pEnd] = [formatDate(p.curStart), formatDate(p.curEnd), formatDate(p.prevStart), formatDate(p.prevEnd)];
+        
+        console.log(`Syncing ${client.name} [${mode}]: ${cStart} - ${cEnd}`);
+
+        // Fetch Live Metrics concurrently for current/prev
+        const [curGsc, prevGsc, curGa4, prevGa4] = await Promise.all([
+          fetchGscLive(client, cStart, cEnd),
+          fetchGscLive(client, pStart, pEnd),
+          fetchGa4Live(client, cStart, cEnd),
+          fetchGa4Live(client, pStart, pEnd)
+        ]);
+
+        const current_data = {
+          gsc_clicks: curGsc.clicks,
+          gsc_impressions: curGsc.impressions,
+          gsc_position: curGsc.position,
+          gsc_ctr: curGsc.ctr,
+          gsc_top3: curGsc.top3,
+          gsc_top10: curGsc.top10,
+          ga4_traffic: curGa4.traffic,
+          ga4_organic_traffic: curGa4.organic_traffic,
+          phone_calls: curGa4.phone_calls,
+          leads_total: curGa4.leads_total,
+          leads_legit: curGa4.leads_total // Temporary legit = total
+        };
+
+        const prev_data = {
+          gsc_clicks: prevGsc.clicks,
+          gsc_impressions: prevGsc.impressions,
+          gsc_position: prevGsc.position,
+          gsc_ctr: prevGsc.ctr,
+          gsc_top3: prevGsc.top3,
+          gsc_top10: prevGsc.top10,
+          ga4_traffic: prevGa4.traffic,
+          ga4_organic_traffic: prevGa4.organic_traffic,
+          phone_calls: prevGa4.phone_calls,
+          leads_total: prevGa4.leads_total,
+          leads_legit: prevGa4.leads_total
+        };
+
+        // UPSERT
+        const { error: upsertErr } = await supabase
+          .from('dashboard_cache')
+          .upsert({
+            client_id: client.id,
+            view_mode: mode,
+            current_data,
+            prev_data,
+            last_updated: new Date().toISOString()
+          }, { onConflict: 'client_id,view_mode' });
+          
+        if (upsertErr) console.error("Upsert err", upsertErr);
+      }
+    }
+
+    console.log('[CRON] Sync Complete!');
+    res.json({ success: true });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 app.post('/api/admin/seed', async (req, res) => {
   console.log('Seed request received. Targeting URL (redacted):', supabaseUrl.substring(0, 15) + '...');
   try {
@@ -2112,6 +2306,200 @@ if (process.env.NODE_ENV !== 'production' && !process.env.PASSENGER_APP_ENV) {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
+
+
+// ==========================================
+// BACKGROUND CRON JOB: SYNC DASHBOARD CACHE
+// ==========================================
+app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
+  console.log('[CRON] Starting Dashboard Cache Sync for all clients...');
+  
+  try {
+    // 1. Fetch all clients
+    const { data: clients, error: clientErr } = await supabase.from('clients').select('*');
+    if (clientErr) throw clientErr;
+
+    // Helper functions for date math
+    const startOfWeek = (d) => { const x=new Date(d); const day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1); return new Date(x.setDate(diff)); };
+    const endOfWeek = (d) => { const x=startOfWeek(d); x.setDate(x.getDate()+6); x.setHours(23,59,59,999); return x; };
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const endOfMonth = (d) => { const x=new Date(d.getFullYear(), d.getMonth()+1, 0); x.setHours(23,59,59,999); return x; };
+    const subWeeks = (d, w) => new Date(d.getTime() - w * 7 * 24 * 60 * 60 * 1000);
+    const subMonths = (d, m) => { const x=new Date(d); x.setMonth(x.getMonth()-m); return x; };
+    const subDays = (d, days) => new Date(d.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const today = new Date();
+
+    // Define periods for WoW, Rolling, MoM
+    const periods = {};
+    
+    // Weekly (WoW)
+    let wCurStart = startOfWeek(subWeeks(today, 1)); wCurStart.setHours(0,0,0,0);
+    let wCurEnd = endOfWeek(subWeeks(today, 1)); wCurEnd.setHours(23,59,59,999);
+    let wPrevStart = startOfWeek(subWeeks(today, 2)); wPrevStart.setHours(0,0,0,0);
+    let wPrevEnd = endOfWeek(subWeeks(today, 2)); wPrevEnd.setHours(23,59,59,999);
+    periods['weekly'] = { curStart: wCurStart, curEnd: wCurEnd, prevStart: wPrevStart, prevEnd: wPrevEnd };
+
+    // Rolling 7D
+    let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
+    let rCurStart = subDays(today, 9); rCurStart.setHours(0,0,0,0);
+    let rPrevStart = subDays(rCurStart, 7);
+    let rPrevEnd = subDays(rCurEnd, 7);
+    periods['rolling'] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
+
+    // Monthly (MoM)
+    let mCurStart = startOfMonth(subMonths(today, 1)); mCurStart.setHours(0,0,0,0);
+    let mCurEnd = endOfMonth(subMonths(today, 1)); mCurEnd.setHours(23,59,59,999);
+    let mPrevStart = startOfMonth(subMonths(today, 2)); mPrevStart.setHours(0,0,0,0);
+    let mPrevEnd = endOfMonth(subMonths(today, 2)); mPrevEnd.setHours(23,59,59,999);
+    periods['monthly'] = { curStart: mCurStart, curEnd: mCurEnd, prevStart: mPrevStart, prevEnd: mPrevEnd };
+
+    const formatDate = (d) => d.toISOString().split('T')[0];
+
+    // Minimal GSC fetching helper
+    const fetchGscLive = async (client, startDate, endDate) => {
+      let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
+      if (!client.gsc_site_url) return gsc;
+      try {
+        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', client.id).single();
+        if(!creds || !creds.tokens) return gsc;
+        const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
+        oAuth2Client.setCredentials(creds.tokens);
+        const searchconsole = google.searchconsole({ version: 'v1', auth: oAuth2Client });
+        
+        const response = await searchconsole.searchanalytics.query({
+          siteUrl: client.gsc_site_url,
+          requestBody: { startDate, endDate, dimensions: ['query'], rowLimit: 1000 }
+        });
+        
+        const rows = response.data.rows || [];
+        for (const r of rows) {
+          gsc.clicks += r.clicks || 0;
+          gsc.impressions += r.impressions || 0;
+          gsc.position += (r.position || 0) * (r.impressions || 0);
+          if (r.position <= 3) gsc.top3++;
+          if (r.position <= 10) gsc.top10++;
+        }
+        gsc.position = gsc.impressions > 0 ? gsc.position / gsc.impressions : 0;
+        gsc.ctr = gsc.impressions > 0 ? gsc.clicks / gsc.impressions : 0;
+      } catch(e) { console.error("GSC error for", client.name, e.message); }
+      return gsc;
+    };
+
+    // Minimal GA4 fetching helper
+    const fetchGa4Live = async (client, startDate, endDate) => {
+      let ga4 = { traffic: 0, organic_traffic: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
+      if (!client.ga4_property_id) return ga4;
+      try {
+        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', client.id).single();
+        if(!creds || !creds.tokens) return ga4;
+        const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
+        oAuth2Client.setCredentials(creds.tokens);
+        const analytics = google.analyticsdata({ version: 'v1beta', auth: oAuth2Client });
+        
+        const res = await analytics.properties.runReport({
+          property: `properties/${client.ga4_property_id}`,
+          requestBody: {
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+            metrics: [{ name: 'sessions' }]
+          }
+        });
+        const rows = res.data.rows || [];
+        for (const r of rows) {
+          const ch = (r.dimensionValues?.[0]?.value || '').toLowerCase();
+          const sess = parseInt(r.metricValues?.[0]?.value || '0');
+          ga4.traffic += sess;
+          if (ch === 'organic search') ga4.organic_traffic += sess;
+        }
+
+        const eventsRes = await analytics.properties.runReport({
+          property: `properties/${client.ga4_property_id}`,
+          requestBody: {
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'eventName' }],
+            metrics: [{ name: 'eventCount' }]
+          }
+        });
+        for (const r of (eventsRes.data.rows || [])) {
+          const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
+          const c = parseInt(r.metricValues?.[0]?.value || '0');
+          if (ev.includes('call') || ev.includes('phone') || ev === 'click_to_call') ga4.phone_calls += c;
+          if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(ev)) {
+             ga4.leads_total += c;
+          }
+        }
+      } catch(e) { console.error("GA4 error for", client.name, e.message); }
+      return ga4;
+    };
+
+    // We process clients concurrently, but chunked to avoid rate limits
+    for (const client of clients || []) {
+      for (const mode of Object.keys(periods)) {
+        const p = periods[mode];
+        const [cStart, cEnd, pStart, pEnd] = [formatDate(p.curStart), formatDate(p.curEnd), formatDate(p.prevStart), formatDate(p.prevEnd)];
+        
+        console.log(`Syncing ${client.name} [${mode}]: ${cStart} - ${cEnd}`);
+
+        // Fetch Live Metrics concurrently for current/prev
+        const [curGsc, prevGsc, curGa4, prevGa4] = await Promise.all([
+          fetchGscLive(client, cStart, cEnd),
+          fetchGscLive(client, pStart, pEnd),
+          fetchGa4Live(client, cStart, cEnd),
+          fetchGa4Live(client, pStart, pEnd)
+        ]);
+
+        const current_data = {
+          gsc_clicks: curGsc.clicks,
+          gsc_impressions: curGsc.impressions,
+          gsc_position: curGsc.position,
+          gsc_ctr: curGsc.ctr,
+          gsc_top3: curGsc.top3,
+          gsc_top10: curGsc.top10,
+          ga4_traffic: curGa4.traffic,
+          ga4_organic_traffic: curGa4.organic_traffic,
+          phone_calls: curGa4.phone_calls,
+          leads_total: curGa4.leads_total,
+          // Add default legit leads same as total unless updated manually later
+          leads_legit: curGa4.leads_total 
+        };
+
+        const prev_data = {
+          gsc_clicks: prevGsc.clicks,
+          gsc_impressions: prevGsc.impressions,
+          gsc_position: prevGsc.position,
+          gsc_ctr: prevGsc.ctr,
+          gsc_top3: prevGsc.top3,
+          gsc_top10: prevGsc.top10,
+          ga4_traffic: prevGa4.traffic,
+          ga4_organic_traffic: prevGa4.organic_traffic,
+          phone_calls: prevGa4.phone_calls,
+          leads_total: prevGa4.leads_total,
+          leads_legit: prevGa4.leads_total
+        };
+
+        // UPSERT
+        const { error: upsertErr } = await supabase
+          .from('dashboard_cache')
+          .upsert({
+            client_id: client.id,
+            view_mode: mode,
+            current_data,
+            prev_data,
+            last_updated: new Date().toISOString()
+          }, { onConflict: 'client_id,view_mode' });
+          
+        if (upsertErr) console.error("Upsert err", upsertErr);
+      }
+    }
+
+    console.log('[CRON] Sync Complete!');
+    res.json({ success: true });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
