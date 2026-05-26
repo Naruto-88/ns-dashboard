@@ -1804,7 +1804,29 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
       if (!auth || !client.gsc_site_url) return gsc;
       try {
         const searchconsole = google.searchconsole({ version: 'v1', auth });
-        const { response } = await fetchGscWithSelfHeal(
+        
+        // 1. Fetch total aggregates (no dimensions)
+        const { response: totalsRes } = await fetchGscWithSelfHeal(
+          searchconsole,
+          client.id,
+          client.name,
+          client.gsc_site_url,
+          async (url) => searchconsole.searchanalytics.query({
+            siteUrl: url,
+            requestBody: { startDate, endDate, dimensions: [] }
+          })
+        );
+
+        if (totalsRes?.data?.rows?.[0]) {
+           const row = totalsRes.data.rows[0];
+           gsc.clicks = row.clicks || 0;
+           gsc.impressions = row.impressions || 0;
+           gsc.ctr = (row.ctr || 0) * 100;
+           gsc.position = row.position || 0;
+        }
+
+        // 2. Fetch queries for top3/top10 counts
+        const { response: queriesRes } = await fetchGscWithSelfHeal(
           searchconsole,
           client.id,
           client.name,
@@ -1815,16 +1837,11 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
           })
         );
         
-        const rows = response?.data?.rows || [];
-        for (const r of rows) {
-          gsc.clicks += r.clicks || 0;
-          gsc.impressions += r.impressions || 0;
-          gsc.position += (r.position || 0) * (r.impressions || 0);
+        const qRows = queriesRes?.data?.rows || [];
+        for (const r of qRows) {
           if (r.position <= 3) gsc.top3++;
           if (r.position <= 10) gsc.top10++;
         }
-        gsc.position = gsc.impressions > 0 ? gsc.position / gsc.impressions : 0;
-        gsc.ctr = gsc.impressions > 0 ? parseFloat(((gsc.clicks / gsc.impressions) * 100).toFixed(2)) : 0;
       } catch(e) { console.error("GSC error for", client.name, e.message); }
       return gsc;
     };
