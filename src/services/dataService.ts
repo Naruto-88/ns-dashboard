@@ -541,3 +541,28 @@ export const runAiAnalysis = async (params: {
     throw error;
   }
 };
+
+
+export const getDashboardCache = async (viewMode: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('dashboard_cache')
+      .select('*')
+      .eq('view_mode', viewMode);
+      
+    if (error) {
+       console.error('Error fetching dashboard_cache:', error);
+       return {};
+    }
+    
+    // Convert array to object keyed by client_id
+    const cacheMap = {};
+    for (const row of data || []) {
+       cacheMap[row.client_id] = row;
+    }
+    return cacheMap;
+  } catch (error) {
+    console.error('Error fetching dashboard cache:', error);
+    return {};
+  }
+};

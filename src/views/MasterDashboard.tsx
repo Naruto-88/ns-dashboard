@@ -23,7 +23,7 @@ import {
   TrendingDown,
   FileSpreadsheet
 } from 'lucide-react';
-import { getClients, getWeeklyData, getAllWeeklyData, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData } from '../services/dataService';
+import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
@@ -163,7 +163,7 @@ export default function MasterDashboard() {
         prevEnd = new Date(currentEnd.getTime() - duration);
         prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === 'rolling') {
-        currentEnd = subDays(today, 2);
+        currentEnd = subDays(today, 3);
         currentEnd.setHours(23, 59, 59, 999);
         currentStart = subDays(currentEnd, 6);
         currentStart.setHours(0, 0, 0, 0);
@@ -1460,7 +1460,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                     <p className={`text-xs font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Work Detail Notes</p>
                     <div className="space-y-3">
                       {(data.latestData?.weekly_activity_summary || data.currentData?.weekly_activity_summary || data.latestData?.notes || 'No detailed activity notes recorded for this period.')
-                        .split(/\r?\n|\\n/)
+                        .split(/\r?\n|\\n        let currentWeekData: any = null;\n        let previousWeekData: any = null;\n        \n        const cacheEntry = dashboardCache[client.id];\n        if (cacheEntry && cacheEntry.current_data && viewMode !== 'custom') {\n           currentWeekData = cacheEntry.current_data;\n           previousWeekData = cacheEntry.prev_data;\n        } else {\n           const currentWeekStartStr = format(startOfWeek(currentEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');\n           const prevWeekStartStr = format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd');\n           const sortedWeekly = [...weeklyData].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());\n           const latestData = sortedWeekly.length > 0 ? sortedWeekly[0] : null;\n           currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;\n           previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;\n        }\n|\\n/)
                         .filter(line => line.trim())
                         .map((point, i) => (
                           <div key={i} className="flex gap-3 group/point">
