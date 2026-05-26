@@ -801,6 +801,7 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                       <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        {row.phoneCalls.current === 0 && row.phoneCalls.previous === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
                       </div>
@@ -851,6 +852,7 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                       <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        {row.gscTraffic.ctr === 0 && row.gscTraffic.prevCtr === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.gscTraffic.ctr.toFixed(2)}%)</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({row.gscTraffic.prevCtr.toFixed(2)}%)</span></div>
                       </div>
@@ -866,6 +868,7 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                       <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        {row.gscTraffic.impressions === 0 && row.gscTraffic.prevImpressions === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({(row.gscTraffic.impressions / 1000).toFixed(1)}K)</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({(row.gscTraffic.prevImpressions / 1000).toFixed(1)}K)</span></div>
                       </div>
@@ -886,6 +889,7 @@ export default function MasterDashboard() {
                         return (
                           <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                             <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                              {currentPos === 0 && prevPos === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                               <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({currentPos > 0 ? currentPos.toFixed(1) : '-'})</span></div>
                               <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({prevPos > 0 ? prevPos.toFixed(1) : '-'})</span></div>
                             </div>
@@ -911,6 +915,7 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                       <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                        {row.gscTraffic.current === 0 && row.gscTraffic.previous === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.gscTraffic.current.toLocaleString()})</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({row.gscTraffic.previous.toLocaleString()})</span></div>
                       </div>
@@ -932,6 +937,7 @@ export default function MasterDashboard() {
                         }`}>
                           GA4 Traffic Breakdown
                         </div>
+                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 && <div className="text-red-500 text-[8.5px] font-black text-center mb-1">NO DATA</div>}
                         <div className="space-y-1.5 text-[9px] font-black uppercase tracking-[0.05em]">
                           <div className="flex justify-between items-center">
                             <span className="text-[#607a80]">Total Sessions:</span>

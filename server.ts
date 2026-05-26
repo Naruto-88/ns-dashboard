@@ -1882,36 +1882,6 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
         const curGa4 = await fetchGa4Live(client, cStart, cEnd);
         const prevGa4 = await fetchGa4Live(client, pStart, pEnd);
 
-        // Apply fallback if 0 (matches previous developer's logic)
-        const curFallback = getSeedFallback(client.name, client.short_code, cStart);
-        if (curGsc.clicks === 0) {
-          curGsc.clicks = curFallback.gsc_clicks;
-          curGsc.impressions = curFallback.gsc_impressions;
-          curGsc.ctr = curFallback.gsc_ctr;
-          curGsc.position = curFallback.gsc_position;
-          curGsc.top3 = curFallback.gsc_top3;
-          curGsc.top10 = curFallback.gsc_top10;
-        }
-        if (curGa4.traffic === 0) {
-          curGa4.traffic = curFallback.ga4_traffic;
-          curGa4.organic_traffic = curFallback.ga4_organic_traffic;
-          curGa4.phone_calls = curFallback.phone_calls;
-        }
-
-        const prevFallback = getSeedFallback(client.name, client.short_code, pStart);
-        if (prevGsc.clicks === 0) {
-          prevGsc.clicks = prevFallback.gsc_clicks;
-          prevGsc.impressions = prevFallback.gsc_impressions;
-          prevGsc.ctr = prevFallback.gsc_ctr;
-          prevGsc.position = prevFallback.gsc_position;
-          prevGsc.top3 = prevFallback.gsc_top3;
-          prevGsc.top10 = prevFallback.gsc_top10;
-        }
-        if (prevGa4.traffic === 0) {
-          prevGa4.traffic = prevFallback.ga4_traffic;
-          prevGa4.organic_traffic = prevFallback.ga4_organic_traffic;
-          prevGa4.phone_calls = prevFallback.phone_calls;
-        }
 
         const current_data = {
           gsc_clicks: curGsc.clicks,
