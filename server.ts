@@ -7,6 +7,7 @@ import fs from 'fs';
 import { google } from 'googleapis';
 import cookieParser from 'cookie-parser';
 import { createClient } from '@supabase/supabase-js';
+import { format } from 'date-fns';
 
 const supabaseUrl = (process.env.VITE_SUPABASE_URL || 'https://pzjfqrvmwlwfrtgojejl.supabase.co')
   .replace(/\/$/, '')
@@ -1797,7 +1798,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     let mPrevEnd = endOfMonth(subMonths(today, 2)); mPrevEnd.setHours(23,59,59,999);
     periods['monthly'] = { curStart: mCurStart, curEnd: mCurEnd, prevStart: mPrevStart, prevEnd: mPrevEnd };
 
-    const formatDate = (d) => d.toISOString().split('T')[0];
+    const formatDate = (d) => format(d, 'yyyy-MM-dd');
 
     const fetchGscLive = async (client, startDate, endDate) => {
       let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
