@@ -68,12 +68,14 @@ export default function ClientManagement() {
     { name: 'Sai', code: 'SR' },
     { name: 'Vinoj', code: 'VK' },
     { name: 'Sash', code: 'SP' },
-    { name: 'Lidusha', code: 'LB' }
+    { name: 'Lidusha', code: 'LB' },
+    { name: 'Dinesh', code: 'DS' }
   ];
 
   const [formData, setFormData] = useState(initialFormState);
   const [authorizedSites, setAuthorizedSites] = useState<string[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
+  const [showGscDropdown, setShowGscDropdown] = useState(false);
 
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const logDebug = (msg: string) => {
@@ -480,6 +482,18 @@ CREATE TABLE IF NOT EXISTS public.import_logs (
   message TEXT
 );
 
+-- AI Audit History
+CREATE TABLE IF NOT EXISTS public.ai_audit_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
+  model TEXT NOT NULL,
+  analysis_type TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  result JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 4. PERMISSIONS (Allow ALL for internal tool)
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.weekly_data ENABLE ROW LEVEL SECURITY;
@@ -487,6 +501,7 @@ ALTER TABLE public.keywords ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.keyword_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.google_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_audit_history ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "public_access" ON public.clients;
 CREATE POLICY "public_access" ON public.clients FOR ALL USING (true);
@@ -505,6 +520,9 @@ CREATE POLICY "public_access" ON public.google_tokens FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "public_access" ON public.import_logs;
 CREATE POLICY "public_access" ON public.import_logs FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "public_access" ON public.ai_audit_history;
+CREATE POLICY "public_access" ON public.ai_audit_history FOR ALL USING (true);
 
 -- 5. REFRESH SCHEMA CACHE
 NOTIFY pgrst, 'reload schema';
@@ -662,6 +680,10 @@ NOTIFY pgrst, 'reload schema';
       code.toLowerCase().includes(term)
     );
   });
+
+  const filteredSites = authorizedSites.filter(site =>
+    site.toLowerCase().includes(formData.gsc_site_url.toLowerCase())
+  );
 
   return (
     <div className="space-y-8 pb-12">
@@ -1182,7 +1204,12 @@ NOTIFY pgrst, 'reload schema';
                       required
                       type="text" 
                       value={formData.gsc_site_url}
-                      onChange={(e) => setFormData({...formData, gsc_site_url: e.target.value})}
+                      onChange={(e) => {
+                        setFormData({...formData, gsc_site_url: e.target.value});
+                        setShowGscDropdown(true);
+                      }}
+                      onFocus={() => setShowGscDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowGscDropdown(false), 200)}
                       className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
@@ -1192,35 +1219,70 @@ NOTIFY pgrst, 'reload schema';
                       {loadingSites && <RefreshCw className="animate-spin text-zinc-600" size={14} />}
                       {!loadingSites && authorizedSites.length > 0 && <Shield className="text-blue-500/50" size={14} />}
                     </div>
+
+                    {showGscDropdown && authorizedSites.length > 0 && (
+                      <div className={`absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-xl border shadow-xl z-50 transition-all font-mono text-[10px] ${
+                        theme === 'white' 
+                          ? 'bg-white border-zinc-200 text-zinc-900 shadow-zinc-200/50' 
+                          : 'bg-zinc-900 border-white/10 text-white shadow-black/80'
+                      }`}>
+                        {filteredSites.length === 0 ? (
+                          <div className="px-4 py-3 text-zinc-500 italic">No matching verified properties found</div>
+                        ) : (
+                          filteredSites.map(site => (
+                            <button
+                              key={site}
+                              type="button"
+                              onClick={() => {
+                                setFormData({...formData, gsc_site_url: site});
+                                setShowGscDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 transition-colors border-b last:border-0 flex items-center justify-between ${
+                                theme === 'white'
+                                  ? 'border-zinc-100 hover:bg-zinc-50'
+                                  : 'border-white/5 hover:bg-white/5'
+                              } ${formData.gsc_site_url === site ? 'bg-blue-600/10 text-blue-500 font-bold' : ''}`}
+                            >
+                              <span className="truncate">{site}</span>
+                              {formData.gsc_site_url === site && <CheckCircle2 size={12} className="text-blue-500 flex-shrink-0 ml-2" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   {authorizedSites.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-[9px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1.5 ml-1">
                         <CheckCircle2 size={10} />
-                        Verified properties found (Click to apply):
+                        {filteredSites.length < authorizedSites.length ? 'Filtered matching properties' : 'Verified properties found'} (Click to apply):
                       </p>
                       <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
-                        {authorizedSites.map(site => (
-                        <button
-                          key={site}
-                          type="button"
-                          onClick={() => setFormData({...formData, gsc_site_url: site})}
-                          className={`px-3 py-1.5 rounded-xl text-[9px] font-mono transition-all border shadow-sm ${
-                            formData.gsc_site_url === site 
-                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' 
-                              : isWhite 
-                                ? 'bg-white border-zinc-200 text-zinc-600 hover:border-blue-400 hover:text-blue-600'
-                                : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          {site}
-                        </button>
-                      ))}
+                        {filteredSites.length === 0 ? (
+                          <p className="text-[9px] text-zinc-500 italic ml-1">No matching properties found. Type to search or refresh list.</p>
+                        ) : (
+                          filteredSites.map(site => (
+                            <button
+                              key={site}
+                              type="button"
+                              onClick={() => setFormData({...formData, gsc_site_url: site})}
+                              className={`px-3 py-1.5 rounded-xl text-[9px] font-mono transition-all border shadow-sm ${
+                                formData.gsc_site_url === site 
+                                  ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                                  : isWhite 
+                                    ? 'bg-white border-zinc-200 text-zinc-600 hover:border-blue-400 hover:text-blue-600'
+                                    : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              {site}
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
             </div>
 
               <div className="space-y-2">

@@ -1007,7 +1007,29 @@ function generateSimulatedAnalysis(clientName, current, previous, analysisType) 
     actionableDirectives: directives,
     implementationGuide: `1. Content Actions: Locate priority landing pages. Re-author title tags to place primary keywords at the front, keeping length under 60 characters. Write clear meta descriptions under 155 characters with a direct call to action.
 2. Technical Actions: Run a PageSpeed Insights test. Identify oversized image payloads and convert them to modern .webp format. Apply lazy-loading parameters to below-the-fold media assets.
-3. Backlinks Actions: Map out active content resources and reach out to contextual partners for guest features using partial-match anchors.`
+3. Backlinks Actions: Map out active content resources and reach out to contextual partners for guest features using partial-match anchors.`,
+    executiveSummary: {
+      goodThings: [
+        `Organic search console impressions are healthy at ${current.gsc.impressions.toLocaleString()} impressions.`,
+        `Average search ranking position is stabilized at ${current.gsc.position.toFixed(1)}.`,
+        `Established strong visibility for core keyword search query vectors.`
+      ],
+      thingsToImprove: [
+        `Search Console click-through rate (CTR) is currently ${current.gsc.ctr.toFixed(1)}%, which has room for growth.`,
+        `Mobile loading performance (Cumulative Layout Shift) is causing temporary rank volatility.`,
+        `Niche anchor text profile is concentrated and needs contextual diversification.`
+      ],
+      actionsToDo: [
+        `Optimize meta snippets and schema structured data on high-impression service landers.`,
+        `Remediate mobile layout shifts and compress large page payloads.`,
+        `Implement a regular long-form content posting cadence to capture competitor keyword gaps.`
+      ],
+      expectedResults: [
+        `Expected 15-20% growth in organic click volume.`,
+        `25% expansion of absolute keyword visibility in the top 10 rankings.`,
+        `Significant reduction in page load latency and mobile layout bounce rates.`
+      ]
+    }
   };
 }
 app.get("/api/admin/keys", async (req, res) => {
@@ -1288,7 +1310,11 @@ app.post("/api/ai/analyze", async (req, res) => {
     if (simulate || !apiKey) {
       console.log(`[AI ANALYZE] Running in simulation mode for client: ${client.name} (simulate=${simulate}, hasKey=${!!apiKey})`);
       const simulatedResult = generateSimulatedAnalysis(client.name, currentMetrics, previousMetrics, analysisType);
-      return res.json(simulatedResult);
+      return res.json({
+        ...simulatedResult,
+        currentMetrics,
+        previousMetrics
+      });
     }
     const prompt = `You are a high-priced enterprise SEO Consultant conducting an organic growth audit for the client "${client.name}".
 Selected Time Period: ${startDate} to ${endDate}
@@ -1331,7 +1357,13 @@ Based on this data, construct an expert, highly actionable audit. Provide your r
       "expectedImpact": "What specific KPI this will improve and why."
     }
   ],
-  "implementationGuide": "Provide developer-ready or marketer-ready detailed step-by-step implementation instructions. Focus on actual actions."
+  "implementationGuide": "Provide developer-ready or marketer-ready detailed step-by-step implementation instructions. Focus on actual actions.",
+  "executiveSummary": {
+    "goodThings": ["A bullet list of 3-4 positive achievements, strong keywords, or metrics showing growth from the data"],
+    "thingsToImprove": ["A bullet list of 3-4 structural issues, keyword drops, or search console visibility gaps to optimize"],
+    "actionsToDo": ["A bullet list of 3-4 high-level concrete actions from the directives"],
+    "expectedResults": ["A bullet list of 2-3 precise outcomes and expected yields"]
+  }
 }
 
 Do not return markdown code blocks in your JSON values. Make sure the JSON parses perfectly.`;
@@ -1400,7 +1432,11 @@ Do not return markdown code blocks in your JSON values. Make sure the JSON parse
       if (!text) throw new Error("Empty response from GPT API");
       jsonResponse = JSON.parse(cleanJsonString(text));
     }
-    res.json(jsonResponse);
+    res.json({
+      ...jsonResponse,
+      currentMetrics,
+      previousMetrics
+    });
   } catch (error) {
     console.error("AI Strategic Analysis error:", error);
     res.status(500).json({ error: error.message || String(error) });

@@ -86,6 +86,7 @@ export default function GoalsAndTargets() {
           .from('client_actions')
           .select('*')
           .eq('status', 'pending')
+          .order('created_at', { ascending: false })
       ]);
 
       const pendingActionsData = actionsData?.data || [];

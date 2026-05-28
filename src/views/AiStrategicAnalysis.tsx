@@ -22,6 +22,7 @@ import {
   Globe
 } from 'lucide-react';
 import { getClients, runAiAnalysis, updateClient, Client } from '../services/dataService';
+import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
 
@@ -33,11 +34,21 @@ interface ActionableDirective {
   expectedImpact: string;
 }
 
+interface ExecutiveSummary {
+  goodThings: string[];
+  thingsToImprove: string[];
+  actionsToDo: string[];
+  expectedResults: string[];
+}
+
 interface AnalysisResult {
   trafficGapAnalysis: string;
   expectedImpact: string;
   actionableDirectives: ActionableDirective[];
   implementationGuide: string;
+  executiveSummary?: ExecutiveSummary;
+  currentMetrics?: any;
+  previousMetrics?: any;
 }
 
 export default function AiStrategicAnalysis() {
@@ -67,6 +78,32 @@ export default function AiStrategicAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const [historyList, setHistoryList] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchHistory = async (clientId: string) => {
+    if (!clientId) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('ai_audit_history')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setHistoryList(data);
+      } else {
+        setHistoryList([]);
+      }
+    } catch (err) {
+      console.warn('ai_audit_history table might not exist yet:', err);
+      setHistoryList([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const loadingPhrases = [
     'Verifying API integration keys...',
     'Fetching Google Search Console metrics (Clicks, Impressions, CTR)...',
@@ -86,6 +123,15 @@ export default function AiStrategicAnalysis() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (selectedClientId) {
+      fetchHistory(selectedClientId);
+      setResult(null);
+      setError(null);
+      setSuccessMsg(null);
+    }
+  }, [selectedClientId]);
 
   // Loading text cycler
   useEffect(() => {
@@ -118,6 +164,22 @@ export default function AiStrategicAnalysis() {
       });
 
       setResult(response);
+      
+      try {
+        await supabase
+          .from('ai_audit_history')
+          .insert([{
+            client_id: selectedClientId,
+            model: selectedModel,
+            analysis_type: analysisType,
+            start_date: startDate,
+            end_date: endDate,
+            result: response
+          }]);
+        fetchHistory(selectedClientId);
+      } catch (saveErr) {
+        console.warn('Could not save to history table:', saveErr);
+      }
     } catch (e: any) {
       console.error(e);
       setError(e.message || 'The LLM failed to return valid JSON. Please check API integration credentials in Settings or toggle simulation mode.');
@@ -273,6 +335,42 @@ export default function AiStrategicAnalysis() {
               <p className="text-[9px] text-zinc-500 font-medium italic">
                 Active Timezone: {selectedClient.timezone} • Owner: {selectedClient.project_owner_code || 'MW'}
               </p>
+            )}
+
+            {historyList.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-white/5">
+                <label className="text-[9px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-1.5">
+                  <Clock size={10} />
+                  Restore Cached Audit ({historyList.length})
+                </label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    if (!selectedId) return;
+                    const hist = historyList.find(h => h.id === selectedId);
+                    if (hist) {
+                      setResult(hist.result);
+                      setStartDate(hist.start_date.split('T')[0]);
+                      setEndDate(hist.end_date.split('T')[0]);
+                      setSelectedModel(hist.model);
+                      setAnalysisType(hist.analysis_type);
+                      setSuccessMsg(`Restored cached strategic audit from ${new Date(hist.created_at).toLocaleDateString()} (${hist.model.toUpperCase()})`);
+                      setError(null);
+                    }
+                  }}
+                  className={`w-full px-4 py-2.5 border rounded-xl text-xs font-black focus:outline-none transition-all uppercase tracking-wider ${
+                    isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-950 border-white/5 text-white focus:border-blue-500'
+                  }`}
+                >
+                  <option value="">-- Choose Historical Audit --</option>
+                  {historyList.map(h => (
+                    <option key={h.id} value={h.id}>
+                      {new Date(h.created_at).toLocaleDateString()} - {h.analysis_type.toUpperCase()} ({h.model.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
 
@@ -499,6 +597,64 @@ export default function AiStrategicAnalysis() {
                   Performance Gap Audit
                 </h4>
               </div>
+
+              {result.currentMetrics && result.previousMetrics && (
+                <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 border-b pb-6 ${
+                  isWhite ? 'border-zinc-200' : 'border-white/5'
+                }`}>
+                  {[
+                    {
+                      label: 'GSC Clicks',
+                      curr: result.currentMetrics.gsc?.clicks ?? 0,
+                      prev: result.previousMetrics.gsc?.clicks ?? 0,
+                      format: (v: number) => v.toLocaleString()
+                    },
+                    {
+                      label: 'GSC Impressions',
+                      curr: result.currentMetrics.gsc?.impressions ?? 0,
+                      prev: result.previousMetrics.gsc?.impressions ?? 0,
+                      format: (v: number) => v.toLocaleString()
+                    },
+                    {
+                      label: 'Search CTR',
+                      curr: result.currentMetrics.gsc?.ctr ?? 0,
+                      prev: result.previousMetrics.gsc?.ctr ?? 0,
+                      format: (v: number) => `${v.toFixed(2)}%`
+                    },
+                    {
+                      label: 'GA4 Traffic',
+                      curr: result.currentMetrics.ga4?.traffic ?? 0,
+                      prev: result.previousMetrics.ga4?.traffic ?? 0,
+                      format: (v: number) => v.toLocaleString()
+                    }
+                  ].map((m, idx) => {
+                    const diff = m.curr - m.prev;
+                    const percent = m.prev > 0 ? (diff / m.prev) * 100 : 0;
+                    const isPositive = diff >= 0;
+                    return (
+                      <div key={idx} className={`p-4 rounded-2xl border ${
+                        isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950/40 border-white/5'
+                      }`}>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block mb-1">
+                          {m.label}
+                        </span>
+                        <div className="flex items-baseline gap-2">
+                          <span className={`text-xs font-black font-mono ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+                            {m.format(m.curr)}
+                          </span>
+                          <span className={`text-[8px] font-bold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {isPositive ? '▲' : '▼'} {Math.abs(percent).toFixed(1)}%
+                          </span>
+                        </div>
+                        <span className="text-[8px] text-zinc-500 font-medium block mt-1">
+                          Prev: {m.format(m.prev)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               <p className={`text-xs font-bold leading-relaxed tracking-wider ${
                 isWhite ? 'text-zinc-600' : 'text-zinc-300'
               }`}>
@@ -643,6 +799,88 @@ export default function AiStrategicAnalysis() {
               {result.implementationGuide}
             </div>
           </div>
+
+          {/* Executive Summary Card at the bottom */}
+          {result.executiveSummary && (
+            <div className={`printable-card p-6 sm:p-8 rounded-[24px] border shadow-2xl backdrop-blur-xl ${
+              isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
+            }`}>
+              <div className="flex items-center gap-2 mb-6">
+                <Sparkles size={18} className="text-blue-500 animate-pulse" />
+                <h4 className={`text-xs font-black uppercase tracking-widest ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+                  Executive Strategic Summary
+                </h4>
+              </div>
+
+              <div className={`p-6 rounded-2xl border text-xs font-bold leading-relaxed tracking-wider space-y-6 ${
+                isWhite ? 'bg-zinc-50 border-zinc-200 text-zinc-700' : 'bg-zinc-950/40 border-white/5 text-zinc-300'
+              }`}>
+                
+                {/* Section Header Statement */}
+                <p className="font-extrabold uppercase text-[10px] tracking-wider text-blue-500 border-b border-white/5 pb-2">
+                  🔍 AUDIT SCOPE STATEMENT
+                </p>
+                <p className="italic font-medium leading-relaxed">
+                  "I have analysed the property URL <span className="font-mono text-blue-400 not-italic font-bold">{selectedClient?.gsc_site_url || 'https://example.com/'}</span> and all associated organic performance data datasets. Based on this in-depth analysis, I have mapped our core achievements, critical growth sectors, active corrective directives, and expected outcome projections below."
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                  {/* Good Things */}
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1.5">
+                      <CheckCircle2 size={12} />
+                      These are the good things:
+                    </p>
+                    <ul className="list-disc list-inside space-y-2 text-[10px] font-medium text-zinc-400 pl-1 leading-relaxed">
+                      {result.executiveSummary.goodThings.map((item, idx) => (
+                        <li key={idx} className="marker:text-emerald-500 uppercase">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Things to Improve */}
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-rose-400 flex items-center gap-1.5">
+                      <AlertCircle size={12} />
+                      These are the things we have to improve:
+                    </p>
+                    <ul className="list-disc list-inside space-y-2 text-[10px] font-medium text-zinc-400 pl-1 leading-relaxed">
+                      {result.executiveSummary.thingsToImprove.map((item, idx) => (
+                        <li key={idx} className="marker:text-rose-400 uppercase">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Actions to Do */}
+                  <div className="space-y-3 pt-4 border-t border-white/5 md:col-span-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-1.5">
+                      <Zap size={12} />
+                      These are the actions we need to do:
+                    </p>
+                    <ul className="list-disc list-inside space-y-2 text-[10px] font-medium text-zinc-400 pl-1 leading-relaxed">
+                      {result.executiveSummary.actionsToDo.map((item, idx) => (
+                        <li key={idx} className="marker:text-blue-400 uppercase">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Expect Results */}
+                  <div className="space-y-3 pt-4 border-t border-white/5 md:col-span-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
+                      <TrendingUp size={12} />
+                      These are the results we expect by doing that:
+                    </p>
+                    <ul className="list-disc list-inside space-y-2 text-[10px] font-medium text-zinc-400 pl-1 leading-relaxed">
+                      {result.executiveSummary.expectedResults.map((item, idx) => (
+                        <li key={idx} className="marker:text-indigo-400 uppercase">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
 
         </div>
       )}

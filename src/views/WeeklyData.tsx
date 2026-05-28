@@ -22,7 +22,7 @@ export default function WeeklyData() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [clientSearch, setClientSearch] = useState('');
-  const [selectedWeek, setSelectedWeek] = useState(format(startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+  const [selectedWeek, setSelectedWeek] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
   const [data, setData] = useState<Partial<IWeeklyData>>({});
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [keywordHistory, setKeywordHistory] = useState<KeywordHistory[]>([]);
@@ -323,6 +323,28 @@ export default function WeeklyData() {
         import_source: 'manual',
         imported_at: new Date().toISOString()
       });
+
+      // Automatically sync next_seo_action into client_actions
+      if (data.next_seo_action && data.next_seo_action.trim() !== '') {
+        const { data: existingActions } = await supabase
+          .from('client_actions')
+          .select('id')
+          .eq('client_id', selectedClient)
+          .eq('action_text', data.next_seo_action.trim())
+          .eq('status', 'pending');
+          
+        if (!existingActions || existingActions.length === 0) {
+          await supabase
+            .from('client_actions')
+            .insert([{
+              client_id: selectedClient,
+              action_text: data.next_seo_action.trim(),
+              status: 'pending',
+              deadline: selectedWeek
+            }]);
+        }
+      }
+
       setMessage({ type: 'success', text: 'Data saved successfully' });
       fetchData();
     } catch (e: any) {
