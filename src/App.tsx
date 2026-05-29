@@ -66,7 +66,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
       theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-950 border-white/5 shadow-[0_0_100px_rgba(37,99,235,0.05)]'
     } border-r h-screen sticky top-0 flex flex-col transition-all duration-300 ease-in-out z-30`}>
       <div className="p-6 overflow-hidden">
-        <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+        <h1 className={`text-xl font-medium flex items-center gap-2 whitespace-nowrap ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
           <TrendingUp className={
             theme === 'mission' ? "text-emerald-500 shrink-0" : 
             theme === 'white' ? "text-[#082a36] shrink-0" :
@@ -85,7 +85,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
             <Tooltip content={item.name} position="right" className="w-full">
               <Link
                 to={item.path}
-                className={`flex items-center gap-3 px-3 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 overflow-hidden whitespace-nowrap ${
+                className={`flex items-center gap-3 px-3 py-2 text-sm font-medium uppercase tracking-wider rounded-lg transition-all duration-200 overflow-hidden whitespace-nowrap ${
                   location.pathname === item.path
                     ? (
                         theme === 'mission' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 
@@ -105,7 +105,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
       <div className={`p-4 border-t ${theme === 'white' ? 'border-zinc-200' : 'border-white/5'} space-y-1`}>
         <button 
           onClick={onToggle}
-          className={`flex items-center gap-3 px-3 py-2 w-full text-xs font-bold ${
+          className={`flex items-center gap-3 px-3 py-2 w-full text-sm font-medium ${
             theme === 'white' ? 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100' : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-900'
           } rounded-lg transition-all overflow-hidden whitespace-nowrap uppercase tracking-wider`}
         >
@@ -116,7 +116,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
         </button>
         <button 
           onClick={() => auth.signOut()}
-          className="flex items-center gap-3 px-3 py-2 w-full text-xs font-bold text-red-500/80 hover:text-red-500 hover:bg-red-500/5 rounded-lg transition-all overflow-hidden whitespace-nowrap uppercase tracking-wider"
+          className="flex items-center gap-3 px-3 py-2 w-full text-sm font-medium text-red-500/80 hover:text-red-500 hover:bg-red-500/5 rounded-lg transition-all overflow-hidden whitespace-nowrap uppercase tracking-wider"
         >
           <LogOut size={16} className="shrink-0" />
           {!isCollapsed && <span>Sign Out</span>}
@@ -223,7 +223,7 @@ function Login() {
       } p-10 rounded-[32px] border border-white/5 max-w-md w-full space-y-10 animate-in fade-in zoom-in duration-500`}>
         <div className="text-center space-y-6">
           <div className="flex justify-center">
-            <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border ${
+            <div className={`px-3 py-1 rounded-full text-sm font-black uppercase tracking-[0.2em] border ${
               supabaseReady === null ? (theme === 'white' ? 'bg-zinc-100 text-zinc-400 border-zinc-200' : 'bg-zinc-800 text-zinc-500 border-white/10') :
               supabaseReady ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'
             }`}>
@@ -239,12 +239,12 @@ function Login() {
           </div>
           <div className="space-y-2">
             <h1 className={`text-4xl font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'} tracking-tighter uppercase italic italic`}>SEO_HUB</h1>
-            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">Operational Intelligence</p>
+            <p className="text-zinc-500 text-sm font-black uppercase tracking-[0.3em]">Operational Intelligence</p>
           </div>
         </div>
         
         {error && (
-          <div className={`p-5 bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-black rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-2 duration-300 uppercase tracking-tighter`}>
+          <div className={`p-5 bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-black rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-2 duration-300 uppercase tracking-tighter`}>
             <AlertCircle size={20} className="flex-shrink-0" />
             <div className="flex-1">
               <div>{error}</div>
@@ -254,7 +254,7 @@ function Login() {
 
         <form onSubmit={handleEmailLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Vector Identity</label>
+            <label className="text-sm font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Vector Identity</label>
             <div className="relative group">
               <input 
                 type="text"
@@ -262,7 +262,7 @@ function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ID: AMIT, SAI, MELAKA..."
-                className={`w-full px-6 py-4 border rounded-2xl font-black text-xs outline-none focus:border-blue-500 transition-all pl-14 uppercase tracking-widest ${
+                className={`w-full px-6 py-4 border rounded-2xl font-black text-sm outline-none focus:border-blue-500 transition-all pl-14 uppercase tracking-widest ${
                   theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                 }`}
               />
@@ -272,7 +272,7 @@ function Login() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Access Phrase</label>
+            <label className="text-sm font-black text-zinc-600 uppercase tracking-[0.2em] pl-1">Access Phrase</label>
             <div className="relative group">
               <input 
                 type="password"
@@ -280,7 +280,7 @@ function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className={`w-full px-6 py-4 border rounded-2xl font-black text-xs outline-none focus:border-blue-500 transition-all pl-14 tracking-widest ${
+                className={`w-full px-6 py-4 border rounded-2xl font-black text-sm outline-none focus:border-blue-500 transition-all pl-14 tracking-widest ${
                   theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                 }`}
               />
@@ -292,7 +292,7 @@ function Login() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-5 ${theme === 'mission' ? 'bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 shadow-blue-500/30'} text-white rounded-2xl font-black text-xs shadow-2xl hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-[0.2em]`}
+            className={`w-full py-5 ${theme === 'mission' ? 'bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 shadow-blue-500/30'} text-white rounded-2xl font-black text-sm shadow-2xl hover:brightness-110 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-[0.2em]`}
           >
             {loading ? 'Authenticating...' : 'Engage Dashboard'}
             {!loading && <ChevronRight size={20} />}

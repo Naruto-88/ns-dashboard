@@ -21,7 +21,7 @@ import {
   Target
 } from 'lucide-react';
 import { DateRange, DatePreset, getDatePresetRange, getPreviousPeriod, calculatePositionComparison, calculateMetricComparison } from '../lib/seoUtils';
-import { getClients, Client, Keyword, KeywordHistory, getKeywords, getKeywordHistory, addKeyword, deleteKeyword, getInsights } from '../services/dataService';
+import { getClients, Client, Keyword, KeywordHistory, getKeywords, getKeywordHistory, addKeyword, deleteKeyword, getInsights, updateKeyword } from '../services/dataService';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ClientSelector from '../components/ClientSelector';
 import Tooltip from '../components/Tooltip';
@@ -46,6 +46,23 @@ export default function KeywordDashboard() {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'query', direction: 'asc' });
   const [addingActionFor, setAddingActionFor] = useState<Client | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+  const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
+  const [editQuery, setEditQuery] = useState('');
+  const [editUrl, setEditUrl] = useState('');
+
+  const handleEditSave = async () => {
+    if (!selectedClient || !editingKeyword) return;
+    try {
+      await updateKeyword(selectedClient, editingKeyword.id, {
+        query: editQuery,
+        landing_page_url: editUrl
+      });
+      setEditingKeyword(null);
+      fetchData();
+    } catch (error) {
+      console.error("Failed to update keyword:", error);
+    }
+  };
 
   useEffect(() => {
     getClients().then(data => {
@@ -231,8 +248,8 @@ export default function KeywordDashboard() {
     <div className="space-y-8 pb-12">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-50">
         <div>
-          <h2 className={`text-2xl font-black font-heading uppercase tracking-tighter italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Keyword Intelligence</h2>
-          <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Track ranking signals and trajectory</p>
+          <h2 className={`text-2xl font-medium font-heading  tracking-tighter italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Keyword Intelligence</h2>
+          <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Track ranking signals and trajectory</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <ClientSelector 
@@ -250,7 +267,7 @@ export default function KeywordDashboard() {
               const client = clients.find(c => c.id === selectedClient);
               if (client) setAddingActionFor(client);
             }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm   transition-all shadow-xl active:scale-95 ${
               theme === 'white' ? 'bg-[#76c9be] text-white shadow-[#76c9be]/20 hover:bg-[#5bb8ad]' : 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500'
             }`}
           >
@@ -259,7 +276,7 @@ export default function KeywordDashboard() {
           </button>
           <button 
             onClick={() => setShowAddModal(true)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm   transition-all shadow-xl active:scale-95 ${
               theme === 'white' ? 'bg-[#f47b20] text-white shadow-[#f47b20]/20 hover:bg-[#f47b20]/90' : 'bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500'
             }`}
           >
@@ -268,7 +285,7 @@ export default function KeywordDashboard() {
           </button>
           <button 
             onClick={() => fetchData(true)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm   transition-all shadow-xl active:scale-95 ${
               theme === 'white' ? 'bg-zinc-800 text-white shadow-zinc-800/20 hover:bg-zinc-700' : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
@@ -290,8 +307,8 @@ export default function KeywordDashboard() {
           <div key={i} className={`p-5 rounded-3xl border shadow-2xl backdrop-blur-xl transition-all ${
             theme === 'white' ? 'bg-white border-[#163f4d]/10 hover:border-[#76c9be]/30' : 'bg-zinc-900/50 border-white/5 hover:border-white/10'
           }`}>
-            <p className={`text-[9px] font-black uppercase tracking-widest leading-none mb-3 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>{stat.label}</p>
-            <p className={`text-2xl font-black font-heading italic tracking-tighter ${stat.color || (theme === 'white' ? 'text-[#082a36]' : 'text-white')}`}>{stat.value}</p>
+            <p className={`text-sm font-medium   leading-none mb-3 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>{stat.label}</p>
+            <p className={`text-2xl font-medium font-heading italic tracking-tighter ${stat.color || (theme === 'white' ? 'text-[#082a36]' : 'text-white')}`}>{stat.value}</p>
           </div>
         ))}
       </div>
@@ -302,7 +319,7 @@ export default function KeywordDashboard() {
         <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className={`border-b text-[9px] font-black uppercase tracking-widest ${
+              <tr className={`border-b text-sm font-medium   ${
                 theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/50 border-white/5 text-zinc-500'
               }`}>
                 <th className="px-8 py-2 cursor-pointer hover:text-blue-500 transition-colors rounded-tl-[20px]" onClick={() => handleSort('query')}>
@@ -355,9 +372,9 @@ export default function KeywordDashboard() {
                 <tr key={kw.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-[#76c9be]/5' : 'hover:bg-white/5'}`}>
                   <td className="px-8 py-2">
                     <div className="space-y-1">
-                      <p className={`font-black font-heading uppercase tracking-tight text-sm italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{kw.query}</p>
+                      <p className={`font-medium font-heading  tracking-tight text-sm italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{kw.query}</p>
                       {kw.landing_page_url && (
-                        <a href={kw.landing_page_url} target="_blank" className={`text-[9px] font-black flex items-center gap-1 uppercase tracking-widest transition-all ${theme === 'white' ? 'text-[#607a80] hover:text-[#76c9be]' : 'text-zinc-500 hover:text-blue-500'}`}>
+                        <a href={kw.landing_page_url} target="_blank" className={`text-sm font-medium flex items-center gap-1   transition-all ${theme === 'white' ? 'text-[#607a80] hover:text-[#76c9be]' : 'text-zinc-500 hover:text-blue-500'}`}>
                           Target <ExternalLink size={10} />
                         </a>
                       )}
@@ -365,11 +382,11 @@ export default function KeywordDashboard() {
                   </td>
                   <td className="px-6 py-2 text-center">
                     <div className="flex flex-col items-center">
-                      <span className={`text-sm font-black font-heading font-mono italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                      <span className={`text-sm font-medium font-heading font-mono italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                         {kw.gscClicks.toLocaleString()}
                       </span>
                       {kw.prevGscClicks > 0 && (
-                        <span className={`text-[9px] font-black mt-0.5 ${kw.gscClicks >= kw.prevGscClicks ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
+                        <span className={`text-sm font-medium mt-0.5 ${kw.gscClicks >= kw.prevGscClicks ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
                           {kw.gscClicks >= kw.prevGscClicks ? '+' : ''}{kw.gscClicks - kw.prevGscClicks}
                         </span>
                       )}
@@ -377,36 +394,36 @@ export default function KeywordDashboard() {
                   </td>
                   <td className="px-6 py-2 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <span className={`text-sm font-black font-mono italic ${kw.gscPosition <= 3 ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : kw.gscPosition <= 10 ? (theme === 'white' ? 'text-[#f47b20]' : 'text-blue-500') : (theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500')}`}>
+                      <span className={`text-sm font-medium font-mono italic ${kw.gscPosition <= 3 ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : kw.gscPosition <= 10 ? (theme === 'white' ? 'text-[#f47b20]' : 'text-blue-500') : (theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500')}`}>
                         {kw.gscPosition > 0 ? kw.gscPosition.toFixed(1) : 'NR'}
                       </span>
                       {kw.prevGscPosition > 0 && kw.gscPosition > 0 && (kw.prevGscPosition - kw.gscPosition !== 0) && (
-                        <div className={`flex items-center text-[9px] font-black ${kw.gscPosition < kw.prevGscPosition ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
+                        <div className={`flex items-center text-sm font-medium ${kw.gscPosition < kw.prevGscPosition ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
                           {kw.gscPosition < kw.prevGscPosition ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                         </div>
                       )}
                     </div>
                   </td>
                   <td className="px-6 py-2">
-                    <span className={`text-sm font-black font-mono italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                    <span className={`text-sm font-medium font-mono italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                       {kw.currentPos ? kw.currentPos.toFixed(1) : '---'}
                     </span>
                   </td>
                   <td className="px-6 py-2">
                     {kw.status === 'improvement' ? (
-                      <span className={`inline-flex items-center gap-2 text-[9px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${
+                      <span className={`inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full border   ${
                         theme === 'white' ? 'text-[#76c9be] bg-[#76c9be]/10 border-[#76c9be]/20' : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
                       }`}>
                         <TrendingUp size={12} /> Traj Up ({Math.abs(kw.diff || 0).toFixed(1)})
                       </span>
                     ) : kw.status === 'decline' ? (
-                      <span className={`inline-flex items-center gap-2 text-[9px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${
+                      <span className={`inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full border   ${
                         theme === 'white' ? 'text-[#e24b4a] bg-[#e24b4a]/10 border-[#e24b4a]/20' : 'text-rose-500 bg-rose-500/10 border-rose-500/20'
                       }`}>
                         <TrendingDown size={12} /> Traj Down ({Math.abs(kw.diff || 0).toFixed(1)})
                       </span>
                     ) : (
-                      <span className={`inline-flex items-center gap-2 text-[9px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${
+                      <span className={`inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full border   ${
                         theme === 'white' ? 'text-[#607a80] bg-[#76c9be]/5 border-[#163f4d]/5' : 'text-zinc-500 bg-zinc-800 border-white/5'
                       }`}>
                         <Minus size={12} /> Static
@@ -416,9 +433,16 @@ export default function KeywordDashboard() {
                   <td className="px-8 py-5 text-right">
                     <div className="flex justify-end gap-2 grayscale group-hover:grayscale-0 transition-all">
                       <Tooltip content="Edit Keyword" position="left">
-                        <button className={`p-2 rounded-xl transition-all border border-transparent shadow-sm ${
-                          theme === 'white' ? 'text-[#607a80] hover:bg-[#76c9be]/10 hover:text-[#082a36]' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
-                        }`}>
+                        <button 
+                          onClick={() => {
+                            setEditingKeyword(kw);
+                            setEditQuery(kw.query);
+                            setEditUrl(kw.landing_page_url || '');
+                          }}
+                          className={`p-2 rounded-xl transition-all border border-transparent shadow-sm ${
+                            theme === 'white' ? 'text-[#607a80] hover:bg-[#76c9be]/10 hover:text-[#082a36]' : 'text-zinc-500 hover:bg-white/5 hover:text-white hover:border-white/10'
+                          }`}
+                        >
                           <Edit2 size={16} />
                         </button>
                       </Tooltip>
@@ -452,7 +476,7 @@ export default function KeywordDashboard() {
             <div className={`p-10 border-b flex items-center justify-between backdrop-blur-xl ${
               theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-950/80 border-white/5'
             }`}>
-              <h3 className={`text-2xl font-black font-heading uppercase italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Bulk Signal Injection</h3>
+              <h3 className={`text-2xl font-medium font-heading  italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Bulk Signal Injection</h3>
               <button 
                 onClick={() => setShowAddModal(false)}
                 className={`p-3 rounded-2xl transition-all ${
@@ -463,7 +487,7 @@ export default function KeywordDashboard() {
               </button>
             </div>
             <div className="p-10 space-y-6">
-              <p className={`text-[10px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+              <p className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                 Data Format: <span className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-400'}>keyword, landing_page, priority</span> (line delimited)
               </p>
               <textarea
@@ -480,7 +504,7 @@ export default function KeywordDashboard() {
             }`}>
               <button 
                 onClick={() => setShowAddModal(false)} 
-                className={`px-8 py-3 font-black uppercase text-[10px] tracking-widest transition-colors ${
+                className={`px-8 py-3 font-medium  text-sm  transition-colors ${
                   theme === 'white' ? 'text-[#607a80] hover:text-[#082a36]' : 'text-zinc-500 hover:text-white'
                 }`}
               >
@@ -488,7 +512,7 @@ export default function KeywordDashboard() {
               </button>
               <button 
                 onClick={handleBulkAdd} 
-                className={`px-10 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl ${
+                className={`px-10 py-3 rounded-2xl font-medium text-sm   transition-all shadow-xl ${
                   theme === 'white' ? 'bg-[#f47b20] text-white shadow-[#f47b20]/20 hover:bg-[#f47b20]/90' : 'bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500'
                 }`}
               >
@@ -505,6 +529,75 @@ export default function KeywordDashboard() {
           onClose={() => setAddingActionFor(null)}
           onSuccess={() => setAddingActionFor(null)}
         />
+      )}
+
+      {editingKeyword && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-3xl animate-in fade-in duration-300">
+          <div className={`rounded-[48px] w-full max-w-lg shadow-2xl overflow-hidden border relative ${
+            theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-950 border-white/5'
+          }`}>
+            <div className={`p-10 border-b flex items-center justify-between backdrop-blur-xl ${
+              theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-950/80 border-white/5'
+            }`}>
+              <h3 className={`text-2xl font-medium font-heading italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Edit Strategic Keyword</h3>
+              <button 
+                onClick={() => setEditingKeyword(null)}
+                className={`p-3 rounded-2xl transition-all ${
+                  theme === 'white' ? 'bg-[#76c9be]/10 text-[#607a80] hover:text-[#082a36]' : 'bg-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-700'
+                }`}
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <div className="p-10 space-y-6">
+              <div className="space-y-2">
+                <label className={`text-sm font-medium ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Strategic Keyword</label>
+                <input
+                  type="text"
+                  value={editQuery}
+                  onChange={(e) => setEditQuery(e.target.value)}
+                  className={`w-full px-6 py-4 border rounded-2xl font-medium text-sm outline-none transition-all ${
+                    theme === 'white' ? 'bg-white border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
+                  }`}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className={`text-sm font-medium ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Target Landing Page URL</label>
+                <input
+                  type="text"
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  className={`w-full px-6 py-4 border rounded-2xl font-medium text-sm outline-none transition-all ${
+                    theme === 'white' ? 'bg-white border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
+                  }`}
+                />
+              </div>
+            </div>
+
+            <div className={`p-10 flex justify-end gap-4 border-t ${
+              theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-zinc-950 border-white/5'
+            }`}>
+              <button 
+                onClick={() => setEditingKeyword(null)} 
+                className={`px-8 py-3 font-medium text-sm transition-colors ${
+                  theme === 'white' ? 'text-[#607a80] hover:text-[#082a36]' : 'text-zinc-500 hover:text-white'
+                }`}
+              >
+                Abort
+              </button>
+              <button 
+                onClick={handleEditSave} 
+                className={`px-10 py-3 rounded-2xl font-medium text-sm transition-all shadow-xl ${
+                  theme === 'white' ? 'bg-[#76c9be] text-white shadow-[#76c9be]/20 hover:bg-[#5bb8ad]' : 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500'
+                }`}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

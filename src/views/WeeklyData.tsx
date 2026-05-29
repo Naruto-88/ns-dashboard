@@ -433,9 +433,9 @@ export default function WeeklyData() {
         theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
       }`}>
         <div className="flex-1">
-          <h2 className={`text-2xl font-black font-heading uppercase tracking-tighter italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Weekly Data Hub</h2>
+          <h2 className={`text-2xl font-medium font-heading  tracking-tighter italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Weekly Data Hub</h2>
           <div className="flex items-center gap-2 mt-2">
-            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border ${
+            <span className={`text-sm font-medium px-3 py-1 rounded-full   border ${
               theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-blue-600/10 text-blue-500 border-blue-500/20'
             }`}>
               Period: {format(parseISO(selectedWeek), 'MMM d')} - {format(endOfWeek(parseISO(selectedWeek), { weekStartsOn: 1 }), 'MMM d, yyyy')}
@@ -444,7 +444,7 @@ export default function WeeklyData() {
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex flex-col">
-            <label className={`text-[9px] font-black uppercase tracking-widest mb-1.5 ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Surveillance Target</label>
+            <label className={`text-sm font-medium   mb-1.5 ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Surveillance Target</label>
             <ClientSelector 
               clients={clients} 
               selectedId={selectedClient} 
@@ -452,7 +452,7 @@ export default function WeeklyData() {
             />
           </div>
           <div className="flex flex-col">
-            <label className={`text-[9px] font-black uppercase tracking-widest mb-1.5 ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Week Commencement</label>
+            <label className={`text-sm font-medium   mb-1.5 ml-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Week Commencement</label>
             <input
               type="date"
               value={selectedWeek}
@@ -465,7 +465,7 @@ export default function WeeklyData() {
                   setSelectedWeek('');
                 }
               }}
-              className={`px-4 py-2.5 border rounded-2xl text-xs font-black outline-none transition-all uppercase ${
+              className={`px-4 py-2.5 border rounded-2xl text-sm font-medium outline-none transition-all  ${
                 theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500'
               }`}
             />
@@ -473,7 +473,7 @@ export default function WeeklyData() {
           <button 
             onClick={handleSync}
             disabled={syncing || !selectedClient}
-            className={`mt-5 flex items-center gap-2 px-6 py-2.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 ${
+            className={`mt-5 flex items-center gap-2 px-6 py-2.5 border rounded-2xl text-sm font-medium   transition-all shadow-xl disabled:opacity-50 ${
               theme === 'white' ? 'bg-[#76c9be]/10 border-[#76c9be]/20 text-[#082a36] hover:bg-[#76c9be]/20' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
             }`}
           >
@@ -482,7 +482,7 @@ export default function WeeklyData() {
           <button 
             onClick={handleSyncAllAhrefs}
             disabled={syncingAllAhrefs || clients.length === 0}
-            className={`mt-5 flex items-center gap-2 px-6 py-2.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 ${
+            className={`mt-5 flex items-center gap-2 px-6 py-2.5 border rounded-2xl text-sm font-medium   transition-all shadow-xl disabled:opacity-50 ${
               theme === 'white' ? 'bg-[#f47b20]/10 border-[#f47b20]/20 text-[#f47b20] hover:bg-[#f47b20]/20' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
             }`}
             title="Sync Ahrefs authority metrics (DR, Backlinks, Ref Domains) sequentially for all active clients"
@@ -499,11 +499,11 @@ export default function WeeklyData() {
             <div className={`p-8 rounded-[40px] border backdrop-blur-xl space-y-6 ${
               theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-xl' : 'bg-zinc-900/50 border-white/5'
             }`}>
-              <h3 className={`text-lg font-black font-heading border-b pb-4 flex items-center justify-between uppercase tracking-tight ${
+              <h3 className={`text-lg font-medium font-heading border-b pb-4 flex items-center justify-between  tracking-tight ${
                 theme === 'white' ? 'text-[#082a36] border-[#163f4d]/5' : 'text-white border-white/5'
               }`}>
                 Visibility Index (Focus Keywords)
-                <span className={`text-[9px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${
+                <span className={`text-sm font-medium px-3 py-1 rounded-full border   ${
                   theme === 'white' ? 'bg-[#76c9be]/5 text-[#607a80] border-[#163f4d]/5' : 'bg-zinc-800 text-zinc-500 border-white/5'
                 }`}>Global Snapshots</span>
               </h3>
@@ -512,8 +512,8 @@ export default function WeeklyData() {
                   theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5 hover:border-[#76c9be]' : 'bg-zinc-800/50 border-white/5 hover:border-blue-500/20'
                 }`}>
                   <Tooltip content="Average rank of all tracked keywords for this period." className="w-full">
-                    <p className={`text-[9px] font-black uppercase tracking-widest mb-2 text-center ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Avg Position</p>
-                    <p className={`text-3xl font-black text-center font-heading font-mono tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{keywordStats.avg.toFixed(1)}</p>
+                    <p className={`text-sm font-medium   mb-2 text-center ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Avg Position</p>
+                    <p className={`text-3xl font-medium text-center font-heading font-mono tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{keywordStats.avg.toFixed(1)}</p>
                   </Tooltip>
                 </div>
                 <button 
@@ -523,8 +523,8 @@ export default function WeeklyData() {
                   }`}
                 >
                   <Tooltip content="Total keywords ranking in top 3 positions">
-                    <p className={`text-[9px] font-black uppercase tracking-widest mb-2 text-center ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>Top 3 Index</p>
-                    <p className={`text-3xl font-black font-heading text-center flex items-center justify-center gap-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-400'}`}>
+                    <p className={`text-sm font-medium   mb-2 text-center ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>Top 3 Index</p>
+                    <p className={`text-3xl font-medium font-heading text-center flex items-center justify-center gap-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-400'}`}>
                       {keywordStats.top3.length}
                       <Maximize2 size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                     </p>
@@ -537,8 +537,8 @@ export default function WeeklyData() {
                   }`}
                 >
                   <Tooltip content="Total keywords ranking in top 10 positions">
-                    <p className={`text-[9px] font-black uppercase tracking-widest mb-2 text-center ${theme === 'white' ? 'text-[#f47b20]' : 'text-blue-500'}`}>Top 10 Reach</p>
-                    <p className={`text-3xl font-black font-heading text-center flex items-center justify-center gap-3 ${theme === 'white' ? 'text-[#f47b20]' : 'text-blue-400'}`}>
+                    <p className={`text-sm font-medium   mb-2 text-center ${theme === 'white' ? 'text-[#f47b20]' : 'text-blue-500'}`}>Top 10 Reach</p>
+                    <p className={`text-3xl font-medium font-heading text-center flex items-center justify-center gap-3 ${theme === 'white' ? 'text-[#f47b20]' : 'text-blue-400'}`}>
                       {keywordStats.top10.length}
                       <Maximize2 size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                     </p>
@@ -552,13 +552,13 @@ export default function WeeklyData() {
                 <div key={idx} className={`p-8 rounded-[40px] border backdrop-blur-xl space-y-6 ${
                   theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-xl' : 'bg-zinc-900/50 border-white/5'
                 }`}>
-                  <h3 className={`text-lg font-black font-heading border-b pb-4 uppercase tracking-tight ${
+                  <h3 className={`text-lg font-medium font-heading border-b pb-4  tracking-tight ${
                     theme === 'white' ? 'text-[#082a36] border-[#163f4d]/5' : 'text-white border-white/5'
                   }`}>{section.title}</h3>
                   <div className="grid grid-cols-2 gap-6">
                     {section.fields.map((field) => (
                       <div key={field.key} className="space-y-2">
-                        <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                        <label className={`text-sm font-medium   flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
                           {field.label}
                           <Tooltip content={field.tooltip}>
                             <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
@@ -569,7 +569,7 @@ export default function WeeklyData() {
                           step="0.01"
                           value={data[field.key as keyof IWeeklyData] === undefined ? '' : data[field.key as keyof IWeeklyData]}
                           onChange={(e) => updateField(field.key as keyof IWeeklyData, e.target.value)}
-                          className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                          className={`w-full px-5 py-3 border rounded-2xl text-md font-medium outline-none transition-all font-mono ${
                             theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                           }`}
                         />
@@ -583,7 +583,7 @@ export default function WeeklyData() {
               <div className={`p-8 rounded-[40px] border backdrop-blur-xl space-y-6 ${
                 theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-xl' : 'bg-zinc-900/50 border-white/5'
               }`}>
-                <h3 className={`text-lg font-black font-heading border-b pb-4 flex items-center justify-between uppercase tracking-tight ${
+                <h3 className={`text-lg font-medium font-heading border-b pb-4 flex items-center justify-between  tracking-tight ${
                   theme === 'white' ? 'text-[#082a36] border-[#163f4d]/5' : 'text-white border-white/5'
                 }`}>
                   <span>Ahrefs Authority</span>
@@ -592,7 +592,7 @@ export default function WeeklyData() {
                       type="button"
                       onClick={handleAhrefsSync}
                       disabled={syncingAhrefs}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-sm font-medium   transition-all ${
                         theme === 'white' 
                           ? 'bg-[#76c9be]/10 border-[#76c9be]/20 text-[#082a36] hover:bg-[#76c9be]/20' 
                           : 'bg-zinc-800 border-white/5 text-white hover:bg-zinc-700'
@@ -605,7 +605,7 @@ export default function WeeklyData() {
                 
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                    <label className={`text-sm font-medium   flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
                       Domain Rating (DR)
                       <Tooltip content="Ahrefs Domain Rating (DR) score (0-100).">
                         <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
@@ -615,14 +615,14 @@ export default function WeeklyData() {
                       type="number"
                       value={data.ahrefs_dr === undefined ? '' : data.ahrefs_dr}
                       onChange={(e) => updateField('ahrefs_dr', e.target.value)}
-                      className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-md font-medium outline-none transition-all font-mono ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                    <label className={`text-sm font-medium   flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
                       Backlinks
                       <Tooltip content="Total number of external backlinks pointing to this website domain.">
                         <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
@@ -632,14 +632,14 @@ export default function WeeklyData() {
                       type="number"
                       value={data.ahrefs_backlinks === undefined ? '' : data.ahrefs_backlinks}
                       onChange={(e) => updateField('ahrefs_backlinks', e.target.value)}
-                      className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-md font-medium outline-none transition-all font-mono ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
                   </div>
 
                   <div className="space-y-2 col-span-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                    <label className={`text-sm font-medium   flex items-center gap-2 relative ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
                       Referring Domains
                       <Tooltip content="Total number of unique domains linking to this website.">
                         <Info size={12} className="text-zinc-700 cursor-help hover:text-blue-500 transition-colors" />
@@ -649,7 +649,7 @@ export default function WeeklyData() {
                       type="number"
                       value={data.ahrefs_ref_domains === undefined ? '' : data.ahrefs_ref_domains}
                       onChange={(e) => updateField('ahrefs_ref_domains', e.target.value)}
-                      className={`w-full px-5 py-3 border rounded-2xl text-md font-black outline-none transition-all font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-md font-medium outline-none transition-all font-mono ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
@@ -661,7 +661,7 @@ export default function WeeklyData() {
             <div className={`p-8 rounded-[40px] border backdrop-blur-xl space-y-8 ${
               theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-xl' : 'bg-zinc-900/50 border-white/5'
             }`}>
-               <h3 className={`text-lg font-black font-heading border-b pb-4 flex items-center gap-3 uppercase tracking-tight ${
+               <h3 className={`text-lg font-medium font-heading border-b pb-4 flex items-center gap-3  tracking-tight ${
                 theme === 'white' ? 'text-[#082a36] border-[#163f4d]/5' : 'text-white border-white/5'
               }`}>
                 <Search size={22} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
@@ -670,24 +670,24 @@ export default function WeeklyData() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Threat Assessment (Issue Type)</label>
+                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Threat Assessment (Issue Type)</label>
                     <input 
                       type="text"
                       placeholder="e.g. Technical Debt, Content Gap..."
                       value={data.primary_issue_type || ''}
                       onChange={(e) => updateTextField('primary_issue_type', e.target.value)}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-bold outline-none transition-all placeholder:text-[#607a80]/50 uppercase ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none transition-all placeholder:text-[#607a80]/50  ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Intelligence Insight</label>
+                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Intelligence Insight</label>
                     <textarea 
                       placeholder="Share a key performance discovery..."
                       value={data.primary_insight || ''}
                       onChange={(e) => updateTextField('primary_insight', e.target.value)}
-                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-bold outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none uppercase tracking-tight ${
+                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none  tracking-tight ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
@@ -695,23 +695,23 @@ export default function WeeklyData() {
                 </div>
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Correction Directive (Next Action)</label>
+                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Correction Directive (Next Action)</label>
                     <textarea 
                       placeholder="e.g. Publish pillar page for keyword X..."
                       value={data.next_seo_action || ''}
                       onChange={(e) => updateTextField('next_seo_action', e.target.value)}
-                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-bold outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none uppercase tracking-tight ${
+                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none  tracking-tight ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Activity Log</label>
+                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Activity Log</label>
                     <textarea 
                       placeholder="Describe what was done this week..."
                       value={data.weekly_activity_summary || ''}
                       onChange={(e) => updateTextField('weekly_activity_summary', e.target.value)}
-                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-bold outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none uppercase tracking-tight ${
+                      className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none transition-all placeholder:text-[#607a80]/50 h-28 resize-none  tracking-tight ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/5' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                       }`}
                     />
@@ -725,7 +725,7 @@ export default function WeeklyData() {
           }`}>
             <div className="flex items-center gap-4 text-sm font-medium">
               {message && (
-                <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl uppercase text-[10px] font-black tracking-widest ${message.type === 'success' ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20') : 'bg-red-500/10 text-red-500 border border-red-500/20'} animate-in fade-in slide-in-from-left-2 overflow-hidden`}>
+                <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl  text-sm font-medium  ${message.type === 'success' ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20') : 'bg-red-500/10 text-red-500 border border-red-500/20'} animate-in fade-in slide-in-from-left-2 overflow-hidden`}>
                   {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                   {message.text}
                 </div>
@@ -735,7 +735,7 @@ export default function WeeklyData() {
               <button 
                 onClick={handleSave}
                 disabled={saving}
-                className={`flex items-center gap-3 px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 active:scale-95 ${
+                className={`flex items-center gap-3 px-10 py-4 rounded-2xl font-medium text-sm   transition-all shadow-xl disabled:opacity-50 active:scale-95 ${
                   theme === 'white' ? 'bg-[#f47b20] text-white shadow-[#f47b20]/20 hover:bg-[#f47b20]/90' : 'bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500'
                 }`}
               >
@@ -755,8 +755,8 @@ export default function WeeklyData() {
               theme === 'white' ? 'bg-zinc-50/80 border-zinc-100' : 'bg-zinc-900/80 border-white/5'
             }`}>
               <div>
-                <h3 className={`text-xl font-black font-heading uppercase tracking-tight italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{showKeywordList.title}</h3>
-                <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>{showKeywordList.list.length} target matches identified</p>
+                <h3 className={`text-xl font-medium font-heading  tracking-tight italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{showKeywordList.title}</h3>
+                <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>{showKeywordList.list.length} target matches identified</p>
               </div>
               <button 
                 onClick={() => setShowKeywordList(null)}
@@ -770,7 +770,7 @@ export default function WeeklyData() {
             <div className="max-h-[60vh] overflow-y-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className={`border-b text-[9px] font-black uppercase tracking-widest ${
+                  <tr className={`border-b text-sm font-medium   ${
                     theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5 text-[#607a80]' : 'bg-zinc-950/50 border-white/5 text-zinc-500'
                   }`}>
                     <th className="px-8 py-5">Target Query</th>
@@ -781,13 +781,13 @@ export default function WeeklyData() {
                 <tbody className={`divide-y ${theme === 'white' ? 'divide-[#163f4d]/5' : 'divide-white/5'}`}>
                   {showKeywordList.list.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-8 py-20 text-center text-zinc-400 font-black uppercase tracking-widest text-xs">No visibility matches found in this sector.</td>
+                      <td colSpan={3} className="px-8 py-20 text-center text-zinc-400 font-medium   text-sm">No visibility matches found in this sector.</td>
                     </tr>
                   ) : showKeywordList.list.map((kw, i) => (
                     <tr key={i} className={`transition-colors group ${theme === 'white' ? 'hover:bg-[#76c9be]/5' : 'hover:bg-white/5'}`}>
-                      <td className={`px-8 py-4 font-black font-heading transition-colors uppercase text-xs ${theme === 'white' ? 'text-[#082a36] group-hover:text-[#76c9be]' : 'text-white group-hover:text-blue-400'}`}>{kw.query}</td>
+                      <td className={`px-8 py-4 font-medium font-heading transition-colors  text-sm ${theme === 'white' ? 'text-[#082a36] group-hover:text-[#76c9be]' : 'text-white group-hover:text-blue-400'}`}>{kw.query}</td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                        <span className={`px-3 py-1 rounded-lg text-sm font-medium   ${
                           kw.position <= 3 ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20') : (theme === 'white' ? 'bg-[#f47b20]/10 text-[#f47b20] border border-[#f47b20]/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20')
                         }`}>
                           {kw.position.toFixed(1)}
@@ -798,7 +798,7 @@ export default function WeeklyData() {
                           href={kw.url} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className={`flex items-center gap-2 text-[10px] cursor-pointer font-black grayscale hover:grayscale-0 transition-all uppercase tracking-tighter ${theme === 'white' ? 'text-[#607a80] hover:text-[#76c9be]' : 'text-zinc-500 hover:text-blue-400'}`}
+                          className={`flex items-center gap-2 text-sm cursor-pointer font-medium grayscale hover:grayscale-0 transition-all  tracking-tighter ${theme === 'white' ? 'text-[#607a80] hover:text-[#76c9be]' : 'text-zinc-500 hover:text-blue-400'}`}
                         >
                           <span className="truncate max-w-[180px]">{kw.url}</span>
                           <ExternalLink size={12} />
@@ -814,7 +814,7 @@ export default function WeeklyData() {
             }`}>
               <button 
                 onClick={() => setShowKeywordList(null)}
-                className={`px-10 py-3 rounded-2xl font-black text-xs transition-all uppercase tracking-widest ${
+                className={`px-10 py-3 rounded-2xl font-medium text-sm transition-all   ${
                    theme === 'white' ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-white text-black hover:bg-zinc-200'
                 }`}
               >
@@ -834,9 +834,9 @@ export default function WeeklyData() {
               theme === 'white' ? 'bg-zinc-50/80 border-zinc-100' : 'bg-zinc-900/80 border-white/5'
             }`}>
               <div>
-                <h3 className={`text-xl font-black font-heading uppercase tracking-tight italic flex items-center gap-2.5 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                <h3 className={`text-xl font-medium font-heading  tracking-tight italic flex items-center gap-2.5 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                   Batch Ahrefs Sync
-                  <span className={`px-2 py-0.5 text-[8px] font-black border rounded-md uppercase tracking-widest animate-pulse ${
+                  <span className={`px-2 py-0.5 text-sm font-medium border rounded-md   animate-pulse ${
                     syncingAllAhrefs 
                       ? (theme === 'white' ? 'bg-[#f47b20]/10 text-[#f47b20] border-[#f47b20]/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20')
                       : (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20')
@@ -844,7 +844,7 @@ export default function WeeklyData() {
                     {syncingAllAhrefs ? 'Rate-Limit Sentinel Active (4s Gap)' : 'Complete'}
                   </span>
                 </h3>
-                <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
+                <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>
                   Syncing Ahrefs v3 stats for all client nodes sequentially
                 </p>
               </div>
@@ -862,7 +862,7 @@ export default function WeeklyData() {
 
             {/* Progress Bar & Summary Stats */}
             <div className="p-8 space-y-4">
-              <div className="flex items-center justify-between text-xs font-black uppercase tracking-widest">
+              <div className="flex items-center justify-between text-sm font-medium  ">
                 <span className={theme === 'white' ? 'text-zinc-500' : 'text-zinc-400'}>
                   Overall Progress ({syncAllProgress.current} / {syncAllProgress.total})
                 </span>
@@ -896,11 +896,11 @@ export default function WeeklyData() {
                   }`}
                 >
                   <div className="flex flex-col">
-                    <span className={`text-xs font-black uppercase tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                    <span className={`text-sm font-medium  tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                       {item.clientName}
                     </span>
                     {item.error && (
-                      <span className="text-[9px] text-red-400 font-bold uppercase tracking-tight mt-0.5">
+                      <span className="text-sm text-red-400 font-medium  tracking-tight mt-0.5">
                         Error: {item.error}
                       </span>
                     )}
@@ -908,28 +908,28 @@ export default function WeeklyData() {
 
                   <div>
                     {item.status === 'pending' && (
-                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                      <span className={`px-3 py-1 rounded-lg text-sm font-medium   ${
                         theme === 'white' ? 'bg-zinc-100 text-zinc-400 border border-zinc-200' : 'bg-zinc-800 text-zinc-500 border border-white/5'
                       }`}>
                         Pending
                       </span>
                     )}
                     {item.status === 'syncing' && (
-                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse ${
+                      <span className={`px-3 py-1 rounded-lg text-sm font-medium   animate-pulse ${
                         theme === 'white' ? 'bg-[#f47b20]/10 text-[#f47b20] border border-[#f47b20]/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                       }`}>
                         Syncing...
                       </span>
                     )}
                     {item.status === 'success' && (
-                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                      <span className={`px-3 py-1 rounded-lg text-sm font-medium   ${
                         theme === 'white' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       }`}>
                         Success
                       </span>
                     )}
                     {item.status === 'failed' && (
-                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                      <span className={`px-3 py-1 rounded-lg text-sm font-medium   ${
                         theme === 'white' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
                       }`}>
                         Failed
@@ -946,7 +946,7 @@ export default function WeeklyData() {
               <button 
                 onClick={() => setSyncAllProgress(null)}
                 disabled={syncingAllAhrefs}
-                className={`px-10 py-3 rounded-2xl font-black text-xs transition-all uppercase tracking-widest disabled:opacity-50 ${
+                className={`px-10 py-3 rounded-2xl font-medium text-sm transition-all   disabled:opacity-50 ${
                    theme === 'white' ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-white text-black hover:bg-zinc-200'
                 }`}
               >

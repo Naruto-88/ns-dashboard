@@ -83,10 +83,10 @@ export default function NextActionModal({ client, onClose, onSuccess, editData }
             <Target size={24} />
           </div>
           <div>
-            <h3 className={`text-lg font-black uppercase tracking-tight font-heading ${
+            <h3 className={`text-lg font-medium normal-case tracking-normal font-heading ${
               isWhite ? 'text-[#082a36]' : 'text-white'
             }`}>{editData ? 'Edit Action' : 'Next Action'}</h3>
-            <p className={`text-[10px] font-black uppercase tracking-widest ${
+            <p className={`text-sm font-medium normal-case tracking-normal ${
               isWhite ? 'text-[#607a80]' : 'text-zinc-500'
             }`}>For {client.name}</p>
           </div>
@@ -94,14 +94,14 @@ export default function NextActionModal({ client, onClose, onSuccess, editData }
 
         <form onSubmit={handleSaveAction} className="space-y-6">
           <div className="space-y-2">
-            <label className={`text-[10px] font-black uppercase tracking-widest ${
+            <label className={`text-sm font-medium normal-case tracking-normal ${
               isWhite ? 'text-zinc-500' : 'text-zinc-400'
             }`}>Action Description</label>
             <textarea 
               required
               value={actionForm.text}
               onChange={e => setActionForm({ ...actionForm, text: e.target.value })}
-              className={`w-full px-4 py-3 border rounded-2xl text-sm font-bold resize-none h-24 outline-none focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/10 transition-all ${
+              className={`w-full px-4 py-3 border rounded-2xl text-sm font-medium resize-none h-24 outline-none focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/10 transition-all ${
                 isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
               }`}
               placeholder="e.g. Optimize technical SEO issues on homepage..."
@@ -109,7 +109,7 @@ export default function NextActionModal({ client, onClose, onSuccess, editData }
           </div>
           
           <div className="space-y-2">
-            <label className={`text-[10px] font-black uppercase tracking-widest ${
+            <label className={`text-sm font-medium normal-case tracking-normal ${
               isWhite ? 'text-zinc-500' : 'text-zinc-400'
             }`}>Deadline Date</label>
             <input 
@@ -117,7 +117,7 @@ export default function NextActionModal({ client, onClose, onSuccess, editData }
               required
               value={actionForm.deadline}
               onChange={e => setActionForm({ ...actionForm, deadline: e.target.value })}
-              className={`w-full px-4 py-3 border rounded-2xl text-sm font-bold outline-none focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/10 transition-all ${
+              className={`w-full px-4 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/10 transition-all ${
                 isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
               }`}
             />
@@ -126,7 +126,7 @@ export default function NextActionModal({ client, onClose, onSuccess, editData }
           <button 
             disabled={savingAction}
             type="submit"
-            className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 ${
+            className={`w-full py-4 rounded-2xl font-medium text-sm normal-case tracking-normal flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 ${
               isWhite 
                 ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20' 
                 : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'

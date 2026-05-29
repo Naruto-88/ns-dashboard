@@ -48,15 +48,17 @@ export default function Tooltip({ content, children, position = 'top', align = '
     >
       {children}
       {isVisible && (
-        <div className={`absolute ${getPositionClasses()} w-56 p-3 rounded-3xl font-bold z-[9999] shadow-[0_30px_60px_rgba(0,0,0,0.6)] border backdrop-blur-3xl animate-in fade-in ${animationClasses[position]} duration-200 text-left pointer-events-none ${
+        <div className={`absolute ${getPositionClasses()} w-56 p-3 rounded-3xl font-medium z-[9999] shadow-[0_30px_60px_rgba(0,0,0,0.6)] border backdrop-blur-3xl animate-in fade-in ${animationClasses[position]} duration-200 text-left pointer-events-none tooltip-override ${
           theme === 'white' ? 'bg-white/100 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/10 text-white'
         }`}>
           {typeof content === 'string' ? (
-            <div className="text-[8.5px] leading-relaxed font-black uppercase tracking-[0.15em] text-center italic">
+            <div className="text-[12px] leading-relaxed font-medium text-center tooltip-override">
               {content}
             </div>
           ) : (
-            content
+            <div className="text-[12px] leading-relaxed tooltip-override w-full">
+              {content}
+            </div>
           )}
         </div>
       )}

@@ -523,11 +523,11 @@ export default function MasterDashboard() {
               <LayoutDashboard className="text-white" size={24} />
             </div>
             <div>
-              <h2 className={`text-3xl font-black font-heading tracking-tighter uppercase italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Master Dashboard</h2>
+              <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Master Dashboard</h2>
               <div className="flex items-center gap-2 mt-1">
-                <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest leading-none">Cross-Property Intelligence</p>
+                <p className="text-zinc-500 text-sm font-medium   leading-none">Cross-Property Intelligence</p>
                 {viewingPeriod && (
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-blue-600/10 text-blue-600'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-sm font-medium   ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-blue-600/10 text-blue-600'}`}>
                     {format(viewingPeriod.start, 'MMM dd')} - {format(viewingPeriod.end, 'MMM dd, yyyy')}
                   </span>
                 )}
@@ -542,7 +542,7 @@ export default function MasterDashboard() {
             <Tooltip content="Rolling Last 7 Days vs Previous 7 Days">
               <button
                 onClick={() => setViewMode('rolling')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'rolling'
+                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === 'rolling'
                     ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
@@ -555,7 +555,7 @@ export default function MasterDashboard() {
             <Tooltip content="Last 28 Days vs Previous 28 Days">
               <button
                 onClick={() => setViewMode('28days')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === '28days'
+                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === '28days'
                     ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
@@ -568,7 +568,7 @@ export default function MasterDashboard() {
             <Tooltip content="Month over Month Performance">
               <button
                 onClick={() => setViewMode('monthly')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === 'monthly'
+                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === 'monthly'
                     ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
@@ -581,7 +581,7 @@ export default function MasterDashboard() {
             <Tooltip content="3 Months Performance vs Previous 3 Months">
               <button
                 onClick={() => setViewMode('3months')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${viewMode === '3months'
+                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === '3months'
                     ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
@@ -599,14 +599,14 @@ export default function MasterDashboard() {
                 type="date" 
                 value={dateRange.start} 
                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className={`bg-transparent text-[10px] font-black uppercase outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
+                className={`bg-transparent text-sm font-medium  outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
               <Minus size={12} className="text-zinc-500" />
               <input 
                 type="date" 
                 value={dateRange.end} 
                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className={`bg-transparent text-[10px] font-black uppercase outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
+                className={`bg-transparent text-sm font-medium  outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
               <button 
                 onClick={() => setViewMode('rolling')}
@@ -637,7 +637,7 @@ export default function MasterDashboard() {
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-bold outline-none transition-all ${theme === 'white' 
+              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium outline-none transition-all ${theme === 'white' 
                 ? 'bg-white border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' 
                 : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500'
                 } w-48`}
@@ -645,7 +645,7 @@ export default function MasterDashboard() {
           </div>
           <button
             onClick={handleLiveSync}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
               theme === 'white' 
                 ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20' 
                 : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20'
@@ -658,7 +658,7 @@ export default function MasterDashboard() {
           <button
             onClick={handleSyncToSheets}
             disabled={isSyncingSheets}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
               theme === 'white' 
                 ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 shadow-lg border border-[#082a36]' 
                 : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg border border-blue-500 shadow-blue-600/20'
@@ -677,7 +677,7 @@ export default function MasterDashboard() {
             <thead className="sticky top-0 z-[30]">
               <tr className={`border-b ${theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl'}`}>
                 <th
-                  className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest sticky left-0 z-[40] border-r cursor-pointer transition-colors rounded-tl-[20px] ${
+                  className={`px-6 py-2 text-sm font-medium   sticky left-0 z-[40] border-r cursor-pointer transition-colors rounded-tl-[20px] ${
                     theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white hover:text-[#76c9be]' : 'bg-zinc-950 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)] text-[#607a80] hover:text-[#76c9be]'
                   }`}
                   onClick={() => handleSort('client')}
@@ -688,74 +688,74 @@ export default function MasterDashboard() {
                     {sortConfig?.key === 'client' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('pm')}>
+                <th className={`px-4 py-2 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('pm')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Project Manager Code" position="bottom">PM</Tooltip>
                     {sortConfig?.key === 'pm' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('leads')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('leads')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Verified high-quality leads" position="bottom">Legit Leads</Tooltip>
                     {sortConfig?.key === 'leads' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GA4 Phone Calls" position="bottom">Phone Calls (C/P)</Tooltip>
                     {sortConfig?.key === 'phone_calls' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Keywords in top 3 positions" position="bottom">Top 3</Tooltip>
                     {sortConfig?.key === 'top3' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top10')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top10')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Actual vs Target keywords in top 10" position="bottom">Top 10 (A/T)</Tooltip>
                     {sortConfig?.key === 'top10' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-[10px] font-black uppercase tracking-widest cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('ctr')}>
+                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('ctr')}>
                   <div className="flex items-center justify-center gap-1">
                     Avg CTR {sortConfig?.key === 'ctr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-[10px] font-black uppercase tracking-widest cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('impressions')}>
+                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('impressions')}>
                   <div className="flex items-center justify-center gap-1">
                     Impressions {sortConfig?.key === 'impressions' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-[10px] font-black uppercase tracking-widest cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('position')}>
+                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('position')}>
                   <div className="flex items-center justify-center gap-1">
                     Avg Pos {sortConfig?.key === 'position' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('gsc')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('gsc')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GSC Clicks" position="bottom">GSC Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'gsc' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GA4 Users" position="bottom">GA4 Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'ga4' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Ahrefs Domain Rating & Backlinks" position="bottom">Ahrefs DR & BL</Tooltip>
                     {sortConfig?.key === 'dr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
+                <th className={`px-4 py-5 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
                   <Tooltip content="Weekly production activities" position="bottom">Activity</Tooltip>
                 </th>
-                <th className={`px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Intelligence</th>
-                <th className={`px-8 py-2 text-[10px] font-black uppercase tracking-widest text-center sticky right-0 z-[40] border-l cursor-pointer hover:text-[#76c9be] transition-colors rounded-tr-[20px] ${
+                <th className={`px-4 py-5 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Intelligence</th>
+                <th className={`px-8 py-2 text-sm font-medium   text-center sticky right-0 z-[40] border-l cursor-pointer hover:text-[#76c9be] transition-colors rounded-tr-[20px] ${
                   theme === 'white' ? 'bg-[#082a36] text-white border-[#163f4d]/20' : 'bg-inherit text-[#607a80] shadow-[-2px_0_10px_rgba(3,7,18,0.5)]'
                 }`} onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">
@@ -777,7 +777,7 @@ export default function MasterDashboard() {
                   <td className={`px-6 py-2 sticky left-0 z-[19] hover:z-[50] border-r transition-colors ${theme === 'white' ? 'bg-white border-zinc-100 group-hover:bg-zinc-50' : 'bg-zinc-900 group-hover:bg-zinc-800 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)]'
                     }`}>
                     <Tooltip content={row.client.name} position="right">
-                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs uppercase ring-1 transition-all ${theme === 'white'
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-medium text-sm  ring-1 transition-all ${theme === 'white'
                           ? 'bg-[#76c9be]/10 text-[#76c9be] ring-[#76c9be]/20 group-hover:bg-[#082a36] group-hover:text-white'
                           : 'bg-blue-600/10 text-blue-500 ring-blue-500/20 group-hover:bg-blue-600 group-hover:text-white'
                         }`}>
@@ -787,7 +787,7 @@ export default function MasterDashboard() {
                   </td>
                   <td className="px-4 py-4 relative hover:z-[50]">
                     <Tooltip content={`Project Officer: ${row.client.project_owner_name}`} position={rowIndex < 2 ? 'bottom' : 'top'} className="flex justify-center">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black border transition-colors ${theme === 'white' ? 'bg-[#76c9be]/5 text-[#607a80] border-[#163f4d]/10 group-hover:bg-[#76c9be]/10' : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:bg-zinc-700 group-hover:text-white'
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium border transition-colors ${theme === 'white' ? 'bg-[#76c9be]/5 text-[#607a80] border-[#163f4d]/10 group-hover:bg-[#76c9be]/10' : 'bg-zinc-800 text-zinc-400 border-white/5 group-hover:bg-zinc-700 group-hover:text-white'
                         }`}>
                         {row.client.project_owner_code}
                       </div>
@@ -799,7 +799,7 @@ export default function MasterDashboard() {
                         <input
                           autoFocus
                           type="number"
-                          className={`w-16 px-2 py-1.5 text-xs font-black border rounded-lg outline-none ring-4 ${theme === 'white' ? 'bg-white border-blue-500 text-zinc-900 ring-blue-500/5' : 'bg-zinc-800 border-blue-500 text-white ring-blue-500/10'
+                          className={`w-16 px-2 py-1.5 text-sm font-medium border rounded-lg outline-none ring-4 ${theme === 'white' ? 'bg-white border-blue-500 text-zinc-900 ring-blue-500/5' : 'bg-zinc-800 border-blue-500 text-white ring-blue-500/10'
                             }`}
                           value={editingLeads.value}
                           onChange={(e) => setEditingLeads({ ...editingLeads, value: e.target.value })}
@@ -815,7 +815,7 @@ export default function MasterDashboard() {
                         onDoubleClick={() => setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() })}
                       >
                         <div className="flex flex-col items-center">
-                          <span className={`font-black font-heading text-xs tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.leads.legit}</span>
+                          <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.leads.legit}</span>
                           <TrendIndicator value={row.leads.change} theme={theme} />
                         </div>
                       </div>
@@ -823,7 +823,7 @@ export default function MasterDashboard() {
                   </td>
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                      <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
                         {row.phoneCalls.current === 0 && row.phoneCalls.previous === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr}</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr}</span></div>
@@ -831,8 +831,8 @@ export default function MasterDashboard() {
                     }>
                       <div className="flex flex-col items-center">
                         <div className="flex items-baseline gap-1">
-                          <span className={`font-black font-heading text-xs tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.phoneCalls.current.toLocaleString()}</span>
-                          <span className="text-[9px] text-[#607a80] font-bold opacity-60">/ {row.phoneCalls.previous.toLocaleString()}</span>
+                          <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.phoneCalls.current.toLocaleString()}</span>
+                          <span className="text-sm text-[#607a80] font-medium opacity-60">/ {row.phoneCalls.previous.toLocaleString()}</span>
                         </div>
                         <TrendIndicator value={row.phoneCalls.change} theme={theme} />
                       </div>
@@ -849,10 +849,10 @@ export default function MasterDashboard() {
                         endDate: format(viewingPeriod?.end || new Date(), 'yyyy-MM-dd')
                       })}
                     >
-                      <span className={`font-black text-xs tracking-tighter ${theme === 'white' ? 'text-blue-600' : 'text-blue-400'}`}>
+                      <span className={`font-medium text-sm tracking-tighter ${theme === 'white' ? 'text-blue-600' : 'text-blue-400'}`}>
                         {row.gscTraffic.top3 || row.currentData?.top_3_count || 0}
                       </span>
-                      <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest opacity-60">LIVE</span>
+                      <span className="text-sm font-medium text-zinc-500   opacity-60">LIVE</span>
                     </div>
                   </td>
                   <td className="px-4 py-2 text-center">
@@ -866,22 +866,22 @@ export default function MasterDashboard() {
                         endDate: format(viewingPeriod?.end || new Date(), 'yyyy-MM-dd')
                       })}
                     >
-                      <span className={`font-black text-xs tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                      <span className={`font-medium text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                         {row.gscTraffic.top10 || row.currentData?.top_10_count || 0}
                       </span>
-                      <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">TAR: {row.client.top_10_target || 0}</span>
+                      <span className="text-sm font-medium text-zinc-600  ">TAR: {row.client.top_10_target || 0}</span>
                     </div>
                   </td>
                   <td className="px-4 py-2 text-center">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                      <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
                         {row.gscTraffic.ctr === 0 && row.gscTraffic.prevCtr === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.gscTraffic.ctr.toFixed(2)}%)</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({row.gscTraffic.prevCtr.toFixed(2)}%)</span></div>
                       </div>
                     }>
                       <div className="flex flex-col items-center">
-                        <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                        <span className={`text-sm font-medium ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                           {row.gscTraffic.ctr.toFixed(2)}%
                         </span>
                         <TrendIndicator value={calculateChange(row.gscTraffic.ctr, row.gscTraffic.prevCtr)} theme={theme} />
@@ -890,14 +890,14 @@ export default function MasterDashboard() {
                   </td>
                   <td className="px-4 py-2 text-center">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                      <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
                         {row.gscTraffic.impressions === 0 && row.gscTraffic.prevImpressions === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({(row.gscTraffic.impressions / 1000).toFixed(1)}K)</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({(row.gscTraffic.prevImpressions / 1000).toFixed(1)}K)</span></div>
                       </div>
                     }>
                       <div className="flex flex-col items-center">
-                        <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                        <span className={`text-sm font-medium ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                           {(row.gscTraffic.impressions / 1000).toFixed(1)}K
                         </span>
                         <TrendIndicator value={calculateChange(row.gscTraffic.impressions, row.gscTraffic.prevImpressions)} theme={theme} />
@@ -911,7 +911,7 @@ export default function MasterDashboard() {
                         const prevPos = row.prevData?.tracked_keywords_avg_position || row.gscTraffic.prevPosition || 0;
                         return (
                           <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                            <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                            <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
                               {currentPos === 0 && prevPos === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                               <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({currentPos > 0 ? currentPos.toFixed(1) : '-'})</span></div>
                               <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({prevPos > 0 ? prevPos.toFixed(1) : '-'})</span></div>
@@ -919,11 +919,11 @@ export default function MasterDashboard() {
                           }>
                             <>
                               <div className="flex items-baseline justify-center gap-0.5">
-                                <span className={`text-xs font-black ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                <span className={`text-sm font-medium ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                                   {currentPos > 0 ? currentPos.toFixed(1) : '-'}
                                 </span>
                                 {prevPos > 0 && (
-                                  <span className="text-[9px] text-[#607a80] font-bold opacity-60">
+                                  <span className="text-sm text-[#607a80] font-medium opacity-60">
                                     / {prevPos.toFixed(1)}
                                   </span>
                                 )}
@@ -937,7 +937,7 @@ export default function MasterDashboard() {
                   </td>
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1 text-[8.5px] font-black uppercase tracking-[0.1em] text-center italic">
+                      <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
                         {row.gscTraffic.current === 0 && row.gscTraffic.previous === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
                         <div className="flex justify-between gap-4"><span>CURRENT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.gscTraffic.current.toLocaleString()})</span></div>
                         <div className="flex justify-between gap-4"><span>PREVIOUS:</span> <span className="opacity-80">{row.prevRangeStr} ({row.gscTraffic.previous.toLocaleString()})</span></div>
@@ -945,8 +945,8 @@ export default function MasterDashboard() {
                     }>
                       <div className="flex flex-col items-center">
                         <div className="flex items-baseline gap-1">
-                          <span className={`font-black font-heading text-xs tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.gscTraffic.current.toLocaleString()}</span>
-                          <span className="text-[9px] text-[#607a80] font-bold opacity-60">/ {row.gscTraffic.previous.toLocaleString()}</span>
+                          <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.gscTraffic.current.toLocaleString()}</span>
+                          <span className="text-sm text-[#607a80] font-medium opacity-60">/ {row.gscTraffic.previous.toLocaleString()}</span>
                         </div>
                         <TrendIndicator value={row.gscTraffic.change} theme={theme} />
                       </div>
@@ -955,22 +955,22 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
                       <div className="space-y-1.5 p-1 min-w-[200px] text-left">
-                        <div className={`font-black border-b pb-1.5 uppercase tracking-wider text-[8.5px] text-center ${
+                        <div className={`font-medium border-b pb-1.5   text-sm text-center ${
                           theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
                         }`}>
                           GA4 Traffic Breakdown
                         </div>
-                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 && <div className="text-red-500 text-[8.5px] font-black text-center mb-1">NO DATA</div>}
-                        <div className="space-y-1.5 text-[9px] font-black uppercase tracking-[0.05em]">
+                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 && <div className="text-red-500 text-sm font-medium text-center mb-1">NO DATA</div>}
+                        <div className="space-y-1.5 text-sm font-medium  tracking-[0.05em]">
                           <div className="flex justify-between items-center">
                             <span className="text-[#607a80]">Total Sessions:</span>
                             <span className={theme === 'white' ? 'text-zinc-900' : 'text-white'}>{row.ga4Traffic.current.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-emerald-500 font-black">Organic Search:</span>
+                            <span className="text-emerald-500 font-medium">Organic Search:</span>
                             <div className="flex gap-1.5 items-center">
                               <span className="text-emerald-400 font-heading tracking-tighter">{row.ga4Traffic.organic.toLocaleString()}</span>
-                              <span className="text-[7.5px] opacity-70">
+                              <span className="text-sm opacity-70">
                                 ({row.ga4Traffic.current > 0 ? ((row.ga4Traffic.organic / row.ga4Traffic.current) * 100).toFixed(0) : 0}%)
                               </span>
                             </div>
@@ -982,7 +982,7 @@ export default function MasterDashboard() {
                             <span className="opacity-80 text-zinc-400">{Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}</span>
                           </div>
                         </div>
-                        <div className={`border-t pt-1 text-[7.5px] text-zinc-500 text-center uppercase tracking-widest italic ${
+                        <div className={`border-t pt-1 text-sm text-zinc-500 text-center   italic ${
                           theme === 'white' ? 'border-zinc-200' : 'border-white/5'
                         }`}>
                           <span>Period: {row.currentRangeStr}</span>
@@ -991,8 +991,8 @@ export default function MasterDashboard() {
                     }>
                       <div className="flex flex-col items-center">
                         <div className="flex items-baseline gap-1">
-                          <span className={`font-black font-heading text-xs tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.ga4Traffic.current.toLocaleString()}</span>
-                          <span className="text-[9px] text-[#607a80] font-bold opacity-60">/ {row.ga4Traffic.previous.toLocaleString()}</span>
+                          <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.ga4Traffic.current.toLocaleString()}</span>
+                          <span className="text-sm text-[#607a80] font-medium opacity-60">/ {row.ga4Traffic.previous.toLocaleString()}</span>
                         </div>
                         <TrendIndicator value={row.ga4Traffic.change} theme={theme} />
                       </div>
@@ -1001,21 +1001,21 @@ export default function MasterDashboard() {
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
                     <Tooltip content={
                       <div className="space-y-1.5 p-0.5">
-                        <div className={`font-black border-b pb-1.5 uppercase tracking-wider text-[9px] flex justify-between items-center gap-4 ${
+                        <div className={`font-medium border-b pb-1.5   text-sm flex justify-between items-center gap-4 ${
                           theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
                         }`}>
                           <span>Ahrefs Comparison</span>
-                          <span className="text-[7.5px] font-normal lowercase tracking-normal opacity-80">
+                          <span className="text-sm font-normal lowercase tracking-normal opacity-80">
                             ({row.ahrefs.hasPrev ? 'vs previous period' : 'no previous data'})
                           </span>
                         </div>
                         <div className="space-y-1 text-left min-w-[180px]">
-                          <div className="flex justify-between items-center text-[9.5px]">
-                            <span className={`font-semibold ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating:</span>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating:</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
+                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-[8.5px] font-black ${
+                                <span className={`text-sm font-medium ${
                                   row.ahrefs.dr - row.ahrefs.prevDr > 0 
                                     ? 'text-emerald-500' 
                                     : row.ahrefs.dr - row.ahrefs.prevDr < 0 
@@ -1028,12 +1028,12 @@ export default function MasterDashboard() {
                             </div>
                           </div>
                           
-                          <div className="flex justify-between items-center text-[9.5px]">
-                            <span className={`font-semibold ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Backlinks:</span>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Backlinks:</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
+                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-[8.5px] font-black ${
+                                <span className={`text-sm font-medium ${
                                   row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
                                     ? 'text-emerald-500' 
                                     : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
@@ -1050,12 +1050,12 @@ export default function MasterDashboard() {
                             </div>
                           </div>
 
-                          <div className="flex justify-between items-center text-[9.5px]">
-                            <span className={`font-semibold ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Referring Domains:</span>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Referring Domains:</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-black ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
+                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-[8.5px] font-black ${
+                                <span className={`text-sm font-medium ${
                                   row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
                                     ? 'text-emerald-500' 
                                     : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
@@ -1073,21 +1073,21 @@ export default function MasterDashboard() {
                           </div>
                         </div>
                         {row.ahrefs.hasPrev && (
-                          <div className={`text-[8px] pt-1.5 border-t flex flex-col gap-0.5 ${
+                          <div className={`text-sm pt-1.5 border-t flex flex-col gap-0.5 ${
                             theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-500'
                           }`}>
-                            <div className="flex justify-between"><span>Current:</span> <span className={`font-semibold ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.currentRangeStr}</span></div>
-                            <div className="flex justify-between"><span>Previous:</span> <span className={`font-semibold ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.prevRangeStr}</span></div>
+                            <div className="flex justify-between"><span>Current:</span> <span className={`font-medium ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.currentRangeStr}</span></div>
+                            <div className="flex justify-between"><span>Previous:</span> <span className={`font-medium ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.prevRangeStr}</span></div>
                           </div>
                         )}
                       </div>
                     } position={rowIndex < 2 ? 'bottom' : 'top'}>
                       <div className="flex flex-col items-center gap-0.5">
                         <div className="flex items-baseline gap-1.5">
-                          <span className={`font-black text-xs tracking-tighter ${theme === 'white' ? 'text-purple-600' : 'text-purple-400'}`}>
+                          <span className={`font-medium text-sm tracking-tighter ${theme === 'white' ? 'text-purple-600' : 'text-purple-400'}`}>
                             DR: {row.ahrefs.dr || '-'}
                             {row.ahrefs.hasPrev && row.ahrefs.dr - row.ahrefs.prevDr !== 0 && (
-                              <span className={`text-[9px] font-black ml-1 select-none ${
+                              <span className={`text-sm font-medium ml-1 select-none ${
                                 row.ahrefs.dr - row.ahrefs.prevDr > 0 
                                   ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') 
                                   : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')
@@ -1097,12 +1097,12 @@ export default function MasterDashboard() {
                             )}
                           </span>
                           {row.ahrefs.targetDr > 0 && (
-                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest opacity-80">
+                            <span className="text-sm font-medium text-zinc-500   opacity-80">
                               / {row.ahrefs.targetDr}
                             </span>
                           )}
                         </div>
-                        <div className={`flex items-center gap-1.5 text-[9px] font-bold ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                        <div className={`flex items-center gap-1.5 text-sm font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                           <span>BL: {row.ahrefs.backlinks >= 1000 ? `${(row.ahrefs.backlinks / 1000).toFixed(1)}K` : row.ahrefs.backlinks}</span>
                           <span className="opacity-30">|</span>
                           <span>RD: {row.ahrefs.refDomains}</span>
@@ -1201,7 +1201,7 @@ function MiniMetric({ count, color, theme, tooltip, prefix, position = 'top' }: 
     <Tooltip content={tooltip} position={position}>
       <div className="flex flex-col items-center gap-0.5 group/metric cursor-default">
         <div className={`w-1 h-3 rounded-full transition-all group-hover/metric:h-4 ${count > 0 ? colors[color] : theme === 'white' ? 'bg-[#163f4d]/10' : 'bg-zinc-800'}`} />
-        <span className={`text-[8px] font-black ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'} group-hover/metric:text-[#76c9be] transition-colors`}>
+        <span className={`text-sm font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'} group-hover/metric:text-[#76c9be] transition-colors`}>
           <span className="opacity-40 mr-0.5">{prefix}</span>
           {count}
         </span>
@@ -1211,14 +1211,14 @@ function MiniMetric({ count, color, theme, tooltip, prefix, position = 'top' }: 
 }
 
 function TrendIndicator({ value, theme, inverse = false }: { value: number; theme?: string; inverse?: boolean }) {
-  if (value === 0) return <div className={`flex items-center gap-1 text-[10px] font-bold ${theme === 'white' ? 'text-[#607a80]' : 'text-slate-400'}`}><Minus size={10} /> 0%</div>;
+  if (value === 0) return <div className={`flex items-center gap-1 text-sm font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-slate-400'}`}><Minus size={10} /> 0%</div>;
 
   const isPositive = inverse ? value < 0 : value > 0;
   const colorClass = isPositive ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500');
   const Icon = isPositive ? ArrowUpRight : ArrowDownRight;
 
   return (
-    <div className={`flex items-center gap-0.5 text-[10px] font-black ${colorClass}`}>
+    <div className={`flex items-center gap-0.5 text-sm font-medium ${colorClass}`}>
       <Icon size={12} />
       {Math.abs(value).toFixed(1)}%
     </div>
@@ -1233,7 +1233,7 @@ function ActivityBadge({ count, label, color }: { count: number; label: string; 
   };
 
   return (
-    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-black ${colors[color]}`}>
+    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-sm font-medium ${colors[color]}`}>
       <span>{count}</span>
       <span className="opacity-60">{label}</span>
     </div>
@@ -1344,12 +1344,12 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
               <Activity className="text-white" size={32} />
             </div>
             <div>
-              <h3 className={`text-4xl font-black font-heading tracking-tighter uppercase italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Mission Intelligence</h3>
-              <p className="text-[#607a80] text-sm font-black uppercase tracking-[0.3em] mt-1">{data.client.name} • Search Performance Command</p>
+              <h3 className={`text-4xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Mission Intelligence</h3>
+              <p className="text-[#607a80] text-sm font-medium  tracking-[0.3em] mt-1">{data.client.name} • Search Performance Command</p>
             </div>
             <button 
               onClick={fetchAutoReport}
-              className={`ml-4 px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#082a36] hover:bg-[#76c9be]/20' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}
+              className={`ml-4 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium   transition-all ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#082a36] hover:bg-[#76c9be]/20' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}
             >
               <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
               Sync GSC Data
@@ -1367,14 +1367,14 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
               <div className={`p-8 rounded-[32px] border h-full ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/40 border-white/5'}`}>
                 <div className="flex items-center gap-3 mb-8">
                   <AlertCircle size={20} className={`${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`} />
-                  <span className="text-sm font-black text-[#607a80] uppercase tracking-widest">Performance Intelligence</span>
+                  <span className="text-sm font-medium text-[#607a80]  ">Performance Intelligence</span>
                 </div>
 
                 <div className="space-y-8">
                   {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-4">
                       <Activity size={32} className={`${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-600'} animate-spin`} />
-                      <p className="text-[10px] font-black uppercase tracking-widest text-[#607a80]">Syncing with Google Search Console...</p>
+                      <p className="text-sm font-medium   text-[#607a80]">Syncing with Google Search Console...</p>
                     </div>
                   ) : autoReport ? (
                     <div className={`text-sm leading-relaxed font-medium space-y-8 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-300'}`}>
@@ -1414,10 +1414,10 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                         </div>
 
                         <div className="space-y-4">
-                          <p className={`font-black uppercase tracking-widest text-xs ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Top Gaining Keywords</p>
+                          <p className={`font-medium   text-sm ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Top Gaining Keywords</p>
                           <div className="grid grid-cols-1 gap-3">
                             {autoReport.gaining.slice(0, 10).map((k: any, i: number) => (
-                              <p key={i} className="text-lg font-medium">• <span className={k.is_focus ? `${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} font-bold underline text-xl` : 'text-xl'}>{k.keys[0]}</span> – <span className="text-xl font-black font-heading">{k.clicks}</span> clicks (↑ {Math.max(1, k.clicks - (k.prevClicks || 0))})</p>
+                              <p key={i} className="text-lg font-medium">• <span className={k.is_focus ? `${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} font-medium underline text-xl` : 'text-xl'}>{k.keys[0]}</span> – <span className="text-xl font-medium font-heading">{k.clicks}</span> clicks (↑ {Math.max(1, k.clicks - (k.prevClicks || 0))})</p>
                             ))}
                           </div>
                         </div>
@@ -1431,12 +1431,12 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
               <div className={`p-8 rounded-[32px] border h-full ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900 border-white/5'}`}>
                 <div className="flex items-center gap-3 mb-8">
                   <Activity size={20} className={theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'} />
-                  <span className="text-sm font-black text-[#607a80] uppercase tracking-widest">Activity & Keyword Trends</span>
+                  <span className="text-sm font-medium text-[#607a80]  ">Activity & Keyword Trends</span>
                 </div>
 
                 <div className="space-y-6">
                   <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
-                    <p className={`text-xs font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Work Detail Notes</p>
+                    <p className={`text-sm font-medium   mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>Work Detail Notes</p>
                     <div className="space-y-3">
                       {(data.latestData?.weekly_activity_summary || data.currentData?.weekly_activity_summary || data.latestData?.notes || 'No detailed activity notes recorded for this period.')
                         .split(/\r?\n|\n/)
@@ -1455,16 +1455,16 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                   {autoReport?.oneClickGainers.length > 0 && (
                     <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-blue-500/5 border-white/5'}`}>
                       <p className="text-lg italic opacity-80 leading-relaxed">
-                        <span className={`font-black ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>The following keywords increased by 1 click each:</span> {autoReport.oneClickGainers.join(', ')}.
+                        <span className={`font-medium ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}>The following keywords increased by 1 click each:</span> {autoReport.oneClickGainers.join(', ')}.
                       </p>
                     </div>
                   )}
 
                   {autoReport?.highImprNoClicks.length > 0 && (
                     <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#f47b20]/5 border-[#f47b20]/20' : 'bg-amber-500/5 border-white/5'}`}>
-                      <p className={`font-black uppercase tracking-widest text-xs mb-2 ${theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}`}>High Impressions / No Clicks</p>
+                      <p className={`font-medium   text-sm mb-2 ${theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}`}>High Impressions / No Clicks</p>
                       <p className={`italic text-lg leading-relaxed ${theme === 'white' ? 'text-[#f47b20]/80' : 'text-amber-500/80'}`}>
-                        <span className="font-black">These keywords gained more impressions but did not generate clicks:</span> {autoReport.highImprNoClicks.join(', ')}.
+                        <span className="font-medium">These keywords gained more impressions but did not generate clicks:</span> {autoReport.highImprNoClicks.join(', ')}.
                       </p>
                     </div>
                   )}
@@ -1476,7 +1476,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
               <div className={`p-8 rounded-[32px] border h-full ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900 border-white/5'}`}>
                 <div className="flex items-center gap-3 mb-8">
                   <Activity size={20} className={theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'} />
-                  <span className="text-sm font-black text-[#607a80] uppercase tracking-widest">Operations Hub</span>
+                  <span className="text-sm font-medium text-[#607a80]  ">Operations Hub</span>
                 </div>
 
                 <div className="space-y-6">
@@ -1488,7 +1488,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                   </div>
 
                   <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
-                    <p className={`text-xs font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>Next SEO Action Plan</p>
+                    <p className={`text-sm font-medium   mb-3 ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>Next SEO Action Plan</p>
                     <div className="space-y-3">
                       {(data.latestData?.next_seo_action || data.currentData?.next_seo_action || 'No operational action planned.')
                         .split(/\r?\n|\\n/)
@@ -1508,7 +1508,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-3 h-3 rounded-full ${data.gsc.change >= 0 ? (theme === 'white' ? 'bg-[#76c9be] shadow-[0_0_8px_#76c9be]' : 'bg-emerald-500 animate-pulse') : (theme === 'white' ? 'bg-[#f47b20]' : 'bg-amber-500')}`} />
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">System Synchronised</span>
+                        <span className="text-sm font-medium   opacity-60">System Synchronised</span>
                       </div>
                       <Tooltip content="Report is based on rolling search data and manual activity logs.">
                         <HelpCircle size={14} className="text-zinc-600" />
@@ -1538,10 +1538,10 @@ function AutoMetric({ label, curr, prev, theme, suffix = '', format = '', invers
 
   return (
     <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-white/5 border-white/5'}`}>
-      <p className={`text-[10px] font-black uppercase tracking-widest mb-1.5 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{label}</p>
+      <p className={`text-sm font-medium   mb-1.5 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{label}</p>
       <div className="flex flex-col gap-0.5">
-        <span className={`text-2xl font-black font-heading tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{formatVal(c)}{suffix}</span>
-        <span className={`text-[9px] font-bold opacity-50 italic ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>prev: {formatVal(p)}{suffix}</span>
+        <span className={`text-2xl font-medium font-heading tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{formatVal(c)}{suffix}</span>
+        <span className={`text-sm font-medium opacity-50 italic ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>prev: {formatVal(p)}{suffix}</span>
       </div>
       <div className="mt-2">
         <TrendIndicator value={diff} theme={theme} inverse={inverse} />
@@ -1553,8 +1553,8 @@ function AutoMetric({ label, curr, prev, theme, suffix = '', format = '', invers
 function ActivityItem({ label, value, theme, color }: any) {
   return (
     <div className={`p-4 rounded-2xl border flex items-center justify-between ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5' : 'bg-white/5 border-white/5'}`}>
-      <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{label}</span>
-      <span className={`text-xl font-black font-heading ${color ? color : (theme === 'white' ? 'text-[#082a36]' : 'text-white')}`}>{value}</span>
+      <span className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{label}</span>
+      <span className={`text-xl font-medium font-heading ${color ? color : (theme === 'white' ? 'text-[#082a36]' : 'text-white')}`}>{value}</span>
     </div>
   );
 }
@@ -1599,10 +1599,10 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
       }`}>
         <div className="p-8 border-b border-white/5 flex items-center justify-between">
           <div>
-            <h2 className={`text-2xl font-black font-heading tracking-tighter uppercase italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+            <h2 className={`text-2xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
               {type === 'top3' ? 'Top 3' : 'Top 10'} Keywords
             </h2>
-            <p className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{clientName} • {startDate} to {endDate}</p>
+            <p className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{clientName} • {startDate} to {endDate}</p>
           </div>
           <button 
             onClick={onClose}
@@ -1619,36 +1619,36 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
             </div>
           ) : keywords.length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">No keywords found in this range.</p>
+              <p className="text-zinc-500 font-medium   text-sm">No keywords found in this range.</p>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className={`border-b ${theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20' : 'border-white/5'}`}>
-                  <th className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Keyword</th>
-                  <th className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-center ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Pos</th>
-                  <th className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-center ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Clicks</th>
-                  <th className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-center ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Impr</th>
-                  <th className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Ranking Page</th>
+                  <th className={`px-4 py-3 text-sm font-medium   ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Keyword</th>
+                  <th className={`px-4 py-3 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Pos</th>
+                  <th className={`px-4 py-3 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Clicks</th>
+                  <th className={`px-4 py-3 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Impr</th>
+                  <th className={`px-4 py-3 text-sm font-medium   text-right ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Ranking Page</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {keywords.map((kw, i) => (
                   <tr key={i} className={`group transition-colors ${theme === 'white' ? 'hover:bg-[#76c9be]/5' : 'hover:bg-white/5'}`}>
                     <td className="py-4">
-                      <div className={`text-sm font-black tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                      <div className={`text-sm font-medium tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
                         {kw.keyword}
                       </div>
                     </td>
                     <td className="py-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                      <span className={`px-2 py-0.5 rounded-lg text-sm font-medium ${
                         kw.position <= 3 ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-emerald-500/10 text-emerald-500') : (theme === 'white' ? 'bg-[#163f4d]/10 text-[#163f4d]' : 'bg-blue-500/10 text-blue-500')
                       }`}>
                         #{kw.position.toFixed(1)}
                       </span>
                     </td>
-                    <td className="py-4 text-center font-black text-xs text-[#082a36]">{kw.clicks}</td>
-                    <td className="py-4 text-center font-black text-xs text-[#082a36]">
+                    <td className="py-4 text-center font-medium text-sm text-[#082a36]">{kw.clicks}</td>
+                    <td className="py-4 text-center font-medium text-sm text-[#082a36]">
                       {kw.impressions >= 1000 ? (kw.impressions / 1000).toFixed(1) + 'K' : kw.impressions}
                     </td>
                     <td className="py-4 text-right">
@@ -1656,7 +1656,7 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
                         href={kw.page} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-1 text-[10px] font-black hover:underline uppercase tracking-widest ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}
+                        className={`inline-flex items-center gap-1 text-sm font-medium hover:underline   ${theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'}`}
                       >
                         View Page <ArrowUpRight size={10} />
                       </a>

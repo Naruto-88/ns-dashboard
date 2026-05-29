@@ -156,10 +156,10 @@ export default function ActionCenter() {
             <CheckCircle2 className="text-white" size={28} />
           </div>
           <div>
-            <h2 className={`text-3xl font-black font-heading tracking-tighter uppercase italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+            <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
               Action Center
             </h2>
-            <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+            <p className={`text-sm font-medium   mt-1 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
               Manage cross-client execution tasks
             </p>
           </div>
@@ -173,7 +173,7 @@ export default function ActionCenter() {
                 placeholder="Search..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`pl-12 pr-6 py-2.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none w-48 ${
+                className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium   outline-none w-48 ${
                   isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500'
                 }`}
               />
@@ -205,7 +205,7 @@ export default function ActionCenter() {
                 <button
                   key={f.id}
                   onClick={() => setFilter(f.id as any)}
-                  className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  className={`px-4 py-1.5 rounded-xl text-sm font-medium   transition-all ${
                     filter === f.id
                       ? isWhite ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                       : isWhite ? 'text-[#607a80] hover:bg-[#76c9be]/10' : 'text-zinc-500 hover:bg-white/5'
@@ -223,12 +223,12 @@ export default function ActionCenter() {
         {loading ? (
           <div className={`p-12 text-center rounded-[24px] border border-dashed ${isWhite ? 'border-zinc-200 text-zinc-400' : 'border-white/10 text-zinc-500'}`}>
             <Clock className="mx-auto animate-spin mb-2" size={24} />
-            <p className="text-[10px] font-black uppercase tracking-widest">Loading Actions...</p>
+            <p className="text-sm font-medium  ">Loading Actions...</p>
           </div>
         ) : filteredActions.length === 0 ? (
           <div className={`p-12 text-center rounded-[24px] border border-dashed ${isWhite ? 'bg-white border-zinc-200 text-zinc-400' : 'bg-zinc-900/50 border-white/10 text-zinc-500'}`}>
             <CheckCircle2 className="mx-auto mb-2 opacity-50" size={32} />
-            <p className="text-[10px] font-black uppercase tracking-widest">No actions found.</p>
+            <p className="text-sm font-medium  ">No actions found.</p>
           </div>
         ) : (
           filteredActions.map(action => {
@@ -255,16 +255,16 @@ export default function ActionCenter() {
                     {isCompleted ? <CheckCircle2 size={24} /> : <Circle size={24} />}
                   </button>
                   <div className="space-y-1">
-                    <p className={`text-sm font-bold ${isWhite ? 'text-[#082a36]' : 'text-white'} ${isCompleted ? 'line-through opacity-70' : ''}`}>
+                    <p className={`text-sm font-medium ${isWhite ? 'text-[#082a36]' : 'text-white'} ${isCompleted ? 'line-through opacity-70' : ''}`}>
                       {action.action_text}
                     </p>
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${
+                      <span className={`px-2 py-0.5 rounded-md border text-sm font-medium   flex items-center gap-1 ${
                         isWhite ? 'bg-zinc-50 border-zinc-200 text-zinc-600' : 'bg-zinc-800 border-white/5 text-zinc-400'
                       }`}>
                         {action.client?.short_code || 'Unknown'} - {action.client?.name}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${statusColor}`}>
+                      <span className={`px-2 py-0.5 rounded-md border text-sm font-medium   flex items-center gap-1 ${statusColor}`}>
                         <Calendar size={10} />
                         {action.deadline ? format(parseISO(action.deadline), 'MMM dd, yyyy') : 'No Deadline'}
                         {isOverdue && <AlertCircle size={10} className="ml-1" />}

@@ -1233,7 +1233,12 @@ function cleanJsonString(str: string): string {
   if (cleaned.endsWith('```')) {
     cleaned = cleaned.substring(0, cleaned.length - 3);
   }
-  return cleaned.trim();
+  cleaned = cleaned.trim();
+  
+  // Remove trailing commas in objects and arrays which crash native JSON.parse
+  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  
+  return cleaned;
 }
 
 function generateSimulatedAnalysis(clientName: string, current: any, previous: any, analysisType: string) {
@@ -1588,9 +1593,235 @@ app.post('/api/admin/sync-sheets', async (req, res) => {
   }
 });
 
+async function auditPage(url: string) {
+  try {
+    const res = await fetch(url, { 
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }, 
+      signal: AbortSignal.timeout(15000) 
+    });
+    if (!res.ok) {
+      return { url, error: `Broken Page (HTTP Status ${res.status})` };
+    }
+    const html = await res.text();
+    const issues: string[] = [];
+
+    // 1. SSL Protocol Security check
+    if (url.startsWith('http://')) {
+      issues.push('Insecure Protocol Detected (Page served over insecure HTTP instead of secure HTTPS)');
+    }
+
+    // 2. Robots Noindex search block check
+    const hasNoindex = /<meta[^>]*name=["']robots["'][^>]*content=["'][^"']*noindex[^"']*["']/i.test(html) ||
+                       /<meta[^>]*content=["'][^"']*noindex[^"']*["'][^>]*name=["']robots["']/i.test(html);
+    if (hasNoindex) {
+      issues.push('CRITICAL: Search Indexing Blocked (Robots meta tag contains noindex, preventing page from ranking on Google)');
+    }
+
+    // 3. Canonical link check
+    const hasCanonical = html.includes('rel="canonical"') || html.includes("rel='canonical'");
+    if (!hasCanonical) {
+      issues.push('Missing Canonical Tag (May lead to duplicate content indexing penalties)');
+    }
+
+    // 4. Thin content word count check
+    const textOnly = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const wordCount = textOnly.split(/\s+/).filter(w => w.length > 0).length;
+    if (wordCount < 250) {
+      issues.push(`Thin Content Penalty Warning (Only ${wordCount} words, search engines prefer at least 250 words of body copy)`);
+    }
+
+    // Title checks
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+    if (!title) {
+      issues.push('Missing Page Title Tag');
+    } else if (title.length > 60) {
+      issues.push(`Over-optimized Title Tag (Length: ${title.length} chars, exceeds 60 Limit)`);
+    } else if (title.length < 10) {
+      issues.push(`Under-optimized Title Tag (Length: ${title.length} chars, too short)`);
+    }
+
+    // Meta Description checks
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([\s\S]*?)["']/i) || 
+                      html.match(/<meta[^>]*content=["']([\s\S]*?)["'][^>]*name=["']description["']/i);
+    const description = descMatch ? descMatch[1].trim() : '';
+    if (!description) {
+      issues.push('Missing Meta Description Tag');
+    } else if (description.length > 160) {
+      issues.push(`Meta Description Exceeds Length Limit (${description.length} chars, exceeds 160 Limit)`);
+    } else if (description.length < 50) {
+      issues.push(`Meta Description Too Short (${description.length} chars, under 50 Limit)`);
+    }
+
+    // Heading checks (H1 count)
+    const h1Matches = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/gi);
+    const h1Count = h1Matches ? h1Matches.length : 0;
+    if (h1Count === 0) {
+      issues.push('Missing Primary Heading (H1)');
+    } else if (h1Count > 1) {
+      issues.push(`Multiple Primary Headings Detected (${h1Count} H1 tags, should only be one)`);
+    }
+
+    // Image alt checks
+    const imgMatches = html.match(/<img[^>]*>/gi) || [];
+    let missingAltCount = 0;
+    imgMatches.forEach(img => {
+      if (!img.includes('alt=') || /alt=["']\s*["']/i.test(img)) {
+        missingAltCount++;
+      }
+    });
+    if (missingAltCount > 0) {
+      issues.push(`${missingAltCount} Images Lacking ALT tags (Hinders image search rankings)`);
+    }
+
+    return { url, issues, title: title || 'Untitled Page' };
+  } catch (err: any) {
+    return { url, error: `Failed to fetch page: ${err.message}` };
+  }
+}
+
+async function crawlSite(siteUrl: string) {
+  let cleanUrl = siteUrl.trim();
+  if (cleanUrl.startsWith('sc-domain:')) {
+    cleanUrl = 'https://' + cleanUrl.replace('sc-domain:', '');
+  }
+  if (!cleanUrl.startsWith('http')) {
+    cleanUrl = 'https://' + cleanUrl;
+  }
+  cleanUrl = cleanUrl.replace(/\/$/, '');
+
+  const scannedPages: any[] = [];
+
+  try {
+    const sitemapHeaders = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
+    console.log(`[CRAWLER] Discovering sitemap for: ${cleanUrl}...`);
+    const sitemapRes = await fetch(`${cleanUrl}/sitemap.xml`, { 
+      headers: sitemapHeaders, 
+      signal: AbortSignal.timeout(15000) 
+    }).catch(() => null);
+    
+    let xmlText = '';
+    if (sitemapRes && sitemapRes.ok) {
+      xmlText = await sitemapRes.text();
+    } else {
+      const sitemapIndexRes = await fetch(`${cleanUrl}/sitemap_index.xml`, { 
+        headers: sitemapHeaders, 
+        signal: AbortSignal.timeout(15000) 
+      }).catch(() => null);
+      if (sitemapIndexRes && sitemapIndexRes.ok) {
+        xmlText = await sitemapIndexRes.text();
+      }
+    }
+
+    let urlList: string[] = [];
+    if (xmlText) {
+      const matchUrls = xmlText.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g);
+      if (matchUrls) {
+        const parsedLocs = matchUrls.map(m => m.replace(/<\/?loc>/g, '').trim());
+        
+        // Resolve nested child sitemaps (common in WordPress Yoast / RankMath index structures)
+        const blockedXmlKeywords = ['author', 'category', 'tag', 'feed', 'comment', 'flip-book', 'video', 'local', 'attachment'];
+        for (const loc of parsedLocs) {
+          if (loc.endsWith('.xml') || loc.includes('sitemap')) {
+            const isBlocked = blockedXmlKeywords.some(kw => loc.toLowerCase().includes(kw));
+            if (isBlocked) {
+              console.log(`[CRAWLER] Skipping blacklisted sub-sitemap: ${loc}`);
+              continue;
+            }
+            console.log(`[CRAWLER] Resolving nested child sitemap index: ${loc}`);
+            const childRes = await fetch(loc, { 
+              headers: sitemapHeaders, 
+              signal: AbortSignal.timeout(15000) 
+            }).catch(() => null);
+            if (childRes && childRes.ok) {
+              const childXml = await childRes.text();
+              const childMatches = childXml.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g);
+              if (childMatches) {
+                childMatches.forEach(cm => {
+                  const leafUrl = cm.replace(/<\/?loc>/g, '').trim();
+                  if (!leafUrl.endsWith('.xml') && !leafUrl.includes('sitemap')) {
+                    urlList.push(leafUrl);
+                  }
+                });
+              }
+            }
+          } else {
+            urlList.push(loc);
+          }
+        }
+      }
+    }
+
+    if (urlList.length === 0) {
+      urlList = [cleanUrl];
+      const homepageRes = await fetch(cleanUrl, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+      if (homepageRes && homepageRes.ok) {
+        const homeHtml = await homepageRes.text();
+        const linkMatches = homeHtml.match(/href=["'](\/[^"']+)["']/g) || [];
+        const domainRegex = new RegExp(`href=["'](https?:\\/\\/(?:www\\.)?${cleanUrl.replace(/https?:\/\/(?:www\.)?/, '')}[^"']+)["']`, 'g');
+        const absoluteMatches = homeHtml.match(domainRegex) || [];
+
+        const links = [
+          ...linkMatches.map(m => cleanUrl + m.replace(/href=["']/, '').replace(/["']$/, '')),
+          ...absoluteMatches.map(m => m.replace(/href=["']/, '').replace(/["']$/, ''))
+        ];
+        
+        links.forEach(l => {
+          if (!l.includes('#') && !l.includes('.png') && !l.includes('.jpg') && !l.includes('.pdf') && !l.includes('.css')) {
+            urlList.push(l);
+          }
+        });
+      }
+    }
+
+    // Filter out junk URLs (categories, tags, feeds, attachments)
+    const blockedUrlKeywords = ['/category/', '/tag/', '/author/', '/feed/', '/wp-content/', '?attachment_id='];
+    const filteredUrls = Array.from(new Set(urlList)).filter(url => {
+      const lower = url.toLowerCase();
+      return !blockedUrlKeywords.some(kw => lower.includes(kw));
+    });
+
+    const targetUrls = filteredUrls.slice(0, 100);
+    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets for parallel audit.`);
+
+    const auditPromises = targetUrls.map(url => auditPage(url));
+    const results = await Promise.all(auditPromises);
+    results.forEach(r => scannedPages.push(r));
+  } catch (err: any) {
+    console.error(`[CRAWLER] Error crawling:`, err);
+    const fallback = await auditPage(cleanUrl);
+    scannedPages.push(fallback);
+  }
+
+  let totalIssues = 0;
+  let totalValidPages = 0;
+  scannedPages.forEach(p => {
+    if (!p.error) {
+      totalValidPages++;
+      totalIssues += (p.issues?.length || 0);
+    }
+  });
+
+  const baseScore = 100;
+  const deduction = totalValidPages > 0 ? (totalIssues / totalValidPages) * 10 : 0;
+  const healthScore = Math.max(50, Math.round(baseScore - deduction));
+
+  return {
+    scannedPages,
+    healthScore,
+    totalIssues,
+    totalPages: scannedPages.length
+  };
+}
+
 // POST AI Strategic Analysis
 app.post('/api/ai/analyze', async (req, res) => {
-  const { clientId, model, analysisType, startDate, endDate, simulate } = req.body;
+  const { clientId, model, analysisType, startDate, endDate, simulate, runTechnicalCrawl, generateAiFixes } = req.body;
 
   if (!clientId || !model || !analysisType || !startDate || !endDate) {
     return res.status(400).json({ error: 'clientId, model, analysisType, startDate, and endDate are required' });
@@ -1625,8 +1856,15 @@ app.post('/api/ai/analyze', async (req, res) => {
       fetchPeriodMetrics(client, prevStartDate, prevEndDate, auth, analytics, searchconsole, clientId)
     ]);
 
+    // 3. Optional: Run technical page crawl
+    let crawlDiagnostics: any = null;
+    if (runTechnicalCrawl && client.gsc_site_url) {
+      crawlDiagnostics = await crawlSite(client.gsc_site_url);
+    }
+
     // 3. Obtain LLM API Key
     let apiKey = '';
+    let geminiKeysPool: string[] = [];
     const { data: keysData } = await supabase.from('api_keys').select('*');
     const keysMap: Record<string, string> = {};
     if (keysData) {
@@ -1636,7 +1874,13 @@ app.post('/api/ai/analyze', async (req, res) => {
     }
 
     if (model === 'gemini') {
-      apiKey = keysMap['gemini'] || process.env.GEMINI_API_KEY || '';
+      geminiKeysPool = [
+        keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
+        keysMap['gemini_2'] || '',
+        keysMap['gemini_3'] || '',
+        keysMap['gemini_4'] || ''
+      ].map(k => k?.trim()).filter(Boolean);
+      apiKey = geminiKeysPool[0] || '';
     } else if (model === 'claude') {
       apiKey = keysMap['claude'] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || '';
     } else if (model === 'gpt') {
@@ -1647,14 +1891,102 @@ app.post('/api/ai/analyze', async (req, res) => {
     if (simulate || !apiKey) {
       console.log(`[AI ANALYZE] Running in simulation mode for client: ${client.name} (simulate=${simulate}, hasKey=${!!apiKey})`);
       const simulatedResult = generateSimulatedAnalysis(client.name, currentMetrics, previousMetrics, analysisType);
+      
+      let simulatedCrawl = null;
+      if (runTechnicalCrawl) {
+        let cleanUrl = client.gsc_site_url || 'https://example.com';
+        if (cleanUrl.startsWith('sc-domain:')) {
+          cleanUrl = 'https://' + cleanUrl.replace('sc-domain:', '');
+        }
+        simulatedCrawl = {
+          totalPages: 8,
+          healthScore: 84,
+          totalIssues: 12,
+          scannedPages: [
+            { 
+              url: `${cleanUrl}/`, 
+              title: 'Home - Premium SEO Services', 
+              issues: ['3 Images Lacking ALT tags']
+            },
+            { 
+              url: `${cleanUrl}/about`, 
+              title: 'About Us - Our Agency Story', 
+              issues: ['Missing Meta Description Tag']
+            },
+            { 
+              url: `${cleanUrl}/services`, 
+              title: 'Core Marketing Solutions & Audits', 
+              issues: ['Over-optimised Title Tag (Length: 72 chars, exceeds 60 Limit)', '2 Images Lacking ALT tags']
+            },
+            { 
+              url: `${cleanUrl}/blog`, 
+              title: 'Resource Hub & SEO Insights', 
+              issues: []
+            },
+            { 
+              url: `${cleanUrl}/contact`, 
+              title: 'Contact Us', 
+              issues: ['Under-optimised Title Tag (Length: 10 chars, too short)', 'Missing Meta Description Tag']
+            },
+            { 
+              url: `${cleanUrl}/services/seo`, 
+              title: 'Search Engine Optimisation (SEO)', 
+              issues: ['Multiple Primary Headings Detected (2 H1 tags, should only be one)']
+            },
+            { 
+              url: `${cleanUrl}/portfolio`, 
+              title: 'Our Client Success Work', 
+              issues: ['Missing Page Title Tag']
+            },
+            { 
+              url: `${cleanUrl}/privacy-policy`, 
+              title: 'Privacy Policy', 
+              issues: []
+            }
+          ]
+        };
+      }
+
       return res.json({
         ...simulatedResult,
         currentMetrics,
-        previousMetrics
+        previousMetrics,
+        crawlDiagnostics: simulatedCrawl
       });
     }
 
     // 5. Build prompt
+    let promptSuffix = '';
+    if (crawlDiagnostics) {
+      promptSuffix = `\n\n[CRITICAL CRAWLER DIAGNOSTICS - ACTUAL ON-PAGE TECHNICAL ERRORS FOUND ON SITE]:
+Total Pages Crawled: ${crawlDiagnostics.totalPages}
+Technical Health Score: ${crawlDiagnostics.healthScore}/100
+Total Issues Found: ${crawlDiagnostics.totalIssues}
+
+Detailed URL Error Breakdown:
+${JSON.stringify(crawlDiagnostics.scannedPages, null, 2)}
+
+YOU MUST incorporate these actual crawled issues into your strategic analysis!
+1. Include recommendations to fix these exact technical on-page issues inside the "Technical" actionableDirectives, specifying how to resolve them on those specific URLs.
+2. In the "executiveSummary.thingsToImprove" list, mention these crawled errors specifically (e.g. meta tags missing, alt images missing).
+3. In the "executiveSummary.actionsToDo" list, include the remediation tasks for these errors.
+4. Inside the "implementationGuide" playbook, write detailed instructions on exactly how to fix these exact errors (e.g., specific html attributes or changes).`;
+
+      if (generateAiFixes) {
+        promptSuffix += `\n\n[CRITICAL REQUEST - GENERATE PAGE-BY-PAGE SEO FIXES]:
+For every page listed in the crawl diagnostics above that contains a title, meta description, or heading error, you MUST generate a highly optimized page title and meta description.
+Add a top-level key inside your JSON output named "pageFixSuggestions" which maps each page's URL to an object containing "optimizedTitle" (50-60 characters) and "optimizedMetaDescription" (120-160 characters).
+Do not use unescaped double quotes inside these strings. Use single quotes for any HTML attributes.
+Example structure to add in your JSON response:
+"pageFixSuggestions": {
+  "https://example.com/about": {
+    "optimizedTitle": "Optimized About Page Title | Keyword",
+    "optimizedMetaDescription": "An engaging, high-CTR meta description containing Australian search keywords."
+  }
+}`;
+      }
+    }
+
     const prompt = `You are a high-priced enterprise SEO Consultant conducting an organic growth audit for the client "${client.name}".
 Selected Time Period: ${startDate} to ${endDate}
 Previous Period (for comparison): ${prevStartDate} to ${prevEndDate}
@@ -1686,47 +2018,76 @@ Based on this data, construct an expert, highly actionable audit. Provide your r
 
 {
   "trafficGapAnalysis": "Provide a thorough textual analysis of current performance, comparing current clicks and traffic against the previous period. Explain potential causes for increases or drops based on keyword trends and position data. (2-3 paragraphs)",
-  "expectedImpact": "Summarize the expected impact on clicks, rankings, and traffic if the proposed changes are fully implemented.",
+  "expectedImpact": "Summarise the expected impact on clicks, rankings, and traffic if the proposed changes are fully implemented.",
   "actionableDirectives": [
     {
       "title": "A concise, impactful directive title",
       "category": "Technical" | "Content" | "Backlinks",
       "priority": "High" | "Medium" | "Low",
-      "description": "A detailed, step-by-step description of what to fix, optimize, or build, including highly specific recommendations based on their current CTR (${currentMetrics.gsc.ctr.toFixed(1)}%) or ranking position (${currentMetrics.gsc.position.toFixed(1)}). Include any relevant target keywords from the list.",
+      "description": "A detailed, step-by-step description of what to fix, optimise, or build, including highly specific recommendations based on their current CTR (${currentMetrics.gsc.ctr.toFixed(1)}%) or ranking position (${currentMetrics.gsc.position.toFixed(1)}). Include any relevant target keywords from the list.",
       "expectedImpact": "What specific KPI this will improve and why."
     }
   ],
   "implementationGuide": "Provide developer-ready or marketer-ready detailed step-by-step implementation instructions. Focus on actual actions.",
   "executiveSummary": {
     "goodThings": ["A bullet list of 3-4 positive achievements, strong keywords, or metrics showing growth from the data"],
-    "thingsToImprove": ["A bullet list of 3-4 structural issues, keyword drops, or search console visibility gaps to optimize"],
+    "thingsToImprove": ["A bullet list of 3-4 structural issues, keyword drops, or search console visibility gaps to optimise"],
     "actionsToDo": ["A bullet list of 3-4 high-level concrete actions from the directives"],
     "expectedResults": ["A bullet list of 2-3 precise outcomes and expected yields"]
-  }
+  }${generateAiFixes && crawlDiagnostics ? ',\n  "pageFixSuggestions": {\n    "https://example.com/url": {\n      "optimisedTitle": "SEO-Optimised Title (50-60 chars)",\n      "optimisedMetaDescription": "High-CTR Meta Description (120-160 chars)"\n    }\n  }' : ''}
 }
 
-Do not return markdown code blocks in your JSON values. Make sure the JSON parses perfectly.`;
+Do not return markdown code blocks in your JSON values. 
+
+CRITICAL JSON INTEGRITY & SPELLING RULES:
+1. YOU MUST write all JSON values and text exclusively in Australian English (British spelling rules). You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). NEVER use the letter 'z' in these words! Use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'.
+2. You MUST ensure that any HTML code snippets or developer instructions you provide inside the JSON values DO NOT contain unescaped raw double quotes ("). Either strictly escape them as \\\" (e.g. \\\"logo.png\\\") OR use single quotes (') for all HTML attributes (e.g. <img src=\'logo.png\' alt=\'logo\'>). This is absolutely critical to prevent JSON parsing crashes.
+3. Do not insert literal unescaped raw newlines inside any string property value; instead, represent newlines using the '\\n' control character.
+4. Make sure the JSON parses perfectly and has no trailing commas.
+
+${promptSuffix}`;
 
     // 6. Invoke selected LLM API
     let jsonResponse: any = null;
 
     if (model === 'gemini') {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      let lastError: any = null;
+      for (let i = 0; i < geminiKeysPool.length; i++) {
+        const currentKey = geminiKeysPool[i];
+        console.log(`[GEMINI POOL] Attempting strategic analysis API call with key index ${i + 1}/${geminiKeysPool.length}`);
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: 'application/json' }
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[GEMINI POOL] Key index ${i + 1} failed with status ${response.status}. Rotating...`);
+            lastError = new Error(`Gemini API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+
+          const data: any = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!text) throw new Error('Empty response from Gemini API');
+          jsonResponse = JSON.parse(cleanJsonString(text));
+          
+          // Successful response - clear any error and break loop
+          lastError = null;
+          break;
+        } catch (err: any) {
+          console.error(`[GEMINI POOL] Exception with key index ${i + 1}:`, err.message || err);
+          lastError = err;
+        }
       }
-      const data: any = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error('Empty response from Gemini API');
-      jsonResponse = JSON.parse(cleanJsonString(text));
+      if (lastError) {
+        throw lastError;
+      }
 
     } else if (model === 'claude') {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1779,11 +2140,217 @@ Do not return markdown code blocks in your JSON values. Make sure the JSON parse
     res.json({
       ...jsonResponse,
       currentMetrics,
-      previousMetrics
+      previousMetrics,
+      crawlDiagnostics
     });
 
   } catch (error: any) {
     console.error('AI Strategic Analysis error:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+
+// POST on-demand single page SEO optimisation (Strict Australian English - no 'z')
+app.post('/api/ai/optimise-page', async (req, res) => {
+  const { clientId, url, pageTitle, issues, model, simulate } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'url is required' });
+  }
+
+  try {
+    // Obtain LLM API Key
+    let apiKey = '';
+    let geminiKeysPool: string[] = [];
+    const { data: keysData } = await supabase.from('api_keys').select('*');
+    const keysMap: Record<string, string> = {};
+    if (keysData) {
+      keysData.forEach(k => {
+        keysMap[k.id] = k.key_value;
+      });
+    }
+
+    const selectedModel = model || 'gemini';
+    if (selectedModel === 'gemini') {
+      geminiKeysPool = [
+        keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
+        keysMap['gemini_2'] || '',
+        keysMap['gemini_3'] || '',
+        keysMap['gemini_4'] || ''
+      ].map(k => k?.trim()).filter(Boolean);
+      apiKey = geminiKeysPool[0] || '';
+    } else if (selectedModel === 'claude') {
+      apiKey = keysMap['claude'] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+    } else if (selectedModel === 'gpt') {
+      apiKey = keysMap['gpt'] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || '';
+    }
+
+    // Run simulation if simulate is active OR API key is missing
+    if (simulate || !apiKey) {
+      console.log(`[AI OPTIMISE] Running page simulation for: ${url} (hasKey=${!!apiKey})`);
+      let simulatedTitle = pageTitle && pageTitle !== 'Untitled Page' 
+        ? `${pageTitle} | Custom SEO Target Australia` 
+        : 'Premium SEO Services & Enterprise Scale Strategy | CSG';
+      
+      let simulatedMeta = `Partner with Australia's elite digital growth team. Scale your organic rankings with customised technical audits, content gap optimisation, and high-quality link profiles.`;
+      
+      let simulatedCodePatch = `<!-- Copy and paste/modify this snippet inside your HTML layout -->\n`;
+      let titleFixed = false;
+      let metaFixed = false;
+
+      if (issues && Array.isArray(issues)) {
+        issues.forEach((iss: string) => {
+          const issLower = iss.toLowerCase();
+          if (issLower.includes('title') && !titleFixed) {
+            simulatedCodePatch += `<title>${simulatedTitle}</title>\n`;
+            titleFixed = true;
+          }
+          if (issLower.includes('meta description') && !metaFixed) {
+            simulatedCodePatch += `<meta name="description" content="${simulatedMeta}" />\n`;
+            metaFixed = true;
+          }
+          if (issLower.includes('alt tag') || issLower.includes('lacking alt')) {
+            simulatedCodePatch += `<!-- Corrected Images with optimised ALT attributes -->\n<img src="/wp-content/uploads/hero-image.png" alt="Optimised digital marketing representation for ${pageTitle || 'client'} page" />\n`;
+          }
+          if (issLower.includes('heading') || issLower.includes('h1')) {
+            simulatedCodePatch += `<!-- Heading Hierarchy Correction -->\n<h1>${pageTitle || 'Primary Section Heading'}</h1>\n`;
+          }
+        });
+      }
+
+      if (simulatedCodePatch === `<!-- Copy and paste/modify this snippet inside your HTML layout -->\n`) {
+        simulatedCodePatch += `<!-- Page structural tags are already fully optimised. No critical code patches needed! -->`;
+      }
+
+      // Quick 300ms network simulation delay for authentic UX feel
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      return res.json({
+        title: simulatedTitle,
+        metaDescription: simulatedMeta,
+        codePatch: simulatedCodePatch
+      });
+    }
+
+    // Build targeted prompt in Australian English
+    const prompt = `You are a high-priced enterprise SEO Consultant conducting audits in Australia. Conduct an on-page audit and write specific code corrections for a single URL.
+Page URL: ${url}
+Current Title: ${pageTitle || 'Untitled Page'}
+Detected Structural / Technical Issues:
+${JSON.stringify(issues || [], null, 2)}
+
+Provide your response as a valid, parsable JSON object strictly conforming to the following structure. Do not include any markdown format blocks or introductory/concluding text:
+{
+  "title": "SEO-Optimised Page Title (keep between 50-60 characters, with high CTR and commercial intent)",
+  "metaDescription": "SEO-Optimised Meta Description (keep between 120-160 characters, high-click compelling CTA)",
+  "codePatch": "Write a clean HTML developer code snippet showing exactly what tags the developer should insert inside their page to resolve the specific issues listed. (For alt images, write exact <img src='...' alt='custom descriptive alt'> tags; for headings, show demoted H1s; for title/meta errors, show the correct tags. Use single quotes for any HTML attributes in the code to ensure JSON string validity!)"
+}
+
+CRITICAL INTEGRITY & SPELLING RULES:
+1. YOU MUST write all JSON values and text exclusively in Australian English (British spelling rules). You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). NEVER use the letter 'z' in these words! Also use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'.
+2. You MUST ensure that the HTML code snippet inside the "codePatch" JSON value DOES NOT contain unescaped raw double quotes ("). Strictly use single quotes (') for all HTML attributes (e.g. <meta name='description' content='value'>).
+3. Do not insert literal unescaped raw newlines inside any string property value; instead, represent newlines using the '\\n' control character.
+4. Make sure the JSON parses perfectly. Do not include any text before or after the JSON structure.`;
+
+    let jsonResponse: any = null;
+
+    if (selectedModel === 'gemini') {
+      let lastError: any = null;
+      for (let i = 0; i < geminiKeysPool.length; i++) {
+        const currentKey = geminiKeysPool[i];
+        console.log(`[GEMINI POOL] Attempting page optimisation API call with key index ${i + 1}/${geminiKeysPool.length}`);
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: 'application/json' }
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[GEMINI POOL] Key index ${i + 1} failed with status ${response.status}. Rotating...`);
+            lastError = new Error(`Gemini API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+
+          const data: any = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!text) throw new Error('Empty response from Gemini API');
+          jsonResponse = JSON.parse(cleanJsonString(text));
+          
+          // Successful response - clear any error and break loop
+          lastError = null;
+          break;
+        } catch (err: any) {
+          console.error(`[GEMINI POOL] Exception with key index ${i + 1}:`, err.message || err);
+          lastError = err;
+        }
+      }
+      if (lastError) {
+        throw lastError;
+      }
+
+    } else if (selectedModel === 'claude') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Claude API error: ${response.status} - ${errorText}`);
+      }
+      const data: any = await response.json();
+      const text = data.content?.[0]?.text;
+      if (!text) throw new Error('Empty response from Claude API');
+      jsonResponse = JSON.parse(cleanJsonString(text));
+
+    } else if (selectedModel === 'gpt') {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: 'You are an elite enterprise SEO assistant. Always respond with valid JSON.' },
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`GPT API error: ${response.status} - ${errorText}`);
+      }
+      const data: any = await response.json();
+      const text = data.choices?.[0]?.message?.content;
+      if (!text) throw new Error('Empty response from GPT API');
+      jsonResponse = JSON.parse(cleanJsonString(text));
+    }
+
+    res.json({
+      title: jsonResponse.title,
+      metaDescription: jsonResponse.metaDescription,
+      codePatch: jsonResponse.codePatch
+    });
+
+  } catch (error: any) {
+    console.error('AI On-Demand Page Optimise error:', error);
     res.status(500).json({ error: error.message || String(error) });
   }
 });

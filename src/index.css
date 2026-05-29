@@ -1,10 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=DM+Sans:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Commissioner:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Commissioner", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-heading: "DM Sans", sans-serif;
+  --font-heading: "Commissioner", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 0.875rem;
 }
 
 @layer base {
@@ -17,7 +18,7 @@
     --primary: 217 91% 60%;
     --border: 0 0% 15%;
     --accent: 217 91% 60%;
-    --font-heading: "Inter";
+    --font-heading: "Commissioner";
     --heading-style: italic font-black;
   }
 
@@ -29,7 +30,7 @@
     --primary: 142 71% 45%; /* Emerald for precise feel */
     --border: 240 5% 15%;
     --accent: 142 71% 45%;
-    --font-heading: "JetBrains Mono";
+    --font-heading: "Commissioner";
     --heading-style: font-bold;
   }
 
@@ -41,9 +42,17 @@
     --primary: 172 43% 63%; /* #76c9be mint */
     --border: 197 55% 19%; /* #163f4d */
     --accent: 25 91% 54%; /* #f47b20 orange */
-    --font-heading: "DM Sans";
+    --font-heading: "Commissioner";
     --heading-style: font-black;
   }
+}
+
+*, *:before, *:after {
+  font-family: 'Commissioner', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+code, pre, code *, pre * {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace !important;
 }
 
 body {
@@ -52,7 +61,6 @@ body {
 
 [data-theme='white'] body {
   @apply bg-[#ffffff] text-[#082a36];
-  font-family: 'DM Sans', sans-serif;
 }
 
 [data-theme='white'] ::-webkit-scrollbar-track {
@@ -73,3 +81,25 @@ body {
 ::-webkit-scrollbar-thumb {
   @apply bg-zinc-800 rounded-full border-2 border-black hover:bg-zinc-700;
 }
+
+/* Tooltip specific override to guarantee font size of 12px and Commissioner font */
+.tooltip-override, [class*="tooltip"], .tooltip-override *, [class*="tooltip"] * {
+  font-family: 'Commissioner', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 12px !important;
+}
+
+/* ClientSelector dropdown explicit overrides for premium typography */
+#client-selector-container,
+#client-selector-container *,
+#client-selector-button,
+#client-selector-button *,
+#client-selector-dropdown,
+#client-selector-dropdown * {
+  font-family: 'Commissioner', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+#client-selector-container .font-mono,
+#client-selector-dropdown .font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace !important;
+}
+

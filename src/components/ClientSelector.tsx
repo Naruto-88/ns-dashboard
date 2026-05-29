@@ -41,11 +41,11 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
   }, []);
 
   return (
-    <div className="relative" ref={containerRef} id="client-selector-container">
+    <div className="relative font-sans" ref={containerRef} id="client-selector-container">
       <Tooltip content="Select active client property">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full md:w-64 px-4 py-2 border rounded-xl shadow-xl transition-all text-xs font-black uppercase tracking-widest ${
+          className={`flex items-center justify-between w-full md:w-64 px-4 py-2 border rounded-xl shadow-xl transition-all text-sm font-sans font-medium normal-case tracking-normal ${
             theme === 'white' ? 'bg-white border-[#163f4d]/10 text-[#082a36] hover:bg-[#76c9be]/5' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'
           }`}
           id="client-selector-button"
@@ -54,7 +54,7 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
             {selectedClient ? (
               <span className="flex items-center gap-2">
                 {selectedClient.short_code && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-lg font-black font-mono ${
+                  <span className={`text-sm px-1.5 py-0.5 rounded-lg font-medium font-mono ${
                     theme === 'white' ? 'bg-[#76c9be] text-white' : 'bg-blue-600 text-white'
                   }`}>
                     {selectedClient.short_code}
@@ -82,7 +82,7 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
               placeholder="Filter nodes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={`w-full py-2 text-xs bg-transparent outline-none font-black uppercase tracking-widest ${
+              className={`w-full py-2 text-sm bg-transparent outline-none font-sans font-medium normal-case tracking-normal ${
                 theme === 'white' ? 'text-[#082a36] placeholder:text-[#607a80]/50' : 'text-white placeholder:text-zinc-700'
               }`}
             />
@@ -97,15 +97,15 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
                     setIsOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-[11px] flex items-center justify-between transition-all ${
+                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-sans flex items-center justify-between transition-all ${
                     selectedId === client.id 
-                      ? (theme === 'white' ? 'bg-[#76c9be] text-white shadow-lg shadow-[#76c9be]/20 font-black' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 font-black')
-                      : theme === 'white' ? 'text-[#607a80] hover:bg-[#76c9be]/5 hover:text-[#082a36] font-black' : 'text-zinc-500 hover:bg-white/5 hover:text-white font-black'
+                      ? (theme === 'white' ? 'bg-[#76c9be] text-white shadow-lg shadow-[#76c9be]/20 font-medium' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 font-medium')
+                      : theme === 'white' ? 'text-[#607a80] hover:bg-[#76c9be]/5 hover:text-[#082a36] font-medium' : 'text-zinc-500 hover:bg-white/5 hover:text-white font-medium'
                   }`}
                 >
-                  <div className="flex items-center gap-3 truncate uppercase tracking-tight">
+                  <div className="flex items-center gap-3 truncate normal-case tracking-normal">
                     {client.short_code && (
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
+                      <span className={`text-sm font-mono px-2 py-0.5 rounded-lg ${
                         selectedId === client.id ? 'bg-white/20' : theme === 'white' ? 'bg-[#76c9be]/5 text-[#607a80] border border-[#163f4d]/5' : 'bg-zinc-800 text-zinc-500 border border-white/5'
                       }`}>
                         {client.short_code}
@@ -117,7 +117,7 @@ export default function ClientSelector({ clients, selectedId, onSelect, placehol
                 </button>
               ))
             ) : (
-              <div className="px-4 py-8 text-[10px] text-zinc-700 text-center font-black uppercase tracking-widest italic">Zero matches found</div>
+              <div className="px-4 py-8 text-sm text-zinc-700 text-center font-sans font-medium normal-case tracking-normal italic">Zero matches found</div>
             )}
           </div>
         </div>

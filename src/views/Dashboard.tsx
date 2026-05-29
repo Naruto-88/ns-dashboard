@@ -72,7 +72,7 @@ function MetricCard({ title, icon: Icon, comparison, prefix = '', suffix = '' }:
           </div>
         </Tooltip>
         {hasData && (
-          <div className={`flex items-center gap-1 text-xs font-black px-3 py-1 rounded-full ${
+          <div className={`flex items-center gap-1 text-sm font-medium px-3 py-1 rounded-full ${
             isPositive ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-emerald-500/10 text-emerald-500') : 
             isNegative ? (theme === 'white' ? 'bg-[#e24b4a]/10 text-[#e24b4a]' : 'bg-red-500/10 text-red-500') : 
             theme === 'white' ? 'bg-[#163f4d]/5 text-[#607a80]' : 'bg-zinc-800 text-zinc-400'
@@ -83,18 +83,18 @@ function MetricCard({ title, icon: Icon, comparison, prefix = '', suffix = '' }:
         )}
       </div>
       <div>
-        <h3 className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{title}</h3>
-        <p className={`text-3xl font-black mt-2 tracking-tight font-heading ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+        <h3 className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{title}</h3>
+        <p className={`text-3xl font-medium mt-2 tracking-tight font-heading ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
           {prefix}{comparison.current.toLocaleString()}{suffix}
         </p>
       </div>
       {hasData ? (
         <div className={`flex items-baseline gap-2 pt-2 border-t ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
-          <span className={`text-[9px] font-black uppercase tracking-widest text-nowrap ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>Previous period</span>
-          <span className="text-xs font-bold text-zinc-400">{prefix}{comparison.previous?.toLocaleString()}{suffix}</span>
+          <span className={`text-sm font-medium   text-nowrap ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>Previous period</span>
+          <span className="text-sm font-medium text-zinc-400">{prefix}{comparison.previous?.toLocaleString()}{suffix}</span>
         </div>
       ) : (
-        <p className={`text-[9px] font-bold uppercase tracking-widest pt-2 border-t ${theme === 'white' ? 'text-[#607a80] border-[#163f4d]/5' : 'text-zinc-600 border-white/5'}`}>No baseline data</p>
+        <p className={`text-sm font-medium   pt-2 border-t ${theme === 'white' ? 'text-[#607a80] border-[#163f4d]/5' : 'text-zinc-600 border-white/5'}`}>No baseline data</p>
       )}
     </div>
   );
@@ -288,8 +288,8 @@ export default function Dashboard() {
               <BarChart3 className="text-white" size={24} />
             </div>
             <div>
-              <h2 className={`text-3xl font-black font-heading tracking-tighter uppercase italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Agency Dashboard</h2>
-              <p className={`text-xs font-bold uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Performance Intelligence Hub</p>
+              <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Agency Dashboard</h2>
+              <p className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Performance Intelligence Hub</p>
             </div>
           </div>
         </div>
@@ -302,7 +302,7 @@ export default function Dashboard() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all ${
                   activeTab === tab 
                     ? (theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg') 
                     : theme === 'white' ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10' : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
@@ -331,7 +331,7 @@ export default function Dashboard() {
                 const client = clients.find(c => c.id === selectedClient);
                 if (client) setAddingActionFor(client);
               }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl ${
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 shadow-xl ${
                 theme === 'white' 
                   ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20' 
                   : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20'
@@ -342,7 +342,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => fetchData(true)}
-              className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl ${
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 shadow-xl ${
                 theme === 'white' 
                   ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20' 
                   : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20'
@@ -363,11 +363,11 @@ export default function Dashboard() {
                 <Shield size={24} />
               </div>
               <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-tight">Signal Interrupted</h3>
-                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Satellite communication bottleneck identified</p>
+                <h3 className="text-sm font-medium text-white  tracking-tight">Signal Interrupted</h3>
+                <p className="text-sm text-zinc-500 font-medium   mt-1">Satellite communication bottleneck identified</p>
               </div>
             </div>
-            <div className="p-4 bg-zinc-950/50 rounded-2xl border border-white/5 font-mono text-[10px] text-zinc-400">
+            <div className="p-4 bg-zinc-950/50 rounded-2xl border border-white/5 font-mono text-sm text-zinc-400">
               {error}
             </div>
           </div>
@@ -384,8 +384,8 @@ export default function Dashboard() {
         }`}>
           <BarChart3 className={`mx-auto ${theme === 'white' ? 'text-zinc-300' : 'text-zinc-800'}`} size={64} />
           <div className="space-y-1">
-            <p className={`font-black uppercase tracking-tighter text-xl italic ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Click Live Sync</p>
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Connect to live metrics to populate your agency dashboard</p>
+            <p className={`font-medium  tracking-tighter text-xl italic ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Click Live Sync</p>
+            <p className="text-sm text-zinc-500 font-medium  ">Connect to live metrics to populate your agency dashboard</p>
           </div>
         </div>
       ) : (
@@ -408,17 +408,17 @@ export default function Dashboard() {
                 }`}>
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h3 className={`text-xl font-black font-heading tracking-tight uppercase ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Traffic Trend</h3>
-                      <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>GSC Clicks & Impressions Over Time</p>
+                      <h3 className={`text-xl font-medium font-heading tracking-tight  ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Traffic Trend</h3>
+                      <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>GSC Clicks & Impressions Over Time</p>
                     </div>
                     <div className="flex gap-4">
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${theme === 'white' ? 'bg-[#76c9be]' : 'bg-blue-500'}`} />
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>Clicks</span>
+                        <span className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>Clicks</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${theme === 'white' ? 'bg-[#9333ea]' : 'bg-purple-500'}`} />
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>Impressions</span>
+                        <span className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`}>Impressions</span>
                       </div>
                     </div>
                   </div>
@@ -471,8 +471,8 @@ export default function Dashboard() {
                 }`}>
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h3 className={`text-xl font-black font-heading tracking-tight uppercase ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Channel Attribution</h3>
-                      <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Engagement Distribution</p>
+                      <h3 className={`text-xl font-medium font-heading tracking-tight  ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Channel Attribution</h3>
+                      <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Engagement Distribution</p>
                     </div>
                   </div>
                   <div className="h-[300px] w-full flex items-center justify-center">
@@ -520,8 +520,8 @@ export default function Dashboard() {
                 theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'
               }`}>
                 <div>
-                  <h3 className={`text-xl font-black font-heading tracking-tight uppercase ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Keyword Performance</h3>
-                  <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Detailed query analysis from GSC</p>
+                  <h3 className={`text-xl font-medium font-heading tracking-tight  ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Keyword Performance</h3>
+                  <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Detailed query analysis from GSC</p>
                 </div>
                 
                 <div className="flex flex-col md:flex-row items-center gap-4">
@@ -530,7 +530,7 @@ export default function Dashboard() {
                   }`}>
                     <button
                       onClick={() => setShowSelectedOnly(false)}
-                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                      className={`px-4 py-2 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
                         !showSelectedOnly 
                           ? (theme === 'white' ? 'bg-[#082a36] text-white' : 'bg-blue-600 text-white shadow-lg') 
                           : theme === 'white' ? 'text-[#607a80] hover:text-[#082a36]' : 'text-zinc-500 hover:text-white'
@@ -540,7 +540,7 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => setShowSelectedOnly(true)}
-                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                      className={`px-4 py-2 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
                         showSelectedOnly 
                           ? (theme === 'white' ? 'bg-[#76c9be] text-[#082a36]' : 'bg-blue-600 text-white shadow-lg') 
                           : theme === 'white' ? 'text-[#607a80] hover:text-[#082a36]' : 'text-zinc-500 hover:text-white'
@@ -560,7 +560,7 @@ export default function Dashboard() {
                       placeholder="Search keywords..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-bold outline-none focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/10 transition-all w-full md:w-64 ${
+                      className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium outline-none focus:border-[#76c9be] focus:ring-4 focus:ring-[#76c9be]/10 transition-all w-full md:w-64 ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/5 text-[#082a36]' : 'bg-zinc-800 border-white/5 text-white'
                       }`}
                     />
@@ -570,7 +570,7 @@ export default function Dashboard() {
               <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className={`border-b text-[10px] font-black uppercase tracking-widest ${
+                    <tr className={`border-b text-sm font-medium   ${
                       theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/50 border-white/5 text-zinc-500'
                     }`}>
                       <th className="px-8 py-2 text-left cursor-pointer hover:text-[#76c9be] transition-colors" onClick={() => handleSort('query')}>
@@ -603,7 +603,7 @@ export default function Dashboard() {
                           {sortConfig?.key === 'position' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                         </div>
                       </th>
-                      <th className={`px-8 py-2 text-right font-black uppercase tracking-widest ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Drift</th>
+                      <th className={`px-8 py-2 text-right font-medium   ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`}>Drift</th>
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${theme === 'white' ? 'divide-[#163f4d]/5' : 'divide-white/5'}`}>
@@ -617,7 +617,7 @@ export default function Dashboard() {
                           <td className="px-8 py-2">
                             <div className="flex items-center gap-3">
                               <div className="relative">
-                                <span className={`text-sm font-bold transition-colors ${theme === 'white' ? 'text-[#082a36] group-hover:text-[#76c9be]' : 'text-white group-hover:text-blue-400'}`}>{q.keys[0]}</span>
+                                <span className={`text-sm font-medium transition-colors ${theme === 'white' ? 'text-[#082a36] group-hover:text-[#76c9be]' : 'text-white group-hover:text-blue-400'}`}>{q.keys[0]}</span>
                                 {q.isStrategic && (
                                   <div className="absolute -left-5 top-1/2 -translate-y-1/2">
                                     <Tooltip content="Strategic Focus Keyword">
@@ -631,9 +631,9 @@ export default function Dashboard() {
                           </td>
                           <td className="px-6 py-2 text-center">
                             <div className="flex flex-col items-center">
-                              <span className={`font-mono text-sm font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-300'}`}>{q.clicks.toLocaleString()}</span>
+                              <span className={`font-mono text-sm font-medium ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-300'}`}>{q.clicks.toLocaleString()}</span>
                               {q.prevClicks > 0 && (
-                                <span className={`text-[9px] font-black mt-0.5 ${q.clicks >= q.prevClicks ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
+                                <span className={`text-sm font-medium mt-0.5 ${q.clicks >= q.prevClicks ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
                                   {q.clicks >= q.prevClicks ? '+' : ''}{q.clicks - q.prevClicks}
                                 </span>
                               )}
@@ -645,7 +645,7 @@ export default function Dashboard() {
                             </div>
                           </td>
                           <td className="px-6 py-2 text-center">
-                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                            <span className={`px-2 py-1 rounded-lg text-sm font-medium ${
                               theme === 'white' ? 'bg-[#163f4d]/5 text-[#607a80]' : 'bg-zinc-800 text-zinc-400'
                             }`}>
                               {(q.ctr * 100).toFixed(1)}%
@@ -653,11 +653,11 @@ export default function Dashboard() {
                           </td>
                           <td className="px-6 py-2 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <span className={`text-sm font-black ${q.position <= 3 ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : q.position <= 10 ? (theme === 'white' ? 'text-[#f47b20]' : 'text-blue-500') : 'text-zinc-400'}`}>
+                              <span className={`text-sm font-medium ${q.position <= 3 ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : q.position <= 10 ? (theme === 'white' ? 'text-[#f47b20]' : 'text-blue-500') : 'text-zinc-400'}`}>
                                 {q.position.toFixed(1)}
                               </span>
                               {q.prevPosition > 0 && (posDiff !== 0) && (
-                                <div className={`flex items-center text-[10px] font-black ${isPosImprovement ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
+                                <div className={`flex items-center text-sm font-medium ${isPosImprovement ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
                                   {isPosImprovement ? <TrendingUp size={12} className="mr-0.5" /> : <TrendingDown size={12} className="mr-0.5" />}
                                   {Math.abs(posDiff).toFixed(1)}
                                 </div>
@@ -672,7 +672,7 @@ export default function Dashboard() {
                                     style={{ width: `${Math.max(5, 100 - (q.position * 2))}%` }}
                                   />
                                </div>
-                               <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>
+                               <span className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-600'}`}>
                                  {q.position <= 10 ? 'Elite' : q.position <= 30 ? 'Active' : 'Distant'}
                                </span>
                              </div>
@@ -682,7 +682,7 @@ export default function Dashboard() {
                     })}
                     {filteredQueries.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-8 py-20 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">No active keyword data found</td>
+                        <td colSpan={6} className="px-8 py-20 text-center text-zinc-400 font-medium   text-sm">No active keyword data found</td>
                       </tr>
                     )}
                   </tbody>
@@ -701,12 +701,12 @@ export default function Dashboard() {
                 }`}>
                   <div className={`flex items-center gap-2 mb-6 transition-colors ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400 group-hover:text-blue-400'}`}>
                     <MousePointer2 size={18} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Total Clicks</span>
+                    <span className="text-sm font-medium  ">Total Clicks</span>
                     <HelpCircle size={14} className="ml-auto opacity-40" />
                   </div>
                   <div className="flex items-end gap-4">
-                    <span className={`text-5xl font-black font-heading leading-none ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{metrics.clicks.current.toLocaleString()}</span>
-                    <div className={`flex items-center font-black text-sm mb-1 uppercase tracking-tighter ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>
+                    <span className={`text-5xl font-medium font-heading leading-none ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{metrics.clicks.current.toLocaleString()}</span>
+                    <div className={`flex items-center font-medium text-sm mb-1  tracking-tighter ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>
                       <TrendingUp size={16} className="mr-1" />
                       +{Math.abs(metrics.clicks.percentChange || 0).toFixed(1)}%
                     </div>
@@ -725,12 +725,12 @@ export default function Dashboard() {
                 }`}>
                   <div className={`flex items-center gap-2 mb-6 transition-colors ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400 group-hover:text-purple-400'}`}>
                     <Eye size={18} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Impressions</span>
+                    <span className="text-sm font-medium  ">Impressions</span>
                     <HelpCircle size={14} className="ml-auto opacity-40" />
                   </div>
                   <div className="flex items-end gap-4">
-                    <span className={`text-5xl font-black font-heading leading-none ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{(metrics.impressions.current / 1000).toFixed(1)}K</span>
-                    <div className={`flex items-center font-black text-sm mb-1 uppercase tracking-tighter ${theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500'}`}>
+                    <span className={`text-5xl font-medium font-heading leading-none ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{(metrics.impressions.current / 1000).toFixed(1)}K</span>
+                    <div className={`flex items-center font-medium text-sm mb-1  tracking-tighter ${theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500'}`}>
                       <TrendingDown size={16} className="mr-1" />
                       -{Math.abs(metrics.impressions.percentChange || 0).toFixed(1)}%
                     </div>
@@ -757,11 +757,11 @@ export default function Dashboard() {
                       <FileText size={20} />
                     </div>
                     <div>
-                      <h3 className={`text-xl font-black font-heading tracking-tight uppercase ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Top Content</h3>
-                      <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>High-performing pages by clicks</p>
+                      <h3 className={`text-xl font-medium font-heading tracking-tight  ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Top Content</h3>
+                      <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>High-performing pages by clicks</p>
                     </div>
                   </div>
-                  <button className={`text-[10px] font-black uppercase tracking-widest transition-colors ${theme === 'white' ? 'text-[#76c9be] hover:text-[#082a36]' : 'text-blue-500 hover:text-blue-400'}`}>View More</button>
+                  <button className={`text-sm font-medium   transition-colors ${theme === 'white' ? 'text-[#76c9be] hover:text-[#082a36]' : 'text-blue-500 hover:text-blue-400'}`}>View More</button>
                 </div>
                 <div className="flex flex-col">
                   {insights.pages.slice(0, 5).map((page: any, i: number) => (
@@ -774,16 +774,16 @@ export default function Dashboard() {
                         {page.keys[0].includes('blog') ? <FileText size={24} /> : <Globe size={24} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className={`text-sm font-bold truncate transition-colors uppercase tracking-tight ${
+                        <h4 className={`text-sm font-medium truncate transition-colors  tracking-tight ${
                           theme === 'white' ? 'text-[#082a36] group-hover:text-[#76c9be]' : 'text-white group-hover:text-blue-400'
                         }`}>
                           {page.keys[0].split('/').filter(Boolean).pop()?.replace(/-/g, ' ') || 'Home Page'}
                         </h4>
-                        <p className={`text-[10px] font-medium truncate mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{page.keys[0]}</p>
+                        <p className={`text-sm font-medium truncate mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>{page.keys[0]}</p>
                       </div>
                       <div className="text-right">
-                        <p className={`text-lg font-black font-heading leading-none ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{page.clicks}</p>
-                        <p className={`text-[9px] font-black uppercase tracking-widest mt-1 flex items-center justify-end ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>
+                        <p className={`text-lg font-medium font-heading leading-none ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{page.clicks}</p>
+                        <p className={`text-sm font-medium   mt-1 flex items-center justify-end ${theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500'}`}>
                           <ArrowUpRight size={10} className="mr-0.5" />
                           {Math.floor(Math.random() * 20)}%
                         </p>
@@ -799,23 +799,23 @@ export default function Dashboard() {
                   theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
                 }`}>
                   <div className={`p-8 border-b ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
-                    <h3 className={`text-xl font-black font-heading tracking-tight uppercase ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Search Intent</h3>
-                    <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Queries leading to your site</p>
+                    <h3 className={`text-xl font-medium font-heading tracking-tight  ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Search Intent</h3>
+                    <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Queries leading to your site</p>
                   </div>
                   <div className="p-2">
                     {insights.queries.slice(0, 5).map((q: any, i: number) => (
                       <div key={i} className={`flex items-center justify-between p-4 rounded-2xl transition-colors group ${
                         theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'
                       }`}>
-                        <span className={`text-xs font-bold uppercase tracking-tight ${
+                        <span className={`text-sm font-medium  tracking-tight ${
                           theme === 'white' ? 'text-[#607a80] group-hover:text-[#082a36]' : 'text-zinc-300 group-hover:text-white'
                         }`}>{q.keys[0]}</span>
                         <div className="flex items-center gap-4">
-                          <div className={`flex items-center gap-1 text-[9px] font-black ${i % 2 === 0 ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
+                          <div className={`flex items-center gap-1 text-sm font-medium ${i % 2 === 0 ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')}`}>
                             {i % 2 === 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
                             {Math.floor(Math.random() * 50)}%
                           </div>
-                          <span className={`text-sm font-black w-8 text-right font-heading font-mono ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{q.clicks}</span>
+                          <span className={`text-sm font-medium w-8 text-right font-heading font-mono ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{q.clicks}</span>
                         </div>
                       </div>
                     ))}
@@ -827,8 +827,8 @@ export default function Dashboard() {
                    theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
                 }`}>
                   <div className={`p-8 border-b ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
-                    <h3 className={`text-xl font-black font-heading tracking-tight uppercase ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Global Audience</h3>
-                    <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Top countries by interest</p>
+                    <h3 className={`text-xl font-medium font-heading tracking-tight  ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Global Audience</h3>
+                    <p className={`text-sm font-medium   mt-1 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Top countries by interest</p>
                   </div>
                   <div className="p-8 space-y-6">
                     {insights.countries.map((c: any, i: number) => {
@@ -836,7 +836,7 @@ export default function Dashboard() {
                       const percent = ((c.clicks / totalClicks) * 100);
                       return (
                         <div key={i} className="space-y-2">
-                          <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest text-[#607a80]">
+                          <div className="flex justify-between items-center text-sm font-medium   text-[#607a80]">
                             <span>{c.keys[0]}</span>
                             <span>{percent.toFixed(0)}%</span>
                           </div>

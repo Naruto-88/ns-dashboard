@@ -258,10 +258,10 @@ export default function GoalsAndTargets() {
       {/* Title Header Card */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className={`text-2xl font-black font-heading uppercase tracking-tighter italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+          <h2 className={`text-2xl font-medium font-heading  tracking-tighter italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
             Goals & Performance Targets
           </h2>
-          <p className={`text-[10px] font-black uppercase tracking-widest mt-1 italic ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+          <p className={`text-sm font-medium   mt-1 italic ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
             Month-end target velocity • {monthName} {currentYear} • {daysRemaining} Days Remaining
           </p>
         </div>
@@ -273,14 +273,14 @@ export default function GoalsAndTargets() {
               placeholder="Search clients..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-xs font-black focus:outline-none transition-all w-64 uppercase tracking-widest ${
+              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium focus:outline-none transition-all w-64   ${
                 isWhite ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
               }`}
             />
           </div>
               <button
                 onClick={() => fetchClientTargetsAndActuals(true)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium   transition-all shadow-xl active:scale-95 ${
                   isWhite 
                     ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20' 
                     : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20'
@@ -299,15 +299,15 @@ export default function GoalsAndTargets() {
         }`}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="space-y-1 text-center md:text-left">
-              <h3 className={`text-sm font-black uppercase tracking-wider ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+              <h3 className={`text-sm font-medium   ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
                 Month Elapsed Progress
               </h3>
-              <p className={`text-[10px] font-black uppercase tracking-widest ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+              <p className={`text-sm font-medium   ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                 Velocity status is measured against the current elapsed {elapsedPercent.toFixed(1)}% of the calendar month
               </p>
             </div>
             <div className="w-full md:w-2/3 space-y-2">
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              <div className="flex justify-between text-sm font-medium   text-zinc-500">
                 <span>Day 1</span>
                 <span className={isWhite ? 'text-[#76c9be]' : 'text-emerald-500'}>Today: Day {currentDay} ({elapsedPercent.toFixed(0)}%)</span>
                 <span>Day {daysInMonth}</span>
@@ -341,12 +341,12 @@ export default function GoalsAndTargets() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                    <p className={`text-sm font-medium   ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                       {item.label}
                     </p>
-                    <h4 className={`text-xl font-black font-mono tracking-tight mt-1 ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+                    <h4 className={`text-xl font-medium font-mono tracking-tight mt-1 ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
                       {item.score.actual.toLocaleString()}
-                      <span className={`text-[10px] font-medium tracking-normal ${isWhite ? 'text-zinc-400' : 'text-zinc-600'} ml-1`}>
+                      <span className={`text-sm font-medium tracking-normal ${isWhite ? 'text-zinc-400' : 'text-zinc-600'} ml-1`}>
                         / {item.score.target.toLocaleString()} target
                       </span>
                     </h4>
@@ -357,7 +357,7 @@ export default function GoalsAndTargets() {
                 </div>
 
                 <div className="mt-6 space-y-2">
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                  <div className="flex items-center justify-between text-sm font-medium  ">
                     <span className={isWhite ? 'text-zinc-400' : 'text-zinc-600'}>Agency Success Velocity</span>
                     <span className={isWhite ? 'text-[#082a36]' : 'text-white'}>{pct}%</span>
                   </div>
@@ -384,10 +384,10 @@ export default function GoalsAndTargets() {
       ) : filteredClients.length === 0 ? (
         <div className={`p-20 text-center rounded-[24px] border ${isWhite ? 'bg-white border-zinc-100' : 'bg-zinc-900/30 border-white/5'}`}>
           <Target size={48} className="mx-auto text-zinc-600 mb-4" />
-          <h4 className={`text-base font-black uppercase tracking-widest ${isWhite ? 'text-zinc-600' : 'text-zinc-400'}`}>
+          <h4 className={`text-base font-medium   ${isWhite ? 'text-zinc-600' : 'text-zinc-400'}`}>
             No Client Nodes Found
           </h4>
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">
+          <p className="text-sm text-zinc-500   mt-1">
             Create or edit client nodes to begin measuring goals
           </p>
         </div>
@@ -412,7 +412,7 @@ export default function GoalsAndTargets() {
                 {/* Header */}
                 <div className="flex items-center justify-between border-b pb-4 mb-6 border-white/5">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs uppercase border shadow-xl ${
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-medium text-sm  border shadow-xl ${
                       isWhite 
                         ? 'bg-[#76c9be]/5 text-[#082a36] border-[#163f4d]/10' 
                         : 'bg-zinc-800 text-blue-400 border-white/5'
@@ -420,23 +420,23 @@ export default function GoalsAndTargets() {
                       {client.short_code}
                     </div>
                     <div>
-                      <h3 className={`font-black font-heading uppercase tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+                      <h3 className={`font-medium font-heading  tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
                         {client.name}
                       </h3>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-widest ${
+                        <span className={`text-sm font-medium px-2 py-0.5 rounded-full border   ${
                           isWhite ? 'text-[#607a80] bg-[#76c9be]/5 border-[#163f4d]/5' : 'text-zinc-400 bg-zinc-800 border-white/5'
                         }`}>
                           Owner: {client.project_owner_code || 'MW'}
                         </span>
-                        <span className="text-[9px] text-zinc-600 uppercase tracking-widest">{client.timezone}</span>
+                        <span className="text-sm text-zinc-600  ">{client.timezone}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => setAddingActionFor(client)}
-                      className={`px-3 py-1.5 flex items-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+                      className={`px-3 py-1.5 flex items-center gap-1.5 rounded-xl border text-sm font-medium   transition-all ${
                         isWhite 
                           ? 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-[#76c9be]/10 hover:text-[#082a36] hover:border-[#76c9be]/30' 
                           : 'bg-zinc-900 border-white/5 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20'
@@ -477,26 +477,26 @@ export default function GoalsAndTargets() {
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-1.5">
                               <metric.icon size={12} className={metric.color} />
-                              <span className={`text-[9px] font-black uppercase tracking-widest ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                              <span className={`text-sm font-medium   ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                                 {metric.label}
                               </span>
                             </div>
                             {metric.target > 0 ? (
-                              <span className={`px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-widest transition-all ${stats.color}`}>
+                              <span className={`px-2 py-0.5 rounded-lg border text-sm font-medium   transition-all ${stats.color}`}>
                                 {stats.status}
                               </span>
                             ) : (
-                              <span className={`px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-widest ${isWhite ? 'bg-zinc-100 text-zinc-400 border-zinc-200' : 'bg-zinc-900 text-zinc-600 border-white/5'}`}>
+                              <span className={`px-2 py-0.5 rounded-lg border text-sm font-medium   ${isWhite ? 'bg-zinc-100 text-zinc-400 border-zinc-200' : 'bg-zinc-900 text-zinc-600 border-white/5'}`}>
                                 Unset
                               </span>
                             )}
                           </div>
 
                           <div className="mt-3 flex items-baseline gap-1">
-                            <span className={`text-lg font-black font-mono tracking-tight ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
+                            <span className={`text-lg font-medium font-mono tracking-tight ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
                               {metric.actual.toLocaleString()}
                             </span>
-                            <span className={`text-[9px] font-medium ${isWhite ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                            <span className={`text-sm font-medium ${isWhite ? 'text-zinc-400' : 'text-zinc-600'}`}>
                               / {metric.target > 0 ? metric.target.toLocaleString() : '-'} target
                             </span>
                           </div>
@@ -509,7 +509,7 @@ export default function GoalsAndTargets() {
                                   style={{ width: `${stats.percent}%` }}
                                 />
                               </div>
-                              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                              <div className="flex justify-between text-sm font-medium   text-zinc-500">
                                 <span>{stats.percent}% achieved</span>
                                 <span>
                                   {stats.remaining > 0 ? `${stats.remaining.toLocaleString()} remaining` : 'achieved!'}
@@ -517,7 +517,7 @@ export default function GoalsAndTargets() {
                               </div>
                             </div>
                           ) : (
-                            <p className="text-[8px] text-zinc-600 uppercase tracking-widest font-black mt-4">
+                            <p className="text-sm text-zinc-600   font-medium mt-4">
                               Setup target to activate tracking
                             </p>
                           )}
@@ -532,11 +532,11 @@ export default function GoalsAndTargets() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-1.5">
                         <Target size={12} className={isWhite ? 'text-[#082a36]' : 'text-blue-400'} />
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
+                        <span className={`text-sm font-medium   ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
                           Pending Actions
                         </span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-widest ${isWhite ? 'bg-white text-zinc-600 border-zinc-200' : 'bg-zinc-900 text-zinc-400 border-white/5'}`}>
+                      <span className={`px-2 py-0.5 rounded-lg border text-sm font-medium   ${isWhite ? 'bg-white text-zinc-600 border-zinc-200' : 'bg-zinc-900 text-zinc-400 border-white/5'}`}>
                         {client.pendingActions?.length || 0}
                       </span>
                     </div>
@@ -545,7 +545,7 @@ export default function GoalsAndTargets() {
                         {client.pendingActions.map(action => (
                           <div key={action.id} className="flex items-start gap-1.5">
                             <Circle size={6} className={`mt-1 shrink-0 ${isWhite ? 'text-[#76c9be]' : 'text-emerald-500'} fill-current`} />
-                            <span className={`text-[10px] leading-snug font-medium ${isWhite ? 'text-zinc-700' : 'text-zinc-400'} line-clamp-2`} title={action.action_text}>
+                            <span className={`text-sm leading-snug font-medium ${isWhite ? 'text-zinc-700' : 'text-zinc-400'} line-clamp-2`} title={action.action_text}>
                               {action.action_text}
                             </span>
                           </div>
@@ -553,7 +553,7 @@ export default function GoalsAndTargets() {
                       </div>
                     ) : (
                       <div className={`flex flex-col items-center justify-center flex-1 text-center ${isWhite ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                        <span className="text-[10px] uppercase font-bold tracking-widest mt-2">No pending actions</span>
+                        <span className="text-sm  font-medium  mt-2">No pending actions</span>
                       </div>
                     )}
                   </div>
@@ -574,10 +574,10 @@ export default function GoalsAndTargets() {
           >
             <div className="flex items-center justify-between border-b pb-4 mb-6 border-white/5">
               <div>
-                <h4 className="text-base font-black uppercase tracking-tight italic">
+                <h4 className="text-base font-medium  tracking-tight italic">
                   Quick Adjust Targets
                 </h4>
-                <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                <p className={`text-sm font-medium   mt-0.5 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                   {editingClient.name} • {monthName} Targets
                 </p>
               </div>
@@ -596,7 +596,7 @@ export default function GoalsAndTargets() {
                 {/* 1. Monthly Clicks */}
                 <Tooltip content="Set the targeted number of Google Search Console organic clicks to achieve per calendar month" className="w-full">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
+                    <label className="text-sm font-medium   text-zinc-500 flex items-center gap-1.5">
                       <MousePointer size={10} className="text-blue-400" />
                       Target Monthly Clicks (GSC)
                     </label>
@@ -604,7 +604,7 @@ export default function GoalsAndTargets() {
                       type="number" 
                       value={editForm.target_monthly_clicks}
                       onChange={(e) => setEditForm(prev => ({ ...prev, target_monthly_clicks: Number(e.target.value) }))}
-                      className={`w-full px-4 py-2.5 border rounded-xl text-xs font-black focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-medium focus:outline-none transition-all ${
                         isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
                       }`}
                     />
@@ -614,7 +614,7 @@ export default function GoalsAndTargets() {
                 {/* 2. Monthly Sessions */}
                 <Tooltip content="Set the targeted number of Google Analytics 4 sessions to achieve per calendar month" className="w-full">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
+                    <label className="text-sm font-medium   text-zinc-500 flex items-center gap-1.5">
                       <Globe size={10} className="text-emerald-400" />
                       Target Monthly Sessions (GA4)
                     </label>
@@ -622,7 +622,7 @@ export default function GoalsAndTargets() {
                       type="number" 
                       value={editForm.target_monthly_sessions}
                       onChange={(e) => setEditForm(prev => ({ ...prev, target_monthly_sessions: Number(e.target.value) }))}
-                      className={`w-full px-4 py-2.5 border rounded-xl text-xs font-black focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-medium focus:outline-none transition-all ${
                         isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
                       }`}
                     />
@@ -632,7 +632,7 @@ export default function GoalsAndTargets() {
                 {/* 3. Target Blogs */}
                 <Tooltip content="Set the monthly content production goal for blogs and article nodes" className="w-full">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
+                    <label className="text-sm font-medium   text-zinc-500 flex items-center gap-1.5">
                       <FileText size={10} className="text-amber-400" />
                       Target blogs published
                     </label>
@@ -640,7 +640,7 @@ export default function GoalsAndTargets() {
                       type="number" 
                       value={editForm.target_monthly_blogs}
                       onChange={(e) => setEditForm(prev => ({ ...prev, target_monthly_blogs: Number(e.target.value) }))}
-                      className={`w-full px-4 py-2.5 border rounded-xl text-xs font-black focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-medium focus:outline-none transition-all ${
                         isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
                       }`}
                     />
@@ -650,7 +650,7 @@ export default function GoalsAndTargets() {
                 {/* 4. Monthly Leads */}
                 <Tooltip content="Set the targeted number of qualified organic leads to generate for this client per calendar month" className="w-full">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
+                    <label className="text-sm font-medium   text-zinc-500 flex items-center gap-1.5">
                       <Sparkles size={10} className="text-purple-400" />
                       Target Monthly Leads
                     </label>
@@ -658,7 +658,7 @@ export default function GoalsAndTargets() {
                       type="number" 
                       value={editForm.lead_target_monthly}
                       onChange={(e) => setEditForm(prev => ({ ...prev, lead_target_monthly: Number(e.target.value) }))}
-                      className={`w-full px-4 py-2.5 border rounded-xl text-xs font-black focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-medium focus:outline-none transition-all ${
                         isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
                       }`}
                     />
@@ -668,7 +668,7 @@ export default function GoalsAndTargets() {
                 {/* 5. Target DR */}
                 <Tooltip content="Set the target Ahrefs Domain Rating (DR) to achieve for this client node" className="w-full">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
+                    <label className="text-sm font-medium   text-zinc-500 flex items-center gap-1.5">
                       <Target size={10} className="text-rose-400" />
                       Target Domain Rating (DR)
                     </label>
@@ -676,7 +676,7 @@ export default function GoalsAndTargets() {
                       type="number" 
                       value={editForm.target_dr}
                       onChange={(e) => setEditForm(prev => ({ ...prev, target_dr: Number(e.target.value) }))}
-                      className={`w-full px-4 py-2.5 border rounded-xl text-xs font-black focus:outline-none transition-all ${
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-medium focus:outline-none transition-all ${
                         isWhite ? 'bg-zinc-50 border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white'
                       }`}
                     />
@@ -688,7 +688,7 @@ export default function GoalsAndTargets() {
                 <button 
                   type="button"
                   onClick={() => setEditingClient(null)}
-                  className={`w-1/2 py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+                  className={`w-1/2 py-2.5 rounded-xl border text-sm font-medium   transition-all ${
                     isWhite ? 'bg-zinc-100 hover:bg-zinc-200 border-zinc-200' : 'bg-zinc-900 hover:bg-zinc-800 border-white/5'
                   }`}
                 >
@@ -696,7 +696,7 @@ export default function GoalsAndTargets() {
                 </button>
                 <button 
                   type="submit"
-                  className={`w-1/2 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg ${
+                  className={`w-1/2 py-2.5 rounded-xl font-medium text-sm   hover:brightness-110 active:scale-95 transition-all shadow-lg ${
                     isWhite ? 'bg-[#082a36] text-white' : 'bg-blue-600 text-white shadow-blue-500/20'
                   }`}
                 >

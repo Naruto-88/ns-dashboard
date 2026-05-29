@@ -33,7 +33,7 @@ export default function DateRangeSelector({ onRangeChange, currentRange, current
       <Tooltip content="Adjust analysis time window">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-3 px-4 py-2 border rounded-xl shadow-xl transition-all text-xs font-black uppercase tracking-widest ${
+          className={`flex items-center gap-3 px-4 py-2 border rounded-xl shadow-xl transition-all text-sm font-medium normal-case tracking-normal ${
             theme === 'white' ? 'bg-white border-[#163f4d]/10 text-[#082a36] hover:bg-[#76c9be]/5' : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'
           }`}
         >
@@ -56,7 +56,7 @@ export default function DateRangeSelector({ onRangeChange, currentRange, current
                 <button
                   key={preset.value}
                   onClick={() => handlePresetSelect(preset.value)}
-                  className={`w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                  className={`w-full text-left px-4 py-2.5 text-sm font-medium normal-case tracking-normal rounded-xl transition-all ${
                     currentPreset === preset.value
                       ? (theme === 'white' ? 'bg-[#76c9be] text-white shadow-lg shadow-[#76c9be]/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20')
                       : theme === 'white' ? 'text-[#607a80] hover:bg-[#76c9be]/5 hover:text-[#082a36]' : 'text-zinc-500 hover:bg-white/5 hover:text-white'
@@ -66,33 +66,33 @@ export default function DateRangeSelector({ onRangeChange, currentRange, current
                 </button>
               ))}
               <div className={`border-t my-3 pt-3 ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
-                <p className={`px-4 text-[9px] font-black uppercase tracking-widest mb-3 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-600'}`}>Custom Range</p>
+                <p className={`px-4 text-sm font-medium normal-case tracking-normal mb-3 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-600'}`}>Custom Range</p>
                 <div className="px-4 space-y-4 pb-2">
                   <div className="space-y-1.5">
-                    <label className={`text-[9px] font-black uppercase tracking-widest ml-0.5 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Start Date</label>
+                    <label className={`text-sm font-medium normal-case tracking-normal ml-0.5 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Start Date</label>
                     <input
                       type="date"
                       value={currentRange.startDate}
                       onChange={(e) => onRangeChange({ ...currentRange, startDate: e.target.value }, 'custom')}
-                      className={`w-full text-[11px] border rounded-xl p-2 font-mono outline-none transition-all ${
+                      className={`w-full text-sm border rounded-xl p-2 font-mono outline-none transition-all ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
                       }`}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className={`text-[9px] font-black uppercase tracking-widest ml-0.5 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>End Date</label>
+                    <label className={`text-sm font-medium normal-case tracking-normal ml-0.5 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>End Date</label>
                     <input
                       type="date"
                       value={currentRange.endDate}
                       onChange={(e) => onRangeChange({ ...currentRange, endDate: e.target.value }, 'custom')}
-                      className={`w-full text-[11px] border rounded-xl p-2 font-mono outline-none transition-all ${
+                      className={`w-full text-sm border rounded-xl p-2 font-mono outline-none transition-all ${
                         theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
                       }`}
                     />
                   </div>
                   <button
                     onClick={() => setIsOpen(false)}
-                    className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+                    className={`w-full py-3 rounded-xl text-sm font-medium normal-case tracking-normal transition-all shadow-xl active:scale-95 ${
                       theme === 'white' ? 'bg-[#76c9be] text-white shadow-[#76c9be]/20 hover:bg-[#76c9be]/90' : 'bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500'
                     }`}
                   >

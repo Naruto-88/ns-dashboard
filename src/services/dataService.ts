@@ -525,6 +525,20 @@ export const deleteKeyword = async (clientId: string, id: string): Promise<void>
   }
 };
 
+export const updateKeyword = async (clientId: string, id: string, updates: Partial<Keyword>): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('keywords')
+      .update(updates)
+      .eq('id', id)
+      .eq('client_id', clientId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating keyword:', error);
+    throw error;
+  }
+};
+
 export const getApiKeys = async (): Promise<any[]> => {
   try {
     const response = await fetch('/api/admin/keys');
