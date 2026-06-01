@@ -2090,7 +2090,7 @@ ${promptSuffix}`;
       }
 
     } else if (model === 'claude') {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      let response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': apiKey,
@@ -2105,7 +2105,29 @@ ${promptSuffix}`;
       });
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Claude API error: ${response.status} - ${errorText}`);
+        const isNotFound = errorText.includes('not_found_error') || response.status === 404;
+        
+        if (isNotFound) {
+          console.warn('[CLAUDE] Model 20241022 not found/enabled. Falling back to claude-3-5-sonnet-20240620...');
+          response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: 'claude-3-5-sonnet-20240620',
+              max_tokens: 4000,
+              messages: [{ role: 'user', content: prompt }]
+            })
+          });
+        }
+        
+        if (!response.ok) {
+          const finalErrorText = isNotFound ? await response.text() : errorText;
+          throw new Error(`Claude API error: ${response.status} - ${finalErrorText}`);
+        }
       }
       const data: any = await response.json();
       const text = data.content?.[0]?.text;
@@ -2295,7 +2317,7 @@ CRITICAL INTEGRITY & SPELLING RULES:
       }
 
     } else if (selectedModel === 'claude') {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      let response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': apiKey,
@@ -2310,7 +2332,29 @@ CRITICAL INTEGRITY & SPELLING RULES:
       });
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Claude API error: ${response.status} - ${errorText}`);
+        const isNotFound = errorText.includes('not_found_error') || response.status === 404;
+        
+        if (isNotFound) {
+          console.warn('[CLAUDE] Model 20241022 not found/enabled. Falling back to claude-3-5-sonnet-20240620...');
+          response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: 'claude-3-5-sonnet-20240620',
+              max_tokens: 2000,
+              messages: [{ role: 'user', content: prompt }]
+            })
+          });
+        }
+        
+        if (!response.ok) {
+          const finalErrorText = isNotFound ? await response.text() : errorText;
+          throw new Error(`Claude API error: ${response.status} - ${finalErrorText}`);
+        }
       }
       const data: any = await response.json();
       const text = data.content?.[0]?.text;
