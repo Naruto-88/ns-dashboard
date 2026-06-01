@@ -59,6 +59,7 @@ export interface WeeklyData {
   schema_updates: number;
   internal_links: number;
   notes?: string;
+  imported_at?: string;
 }
 
 export const getClients = async (): Promise<Client[]> => {
@@ -167,7 +168,9 @@ export const getAllWeeklyData = async (range: DateRange): Promise<Record<string,
 
 export const getLiveMetrics = async (clientId: string, range: DateRange) => {
   try {
-    const response = await fetch(`/api/clients/${clientId}/live-metrics?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const response = await fetch(`/api/clients/${clientId}/live-metrics?startDate=${range.startDate}&endDate=${range.endDate}`, {
+      cache: 'no-store'
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to fetch live metrics');
     return data;
@@ -179,7 +182,9 @@ export const getLiveMetrics = async (clientId: string, range: DateRange) => {
 
 export const getInsights = async (clientId: string, range: DateRange) => {
   try {
-    const response = await fetch(`/api/clients/${clientId}/insights?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const response = await fetch(`/api/clients/${clientId}/insights?startDate=${range.startDate}&endDate=${range.endDate}`, {
+      cache: 'no-store'
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to fetch insights');
     return data;
@@ -191,7 +196,9 @@ export const getInsights = async (clientId: string, range: DateRange) => {
 
 export const getKeywordRankingDetails = async (clientId: string, range: DateRange) => {
   try {
-    const response = await fetch(`/api/clients/${clientId}/keyword-ranking-details?startDate=${range.startDate}&endDate=${range.endDate}`);
+    const response = await fetch(`/api/clients/${clientId}/keyword-ranking-details?startDate=${range.startDate}&endDate=${range.endDate}`, {
+      cache: 'no-store'
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to fetch keyword details');
     return data;
@@ -225,6 +232,7 @@ export interface DashboardMetrics {
   activityTotal: ComparisonResult;
   top3: number;
   top10: number;
+  lastSyncedAt?: string;
 }
 
 export const aggregateMetrics = async (clientId: string, current: DateRange, previous: DateRange): Promise<DashboardMetrics> => {
@@ -240,21 +248,21 @@ export const aggregateMetrics = async (clientId: string, current: DateRange, pre
   };
 
   const currSum = {
-    clicks: currentLive?.gsc_clicks || sumWeekly(currentWeekly, 'gsc_clicks') || 0,
-    impressions: currentLive?.gsc_impressions || sumWeekly(currentWeekly, 'gsc_impressions') || 0,
-    ctr: currentLive?.gsc_ctr || (currentWeekly.length ? (sumWeekly(currentWeekly, 'gsc_ctr') / currentWeekly.length) : 0) || 0,
-    position: currentLive?.gsc_position || (currentWeekly.length ? (sumWeekly(currentWeekly, 'gsc_position') / currentWeekly.length) : 0) || 0,
-    traffic: currentLive?.ga4_traffic || sumWeekly(currentWeekly, 'ga4_traffic') || 0,
+    clicks: currentLive?.gsc_clicks ?? sumWeekly(currentWeekly, 'gsc_clicks') ?? 0,
+    impressions: currentLive?.gsc_impressions ?? sumWeekly(currentWeekly, 'gsc_impressions') ?? 0,
+    ctr: currentLive?.gsc_ctr ?? (currentWeekly.length ? (sumWeekly(currentWeekly, 'gsc_ctr') / currentWeekly.length) : 0) ?? 0,
+    position: currentLive?.gsc_position ?? (currentWeekly.length ? (sumWeekly(currentWeekly, 'gsc_position') / currentWeekly.length) : 0) ?? 0,
+    traffic: currentLive?.ga4_traffic ?? sumWeekly(currentWeekly, 'ga4_traffic') ?? 0,
     leads: sumWeekly(currentWeekly, 'leads_total'),
     activity: sumWeekly(currentWeekly, 'pages_optimized') + sumWeekly(currentWeekly, 'blogs_published') + sumWeekly(currentWeekly, 'backlinks_built')
   };
 
   const prevSum = {
-    clicks: previousLive?.gsc_clicks || sumWeekly(previousWeekly, 'gsc_clicks') || 0,
-    impressions: previousLive?.gsc_impressions || sumWeekly(previousWeekly, 'gsc_impressions') || 0,
-    ctr: previousLive?.gsc_ctr || (previousWeekly.length ? (sumWeekly(previousWeekly, 'gsc_ctr') / previousWeekly.length) : 0) || 0,
-    position: previousLive?.gsc_position || (previousWeekly.length ? (sumWeekly(previousWeekly, 'gsc_position') / previousWeekly.length) : 0) || 0,
-    traffic: previousLive?.ga4_traffic || sumWeekly(previousWeekly, 'ga4_traffic') || 0,
+    clicks: previousLive?.gsc_clicks ?? sumWeekly(previousWeekly, 'gsc_clicks') ?? 0,
+    impressions: previousLive?.gsc_impressions ?? sumWeekly(previousWeekly, 'gsc_impressions') ?? 0,
+    ctr: previousLive?.gsc_ctr ?? (previousWeekly.length ? (sumWeekly(previousWeekly, 'gsc_ctr') / previousWeekly.length) : 0) ?? 0,
+    position: previousLive?.gsc_position ?? (previousWeekly.length ? (sumWeekly(previousWeekly, 'gsc_position') / previousWeekly.length) : 0) ?? 0,
+    traffic: previousLive?.ga4_traffic ?? sumWeekly(previousWeekly, 'ga4_traffic') ?? 0,
     leads: sumWeekly(previousWeekly, 'leads_total'),
     activity: sumWeekly(previousWeekly, 'pages_optimized') + sumWeekly(previousWeekly, 'blogs_published') + sumWeekly(previousWeekly, 'backlinks_built')
   };
@@ -270,7 +278,8 @@ export const aggregateMetrics = async (clientId: string, current: DateRange, pre
     leads: calculateMetricComparison(currSum.leads, hasPrev ? prevSum.leads : null),
     activityTotal: calculateMetricComparison(currSum.activity, hasPrev ? prevSum.activity : null),
     top3: currentLive?.gsc_top3 || sumWeekly(currentWeekly, 'top_3_count') || 0,
-    top10: currentLive?.gsc_top10 || sumWeekly(currentWeekly, 'top_10_count') || 0
+    top10: currentLive?.gsc_top10 || sumWeekly(currentWeekly, 'top_10_count') || 0,
+    lastSyncedAt: currentWeekly[0]?.imported_at || previousWeekly[0]?.imported_at
   };
 };
 
@@ -587,6 +596,8 @@ export const runAiAnalysis = async (params: {
   startDate: string;
   endDate: string;
   simulate?: boolean;
+  runTechnicalCrawl?: boolean;
+  generateAiFixes?: boolean;
 }): Promise<any> => {
   try {
     const response = await fetch('/api/ai/analyze', {

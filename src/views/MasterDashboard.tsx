@@ -100,6 +100,7 @@ export default function MasterDashboard() {
 
   const [viewingPeriod, setViewingPeriod] = useState<{ start: Date; end: Date } | null>(null);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleSyncToSheets = async () => {
     if (rows.length === 0) {
@@ -145,6 +146,8 @@ export default function MasterDashboard() {
       const res = await fetch(`/api/cron/sync-dashboard-cache?mode=${viewMode}`, { method: 'GET' });
       if(!res.ok) throw new Error('Live Sync failed');
       await fetchData(true);
+      setSuccessMsg("Live Google metrics successfully synchronized and cached in database!");
+      setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err) {
       console.error(err);
       alert('Live sync failed');
@@ -1179,6 +1182,22 @@ export default function MasterDashboard() {
           theme={theme}
           onClose={() => setKeywordModal(null)}
         />
+      )}
+
+      {/* Floating Success Notification Toast */}
+      {successMsg && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-[#76c9be]/40 text-[#082a36]' : 'bg-zinc-950/95 border-emerald-500/20 text-emerald-400'
+        }`}>
+          <CheckCircle2 className="shrink-0 mt-0.5 text-emerald-500 animate-bounce" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Successful</h5>
+              <button onClick={() => setSuccessMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{successMsg}</p>
+          </div>
+        </div>
       )}
     </div>
   );

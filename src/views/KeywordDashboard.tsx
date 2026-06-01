@@ -18,7 +18,9 @@ import {
   ArrowUp,
   ArrowDown,
   Settings,
-  Target
+  Target,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { DateRange, DatePreset, getDatePresetRange, getPreviousPeriod, calculatePositionComparison, calculateMetricComparison } from '../lib/seoUtils';
 import { getClients, Client, Keyword, KeywordHistory, getKeywords, getKeywordHistory, addKeyword, deleteKeyword, getInsights, updateKeyword } from '../services/dataService';
@@ -47,6 +49,8 @@ export default function KeywordDashboard() {
   const [addingActionFor, setAddingActionFor] = useState<Client | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [editQuery, setEditQuery] = useState('');
   const [editUrl, setEditUrl] = useState('');
 
@@ -107,12 +111,13 @@ export default function KeywordDashboard() {
 
     if (forceLive) setIsLiveSyncing(true);
     setLoading(true);
+    setError(null);
     try {
       const [k, h, ph, gsc] = await Promise.all([
         getKeywords(selectedClient),
         getKeywordHistory(selectedClient, range),
         getKeywordHistory(selectedClient, getPreviousPeriod(range)),
-        getInsights(selectedClient, range).catch(() => null)
+        getInsights(selectedClient, range)
       ]);
       setKeywords(k);
       setHistory(h);
@@ -123,11 +128,18 @@ export default function KeywordDashboard() {
       if (gsc) {
         sessionStorage.setItem(cacheKey, JSON.stringify(gsc));
       }
-    } catch (error) {
-      console.error("Failed to fetch keyword intelligence:", error);
+
+      if (forceLive) {
+        setSuccessMsg('Satellite keyword metrics successfully synced from Search Console!');
+        setTimeout(() => setSuccessMsg(null), 5000);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch keyword intelligence:", err);
+      setError(err.message || 'Live keyword sync failed.');
+    } finally {
+      setLoading(false);
+      setIsLiveSyncing(false);
     }
-    setLoading(false);
-    setIsLiveSyncing(false);
   };
 
   useEffect(() => {
@@ -596,6 +608,37 @@ export default function KeywordDashboard() {
                 Save Changes
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Floating Success Notification Toast */}
+      {successMsg && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-[#76c9be]/40 text-[#082a36]' : 'bg-zinc-950/95 border-emerald-500/20 text-emerald-400'
+        }`}>
+          <CheckCircle2 className="shrink-0 mt-0.5 text-emerald-500 animate-bounce" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Successful</h5>
+              <button onClick={() => setSuccessMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{successMsg}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Error Notification Toast */}
+      {error && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-rose-200 text-rose-950' : 'bg-zinc-950/95 border-red-500/20 text-red-400'
+        }`}>
+          <AlertCircle className="shrink-0 mt-0.5 text-rose-500 animate-pulse" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Failed</h5>
+              <button onClick={() => setError(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{error}</p>
           </div>
         </div>
       )}

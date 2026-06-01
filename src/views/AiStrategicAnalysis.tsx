@@ -148,7 +148,9 @@ export default function AiStrategicAnalysis() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedModel, setSelectedModel] = useState<'gemini' | 'claude' | 'gpt'>('gemini');
+  const [selectedModel, setSelectedModel] = useState<'gemini' | 'claude' | 'gpt'>('gpt');
+  const [selectedClaudeModel, setSelectedClaudeModel] = useState<string>('claude-haiku-4-5-20251001');
+  const [selectedGptModel, setSelectedGptModel] = useState<string>('gpt-4o-mini');
   const [analysisType, setAnalysisType] = useState<'light' | 'deep'>('light');
   const [simulate, setSimulate] = useState(true); // Default to simulation mode to prevent initial API cost blockers
   const [runTechnicalCrawl, setRunTechnicalCrawl] = useState(false);
@@ -256,7 +258,7 @@ export default function AiStrategicAnalysis() {
     try {
       const response = await runAiAnalysis({
         clientId: selectedClientId,
-        model: selectedModel,
+        model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
         analysisType,
         startDate,
         endDate,
@@ -274,7 +276,7 @@ export default function AiStrategicAnalysis() {
           .from('ai_audit_history')
           .insert([{
             client_id: selectedClientId,
-            model: selectedModel,
+            model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
             analysis_type: analysisType,
             start_date: startDate,
             end_date: endDate,
@@ -337,7 +339,7 @@ export default function AiStrategicAnalysis() {
           url: pageUrl,
           pageTitle,
           issues,
-          model: selectedModel,
+          model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
           simulate
         })
       });
@@ -582,7 +584,108 @@ export default function AiStrategicAnalysis() {
                 </Tooltip>
               ))}
             </div>
-            
+
+            {/* Specific Model selection and pricing breakdown */}
+            {(selectedModel === 'claude' || selectedModel === 'gpt') && (
+              <div className={`mt-3 p-4 rounded-xl border space-y-3 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
+                isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950/60 border-white/5'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold tracking-normal text-zinc-400">
+                    {selectedModel === 'claude' ? 'Select Claude Model' : 'Select ChatGPT Model'}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-sm font-semibold uppercase ${
+                    isWhite ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {(selectedModel === 'claude' ? selectedClaudeModel === 'claude-haiku-4-5-20251001' : selectedGptModel === 'gpt-4o-mini') ? 'Cheapest Default' : 'Custom Active'}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <select
+                    value={selectedModel === 'claude' ? selectedClaudeModel : selectedGptModel}
+                    onChange={(e) => {
+                      if (selectedModel === 'claude') {
+                        setSelectedClaudeModel(e.target.value);
+                      } else {
+                        setSelectedGptModel(e.target.value);
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-xl text-sm font-medium focus:outline-none transition-all normal-case tracking-normal ${
+                      isWhite ? 'bg-white border-zinc-200 text-[#082a36]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
+                    }`}
+                  >
+                    {selectedModel === 'claude' ? (
+                      <>
+                        <option value="claude-haiku-4-5-20251001">Claude 4.5 Haiku (Cheapest - Recommended)</option>
+                        <option value="claude-sonnet-4-6">Claude 4.6 Sonnet (Best Value)</option>
+                        <option value="claude-opus-4-8">Claude 4.8 Opus (Premium)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Cheapest - Recommended)</option>
+                        <option value="gpt-4o">GPT-4o Full (Standard Quality)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                {/* Pricing Table / Metric */}
+                {(() => {
+                  const currentModelId = selectedModel === 'claude' ? selectedClaudeModel : selectedGptModel;
+                  let inputPrice = '';
+                  let outputPrice = '';
+                  let details = '';
+
+                  if (currentModelId === 'claude-haiku-4-5-20251001') {
+                    inputPrice = '$1.00';
+                    outputPrice = '$5.00';
+                    details = 'Claude Haiku 4.5 is the fastest and most cost-effective Claude model.';
+                  } else if (currentModelId === 'claude-sonnet-4-6') {
+                    inputPrice = '$3.00';
+                    outputPrice = '$15.00';
+                    details = 'Claude Sonnet 4.6 balance of supreme intellect and highly detailed strategy.';
+                  } else if (currentModelId === 'claude-opus-4-8') {
+                    inputPrice = '$15.00';
+                    outputPrice = '$75.00';
+                    details = 'Claude Opus 4.8 is the most powerful model for deep enterprise intelligence.';
+                  } else if (currentModelId === 'gpt-4o-mini') {
+                    inputPrice = '$0.15';
+                    outputPrice = '$0.60';
+                    details = 'GPT-4o Mini is an ultra-cheap, lightning fast model for bulk operations.';
+                  } else if (currentModelId === 'gpt-4o') {
+                    inputPrice = '$2.50';
+                    outputPrice = '$10.00';
+                    details = 'GPT-4o Full offers maximum developer-grade code patches and structural fixes.';
+                  }
+
+                  return (
+                    <div className={`p-3 rounded-xl space-y-2 border text-sm font-medium ${
+                      isWhite ? 'bg-white border-zinc-100' : 'bg-zinc-900/40 border-white/5'
+                    }`}>
+                      <div className="grid grid-cols-2 gap-4 text-center">
+                        <div className="border-r border-zinc-200 dark:border-white/5">
+                          <span className="text-zinc-500 block mb-0.5 text-sm">Input Pricing</span>
+                          <span className={`text-sm font-semibold font-mono ${isWhite ? 'text-[#082a36]' : 'text-emerald-400'}`}>
+                            {inputPrice} / 1M tokens
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 block mb-0.5 text-sm">Output Pricing</span>
+                          <span className={`text-sm font-semibold font-mono ${isWhite ? 'text-[#082a36]' : 'text-emerald-400'}`}>
+                            {outputPrice} / 1M tokens
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-sm text-zinc-500 italic mt-1 text-center leading-normal">
+                        {details}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-4 pt-2">
               <div className="flex flex-col gap-2">
                 {/* Simulation Mode Toggle */}

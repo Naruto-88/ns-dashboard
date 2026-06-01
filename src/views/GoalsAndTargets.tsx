@@ -11,6 +11,7 @@ import {
   TrendingDown, 
   AlertTriangle, 
   CheckCircle2, 
+  AlertCircle,
   Clock, 
   Edit2, 
   X, 
@@ -64,10 +65,13 @@ export default function GoalsAndTargets() {
 
   const [addingActionFor, setAddingActionFor] = useState<ClientWithActuals | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const fetchClientTargetsAndActuals = async (forceLive = false) => {
     if (forceLive) setIsLiveSyncing(true);
     setLoading(true);
+    setError(null);
     try {
       const clientList = await getClients();
       
@@ -76,7 +80,10 @@ export default function GoalsAndTargets() {
       
       // If live sync requested, trigger the server-side cron first to refresh the monthly cache
       if (forceLive) {
-        await triggerMonthlySync().catch(err => console.error("Error triggering sync:", err));
+        const syncSuccess = await triggerMonthlySync();
+        if (!syncSuccess) {
+          throw new Error('Monthly cache sync request failed. Please check Google OAuth connectivity.');
+        }
       }
       
       // Fetch monthly cache records and pending actions in parallel
@@ -115,8 +122,13 @@ export default function GoalsAndTargets() {
       });
 
       setClients(enrichedClients);
-    } catch (error) {
-      console.error('Error fetching goals data:', error);
+      if (forceLive) {
+        setSuccessMsg('Live monthly target and performance cache successfully synced!');
+        setTimeout(() => setSuccessMsg(null), 5000);
+      }
+    } catch (err: any) {
+      console.error('Error fetching goals data:', err);
+      setError(err.message || 'Live monthly sync failed.');
     } finally {
       setLoading(false);
       setIsLiveSyncing(false);
@@ -718,6 +730,38 @@ export default function GoalsAndTargets() {
             fetchClientTargetsAndActuals(); // Light refetch without forceLive
           }}
         />
+      )}
+
+      {/* Floating Success Notification Toast */}
+      {successMsg && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          isWhite ? 'bg-white/95 border-[#76c9be]/40 text-[#082a36]' : 'bg-zinc-950/95 border-emerald-500/20 text-emerald-400'
+        }`}>
+          <CheckCircle2 className="shrink-0 mt-0.5 text-emerald-500 animate-bounce" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Successful</h5>
+              <button onClick={() => setSuccessMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{successMsg}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Error Notification Toast */}
+      {error && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          isWhite ? 'bg-white/95 border-rose-200 text-rose-950' : 'bg-zinc-950/95 border-red-500/20 text-red-400'
+        }`}>
+          <AlertCircle className="shrink-0 mt-0.5 text-rose-500 animate-pulse" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Failed</h5>
+              <button onClick={() => setError(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{error}</p>
+          </div>
+        </div>
       )}
     </div>
   );

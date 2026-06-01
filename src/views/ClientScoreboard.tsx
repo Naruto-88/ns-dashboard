@@ -31,10 +31,13 @@ export default function ClientScoreboard() {
   const [showFullReport, setShowFullReport] = useState<any | null>(null);
   const [addingActionFor, setAddingActionFor] = useState<Client | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const fetchData = async (forceLive = false) => {
     if (forceLive) setIsLiveSyncing(true);
     setLoading(true);
+    setError(null);
     
     try {
       const clientList = await getClients();
@@ -56,6 +59,9 @@ export default function ClientScoreboard() {
         endDate: format(previousEnd, 'yyyy-MM-dd')
       };
 
+      const currentMonday = format(startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const previousMonday = format(startOfWeek(subWeeks(today, 2), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
       const dataMap: Record<string, any> = {};
       const weeklyDataMap: Record<string, WeeklyData[]> = {};
 
@@ -63,11 +69,24 @@ export default function ClientScoreboard() {
       const pendingActionsData = actionsData.data || [];
 
       await Promise.all(clientList.map(async (client) => {
-        const [liveCurrent, livePrevious, dbData] = await Promise.all([
-          forceLive ? getLiveMetrics(client.id, currentRange) : Promise.resolve(null),
-          forceLive ? getLiveMetrics(client.id, previousRange) : Promise.resolve(null),
-          getWeeklyData(client.id, { startDate: format(subMonths(today, 6), 'yyyy-MM-dd'), endDate: format(today, 'yyyy-MM-dd') })
-        ]);
+        let liveCurrent = null;
+        let livePrevious = null;
+
+        if (forceLive) {
+          // Fetch and auto-save current week
+          const resCurr = await fetch(`/api/clients/${client.id}/sync-weekly-data?weekStart=${currentMonday}`, { method: 'POST' });
+          const dataCurr = await resCurr.json();
+          if (!resCurr.ok) throw new Error(dataCurr.error || `Sync failed for ${client.name}`);
+          liveCurrent = dataCurr;
+
+          // Fetch and auto-save previous week
+          const resPrev = await fetch(`/api/clients/${client.id}/sync-weekly-data?weekStart=${previousMonday}`, { method: 'POST' });
+          const dataPrev = await resPrev.json();
+          if (!resPrev.ok) throw new Error(dataPrev.error || `Sync failed for ${client.name}`);
+          livePrevious = dataPrev;
+        }
+
+        const dbData = await getWeeklyData(client.id, { startDate: format(subMonths(today, 6), 'yyyy-MM-dd'), endDate: format(today, 'yyyy-MM-dd') });
         
         dataMap[client.id] = { 
           liveCurrent, 
@@ -81,8 +100,13 @@ export default function ClientScoreboard() {
       (window as any).__liveData = dataMap; // Store for useMemo
       setLoading(false);
       setIsLiveSyncing(false);
-    } catch (e) {
+      if (forceLive) {
+        setSuccessMsg('Satellite traffic metrics synced and auto-saved to database successfully!');
+        setTimeout(() => setSuccessMsg(null), 5000);
+      }
+    } catch (e: any) {
       console.error(e);
+      setError(e.message || 'Live sync failed due to connection error.');
       setLoading(false);
       setIsLiveSyncing(false);
     }
@@ -205,6 +229,11 @@ export default function ClientScoreboard() {
                     {client.health.status}
                   </span>
                   <span className={`text-sm font-medium   truncate ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-600'}`}>ID: {client.ga4_property_id}</span>
+                  {client.latest?.imported_at && (
+                    <span className={`text-xs font-medium ml-2 ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                      Sync: {format(parseISO(client.latest.imported_at), 'MMM d, h:mm a')}
+                    </span>
+                  )}
                 </div>
                 {client.pendingActions && client.pendingActions.length > 0 && (
                   <div className="flex flex-col gap-0.5 mt-2 max-h-16 overflow-y-auto pr-2 custom-scrollbar">
@@ -451,6 +480,38 @@ export default function ClientScoreboard() {
             fetchData();
           }}
         />
+      )}
+
+      {/* Floating Success Notification Toast */}
+      {successMsg && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-[#76c9be]/40 text-[#082a36]' : 'bg-zinc-950/95 border-emerald-500/20 text-emerald-400'
+        }`}>
+          <CheckCircle2 className="shrink-0 mt-0.5 text-emerald-500 animate-bounce" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Successful</h5>
+              <button onClick={() => setSuccessMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{successMsg}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Error Notification Toast */}
+      {error && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-rose-200 text-rose-950' : 'bg-zinc-950/95 border-red-500/20 text-red-400'
+        }`}>
+          <AlertCircle className="shrink-0 mt-0.5 text-rose-500 animate-pulse" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Failed</h5>
+              <button onClick={() => setError(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{error}</p>
+          </div>
+        </div>
       )}
     </div>
   );

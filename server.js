@@ -364,14 +364,14 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
   const { weekStart } = req.query;
   if (!weekStart) return res.status(400).json({ error: "weekStart is required" });
   try {
-    const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
+    const auth = await getAuthenticatedClient(req, clientId);
     const { data: client, error: clientError } = await supabase.from("clients").select("*").eq("id", clientId).single();
     if (clientError || !client) return res.status(404).json({ error: "Client not found" });
     const startDate = weekStart;
     const endDate = new Date(new Date(startDate).getTime() + 6 * 24 * 60 * 60 * 1e3).toISOString().split("T")[0];
     let ga4Data = { traffic: 0, newUsers: 0, returningUsers: 0, organicTraffic: 0 };
     let phoneCallsCount = 0;
-    if (auth && client?.ga4_property_id) {
+    if (client?.ga4_property_id) {
       try {
         const analytics = google.analyticsdata({ version: "v1beta", auth });
         const response = await analytics.properties.runReport({
@@ -430,10 +430,11 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
         }
       } catch (e) {
         console.error("GA4 Sync error:", e);
+        throw new Error(`GA4 Analytics Sync failed: ${e.message || String(e)}`);
       }
     }
     let gscData = { clicks: 0, impressions: 0, ctr: 0, position: 0 };
-    if (auth && client?.gsc_site_url) {
+    if (client?.gsc_site_url) {
       try {
         const searchconsole = google.searchconsole({ version: "v1", auth });
         const { response } = await fetchGscWithSelfHeal(
@@ -455,26 +456,27 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
         }
       } catch (e) {
         console.error("GSC Sync error after self-heal:", e.message);
+        throw new Error(`GSC Search Console Sync failed: ${e.message || String(e)}`);
       }
     }
-    const fallback = getSeedFallback(client.name, client.short_code, startDate);
-    if (gscData.clicks === 0) {
-      gscData.clicks = fallback.gsc_clicks;
-      gscData.impressions = fallback.gsc_impressions;
-      gscData.ctr = fallback.gsc_ctr;
-      gscData.position = fallback.gsc_position;
-    }
-    if (ga4Data.traffic === 0) {
-      ga4Data.traffic = fallback.ga4_traffic;
-      ga4Data.newUsers = fallback.ga4_new_users;
-      ga4Data.returningUsers = fallback.ga4_returning_users;
-      ga4Data.organicTraffic = fallback.ga4_organic_traffic;
-    }
-    if (ga4Data.organicTraffic === 0 && ga4Data.traffic > 0) {
-      ga4Data.organicTraffic = Math.round(ga4Data.traffic * 0.72);
-    }
-    if (phoneCallsCount === 0) {
-      phoneCallsCount = fallback.phone_calls;
+    const { error: saveError } = await supabase.from("weekly_data").upsert({
+      client_id: clientId,
+      week_start_date: startDate,
+      gsc_clicks: gscData.clicks,
+      gsc_impressions: gscData.impressions,
+      gsc_ctr: parseFloat(gscData.ctr.toFixed(2)),
+      gsc_position: parseFloat(gscData.position.toFixed(2)),
+      ga4_traffic: ga4Data.traffic,
+      ga4_new_users: ga4Data.newUsers,
+      ga4_returning_users: ga4Data.returningUsers,
+      ga4_organic_traffic: ga4Data.organicTraffic,
+      phone_calls: phoneCallsCount,
+      imported_at: (/* @__PURE__ */ new Date()).toISOString(),
+      import_source: "live_sync"
+    }, { onConflict: "client_id, week_start_date" });
+    if (saveError) {
+      console.error(`[SYNC SAVE ERROR] Failed to auto-save weekly data for client ${clientId} on week ${startDate}:`, saveError.message);
+      throw new Error(`Database auto-save failed: ${saveError.message}`);
     }
     res.json({
       gsc_clicks: gscData.clicks,
@@ -497,7 +499,7 @@ app.get("/api/clients/:clientId/live-metrics", async (req, res) => {
   const { startDate, endDate } = req.query;
   if (!startDate || !endDate) return res.status(400).json({ error: "startDate and endDate are required" });
   try {
-    const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
+    const auth = await getAuthenticatedClient(req, clientId);
     const { data: client, error: clientError } = await supabase.from("clients").select("*").eq("id", clientId).single();
     if (clientError || !client) return res.status(404).json({ error: "Client not found" });
     let ga4Data = { traffic: 0, newUsers: 0, returningUsers: 0, organicTraffic: 0 };
@@ -543,6 +545,7 @@ app.get("/api/clients/:clientId/live-metrics", async (req, res) => {
           ga4Data.organicTraffic = organicSessions;
         } catch (e) {
           console.error("GA4 Live Fetch error:", e);
+          throw new Error(`GA4 Analytics sync failed: ${e.message || String(e)}`);
         }
         try {
           const eventResponse = await analytics.properties.runReport({
@@ -615,6 +618,7 @@ app.get("/api/clients/:clientId/live-metrics", async (req, res) => {
             status: "Failed",
             message: `GSC keywords fetch failed: ${e.message || String(e)}`
           }).catch(() => null);
+          throw new Error(`GSC Search Console sync failed: ${e.message || String(e)}`);
         }
       }
     }
@@ -649,27 +653,6 @@ app.get("/api/clients/:clientId/live-metrics", async (req, res) => {
       } catch (err) {
         console.error("[LEADS API] Failed to fetch custom Lead API:", err.message);
       }
-    }
-    const fallback = getSeedFallback(client.name, client.short_code, startDate);
-    if (gscData.clicks === 0) {
-      gscData.clicks = fallback.gsc_clicks;
-      gscData.impressions = fallback.gsc_impressions;
-      gscData.ctr = fallback.gsc_ctr;
-      gscData.position = fallback.gsc_position;
-      gscData.top3 = fallback.gsc_top3;
-      gscData.top10 = fallback.gsc_top10;
-    }
-    if (ga4Data.traffic === 0) {
-      ga4Data.traffic = fallback.ga4_traffic;
-      ga4Data.newUsers = fallback.ga4_new_users;
-      ga4Data.returningUsers = fallback.ga4_returning_users;
-      ga4Data.organicTraffic = fallback.ga4_organic_traffic;
-    }
-    if (ga4Data.organicTraffic === 0 && ga4Data.traffic > 0) {
-      ga4Data.organicTraffic = Math.round(ga4Data.traffic * 0.72);
-    }
-    if (phoneCallsCount === 0) {
-      phoneCallsCount = fallback.phone_calls;
     }
     res.json({
       gsc_clicks: gscData.clicks,
@@ -1696,24 +1679,20 @@ ${promptSuffix}`;
         throw lastError;
       }
     } else if (model === "claude") {
-      let response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 4e3,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        const isNotFound = errorText.includes("not_found_error") || response.status === 404;
-        if (isNotFound) {
-          console.warn("[CLAUDE] Model 20241022 not found/enabled. Falling back to claude-3-5-sonnet-20240620...");
+      const claudeModels = [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-sonnet-latest",
+        "claude-3-5-sonnet-20240620",
+        "claude-3-5-haiku-20241022",
+        "claude-3-5-haiku-latest",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307"
+      ];
+      let lastError = null;
+      let response = null;
+      for (const mName of claudeModels) {
+        console.log(`[CLAUDE POOL] Attempting strategic analysis API call with model: ${mName}`);
+        try {
           response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
@@ -1722,16 +1701,26 @@ ${promptSuffix}`;
               "content-type": "application/json"
             },
             body: JSON.stringify({
-              model: "claude-3-5-sonnet-20240620",
+              model: mName,
               max_tokens: 4e3,
               messages: [{ role: "user", content: prompt }]
             })
           });
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[CLAUDE POOL] Model ${mName} failed with status ${response.status}: ${errorText}. Trying next...`);
+            lastError = new Error(`Claude API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+          lastError = null;
+          break;
+        } catch (err) {
+          console.error(`[CLAUDE POOL] Exception with model ${mName}:`, err.message || err);
+          lastError = err;
         }
-        if (!response.ok) {
-          const finalErrorText = isNotFound ? await response.text() : errorText;
-          throw new Error(`Claude API error: ${response.status} - ${finalErrorText}`);
-        }
+      }
+      if (lastError || !response || !response.ok) {
+        throw lastError || new Error("All Claude models in the pool failed.");
       }
       const data = await response.json();
       const text = data.content?.[0]?.text;
@@ -1900,24 +1889,20 @@ CRITICAL INTEGRITY & SPELLING RULES:
         throw lastError;
       }
     } else if (selectedModel === "claude") {
-      let response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 2e3,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        const isNotFound = errorText.includes("not_found_error") || response.status === 404;
-        if (isNotFound) {
-          console.warn("[CLAUDE] Model 20241022 not found/enabled. Falling back to claude-3-5-sonnet-20240620...");
+      const claudeModels = [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-sonnet-latest",
+        "claude-3-5-sonnet-20240620",
+        "claude-3-5-haiku-20241022",
+        "claude-3-5-haiku-latest",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307"
+      ];
+      let lastError = null;
+      let response = null;
+      for (const mName of claudeModels) {
+        console.log(`[CLAUDE POOL] Attempting page optimisation API call with model: ${mName}`);
+        try {
           response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
@@ -1926,16 +1911,26 @@ CRITICAL INTEGRITY & SPELLING RULES:
               "content-type": "application/json"
             },
             body: JSON.stringify({
-              model: "claude-3-5-sonnet-20240620",
+              model: mName,
               max_tokens: 2e3,
               messages: [{ role: "user", content: prompt }]
             })
           });
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[CLAUDE POOL] Model ${mName} failed with status ${response.status}: ${errorText}. Trying next...`);
+            lastError = new Error(`Claude API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+          lastError = null;
+          break;
+        } catch (err) {
+          console.error(`[CLAUDE POOL] Exception with model ${mName}:`, err.message || err);
+          lastError = err;
         }
-        if (!response.ok) {
-          const finalErrorText = isNotFound ? await response.text() : errorText;
-          throw new Error(`Claude API error: ${response.status} - ${finalErrorText}`);
-        }
+      }
+      if (lastError || !response || !response.ok) {
+        throw lastError || new Error("All Claude models in the pool failed.");
       }
       const data = await response.json();
       const text = data.content?.[0]?.text;
@@ -2389,33 +2384,6 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
       } catch (err) {
         console.error(`[MONTHLY SYNC] Weekly records query error for ${client.name}:`, err.message);
       }
-      const fallback = getSeedFallback(client.name, client.short_code, startOfMonthStr);
-      if (gscClicks === 0) {
-        gscClicks = fallback.gsc_clicks;
-        gscImpressions = fallback.gsc_impressions;
-        gscCtr = fallback.gsc_ctr;
-        gscPosition = fallback.gsc_position;
-        gscTop3 = fallback.gsc_top3;
-        gscTop10 = fallback.gsc_top10;
-      }
-      if (ga4Traffic === 0) {
-        ga4Traffic = fallback.ga4_traffic;
-        ga4NewUsers = fallback.ga4_new_users;
-        ga4ReturningUsers = fallback.ga4_returning_users;
-        ga4OrganicTraffic = fallback.ga4_organic_traffic;
-      }
-      if (ga4OrganicTraffic === 0 && ga4Traffic > 0) {
-        ga4OrganicTraffic = Math.round(ga4Traffic * 0.72);
-      }
-      if (phoneCallsCount === 0) {
-        phoneCallsCount = fallback.phone_calls;
-      }
-      if (leadsTotal === 0) {
-        leadsTotal = Math.round(phoneCallsCount * 0.4) || 2;
-      }
-      if (ahrefsDr === 0) {
-        ahrefsDr = fallback.ahrefs_dr || 10;
-      }
       const { error: upsertError } = await supabase.from("monthly_data_cache").upsert({
         client_id: client.id,
         month_start_date: startOfMonthStr,
@@ -2612,33 +2580,6 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
         }
       } catch (err) {
         console.error(`[MONTHLY SYNC] Weekly records query error for ${client.name}:`, err.message);
-      }
-      const fallback = getSeedFallback(client.name, client.short_code, startOfMonthStr);
-      if (gscClicks === 0) {
-        gscClicks = fallback.gsc_clicks;
-        gscImpressions = fallback.gsc_impressions;
-        gscCtr = fallback.gsc_ctr;
-        gscPosition = fallback.gsc_position;
-        gscTop3 = fallback.gsc_top3;
-        gscTop10 = fallback.gsc_top10;
-      }
-      if (ga4Traffic === 0) {
-        ga4Traffic = fallback.ga4_traffic;
-        ga4NewUsers = fallback.ga4_new_users;
-        ga4ReturningUsers = fallback.ga4_returning_users;
-        ga4OrganicTraffic = fallback.ga4_organic_traffic;
-      }
-      if (ga4OrganicTraffic === 0 && ga4Traffic > 0) {
-        ga4OrganicTraffic = Math.round(ga4Traffic * 0.72);
-      }
-      if (phoneCallsCount === 0) {
-        phoneCallsCount = fallback.phone_calls;
-      }
-      if (leadsTotal === 0) {
-        leadsTotal = Math.round(phoneCallsCount * 0.4) || 2;
-      }
-      if (ahrefsDr === 0) {
-        ahrefsDr = fallback.ahrefs_dr || 10;
       }
       const { error: upsertError } = await supabase.from("monthly_data_cache").upsert({
         client_id: client.id,

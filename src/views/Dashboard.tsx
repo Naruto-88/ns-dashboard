@@ -30,8 +30,9 @@ import {
   ArrowDown,
   CheckCircle2
 } from 'lucide-react';
+import { format, startOfWeek, parseISO } from 'date-fns';
 import { DateRange, DatePreset, getDatePresetRange, getPreviousPeriod, ComparisonResult } from '../lib/seoUtils';
-import { getClients, aggregateMetrics, Client, DashboardMetrics, getInsights, getPerformanceTrend, getKeywords, Keyword } from '../services/dataService';
+import { getClients, aggregateMetrics, Client, DashboardMetrics, getInsights, getPerformanceTrend, getKeywords, Keyword, syncWeeklyData } from '../services/dataService';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ClientSelector from '../components/ClientSelector';
 import Tooltip from '../components/Tooltip';
@@ -109,6 +110,7 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'insights'>('overview');
   
   // Data for advanced views
@@ -144,7 +146,35 @@ export default function Dashboard() {
     }
     
     setError(null);
+    try {
       const prevRange = getPreviousPeriod(range);
+
+      if (forceLive) {
+        // If it's a single week, trigger a persistent DB sync via the POST endpoint first
+        const isSingleWeek = preset === 'last_week' || (
+          range.startDate && range.endDate &&
+          Math.round((new Date(range.endDate).getTime() - new Date(range.startDate).getTime()) / (1000 * 60 * 60 * 24)) === 6 &&
+          new Date(range.startDate + 'T00:00:00').getDay() === 1
+        );
+
+        if (isSingleWeek) {
+          try {
+            console.log(`[LIVE SYNC] Auto-syncing single week to database for ${range.startDate}...`);
+            const syncRes = await fetch(`/api/clients/${selectedClient}/sync-weekly-data?weekStart=${range.startDate}`, {
+              method: 'POST',
+              cache: 'no-store'
+            });
+            if (!syncRes.ok) {
+              const syncErr = await syncRes.json();
+              console.warn('[LIVE SYNC WARNING] DB auto-sync returned status:', syncRes.status, syncErr);
+            } else {
+              console.log('[LIVE SYNC] Database auto-sync completed successfully!');
+            }
+          } catch (syncError) {
+            console.error('[LIVE SYNC ERROR] Failed to auto-sync week to database:', syncError);
+          }
+        }
+      }
 
       if (!forceLive) {
         const cachedMetrics = sessionStorage.getItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`);
@@ -152,71 +182,42 @@ export default function Dashboard() {
         const cachedTrend = sessionStorage.getItem(`agency_dash_trend_${selectedClient}_${range.startDate}_${range.endDate}`);
 
         if (cachedMetrics && cachedInsights && cachedTrend) {
-          try {
-            setMetrics(JSON.parse(cachedMetrics));
-            setInsights(JSON.parse(cachedInsights));
-            setTrendData(JSON.parse(cachedTrend));
-            setLoading(false);
-            return;
-          } catch (e) {
-            console.error('Error parsing cached dashboard data', e);
-          }
+          setMetrics(JSON.parse(cachedMetrics));
+          setInsights(JSON.parse(cachedInsights));
+          setTrendData(JSON.parse(cachedTrend));
+          setLoading(false);
+          return;
         }
       }
       
-      Promise.all([
+      const [metricsData, insightsData, trendDataRes] = await Promise.all([
         aggregateMetrics(selectedClient, range, prevRange),
         getInsights(selectedClient, range),
         getPerformanceTrend(selectedClient, range)
-      ]).then(async ([metricsData, insightsData, trendDataRes]) => {
-        if (forceLive) {
-           sessionStorage.setItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(metricsData));
-           sessionStorage.setItem(`agency_dash_insights_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(insightsData));
-           sessionStorage.setItem(`agency_dash_trend_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(trendDataRes));
-           
-           try {
-             // Save to Database so that Refresh fetches it permanently
-             const { format, startOfWeek, parseISO } = await import('date-fns');
-             const { syncWeeklyData } = await import('../services/dataService');
-             
-             const endDateDate = parseISO(range.endDate);
-             const weekStartStr = format(startOfWeek(endDateDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-             
-             // Extract current values from the aggregated metrics (stripping away ComparisonResult)
-             const gsc_clicks = typeof metricsData.clicks === 'number' ? metricsData.clicks : metricsData.clicks.current;
-             const gsc_impressions = typeof metricsData.impressions === 'number' ? metricsData.impressions : metricsData.impressions.current;
-             const gsc_ctr = typeof metricsData.ctr === 'number' ? metricsData.ctr : metricsData.ctr.current;
-             const gsc_position = typeof metricsData.position === 'number' ? metricsData.position : metricsData.position.current;
-             const ga4_traffic = typeof metricsData.traffic === 'number' ? metricsData.traffic : metricsData.traffic.current;
-             const leads_total = typeof metricsData.leads === 'number' ? metricsData.leads : metricsData.leads.current;
-             
-             await syncWeeklyData(selectedClient, {
-               week_start_date: weekStartStr,
-               gsc_clicks,
-               gsc_impressions,
-               gsc_ctr,
-               gsc_position,
-               ga4_traffic,
-               leads_total,
-               top_3_count: metricsData.top3 || 0,
-               top_10_count: metricsData.top10 || 0
-             });
-           } catch (dbErr) {
-             console.error('Failed to sync to database from Dashboard:', dbErr);
-           }
-        }
+      ]);
 
-        setMetrics(metricsData);
-        setInsights(insightsData);
-        setTrendData(trendDataRes);
-        setLoading(false);
-        setIsLiveSyncing(false);
-      }).catch(err => {
-        console.error('Dashboard Data Fetch Error:', err);
-        setError(err.message);
-        setLoading(false);
-        setIsLiveSyncing(false);
-      });
+      if (forceLive) {
+        sessionStorage.setItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(metricsData));
+        sessionStorage.setItem(`agency_dash_insights_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(insightsData));
+        sessionStorage.setItem(`agency_dash_trend_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(trendDataRes));
+      }
+
+      setMetrics(metricsData);
+      setInsights(insightsData);
+      setTrendData(trendDataRes);
+      setLoading(false);
+      setIsLiveSyncing(false);
+      
+      if (forceLive) {
+        setSuccessMsg('Live Google metrics successfully synchronised and auto-saved to database!');
+        setTimeout(() => setSuccessMsg(null), 5000);
+      }
+    } catch (err: any) {
+      console.error('Dashboard Data Fetch Error:', err);
+      setError(err.message || 'Live sync failed due to invalid credentials or expired session.');
+      setLoading(false);
+      setIsLiveSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -289,7 +290,9 @@ export default function Dashboard() {
             </div>
             <div>
               <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Agency Dashboard</h2>
-              <p className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>Performance Intelligence Hub</p>
+              <p className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                {metrics?.lastSyncedAt ? `Last DB Sync: ${format(parseISO(metrics.lastSyncedAt), 'MMM d, h:mm a')}` : 'Performance Intelligence Hub'}
+              </p>
             </div>
           </div>
         </div>
@@ -863,6 +866,22 @@ export default function Dashboard() {
           onClose={() => setAddingActionFor(null)}
           onSuccess={() => setAddingActionFor(null)}
         />
+      )}
+
+      {/* Floating Success Notification Toast */}
+      {successMsg && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-[#76c9be]/40 text-[#082a36]' : 'bg-zinc-950/95 border-emerald-500/20 text-emerald-400'
+        }`}>
+          <CheckCircle2 className="shrink-0 mt-0.5 text-emerald-500 animate-bounce" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Live Sync Successful</h5>
+              <button onClick={() => setSuccessMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{successMsg}</p>
+          </div>
+        </div>
       )}
     </div>
   );

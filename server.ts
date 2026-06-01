@@ -502,7 +502,7 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
   if (!weekStart) return res.status(400).json({ error: 'weekStart is required' });
 
   try {
-    const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
+    const auth = await getAuthenticatedClient(req, clientId);
     const { data: client, error: clientError } = await supabase
       .from('clients')
       .select('*')
@@ -518,7 +518,7 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
     // 1. Fetch GA4 Data
     let ga4Data = { traffic: 0, newUsers: 0, returningUsers: 0, organicTraffic: 0 };
     let phoneCallsCount = 0;
-    if (auth && client?.ga4_property_id) {
+    if (client?.ga4_property_id) {
       try {
         const analytics = google.analyticsdata({ version: 'v1beta', auth });
         const response = await analytics.properties.runReport({
@@ -587,14 +587,15 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
         } catch (eventErr) {
           console.error('GA4 Event Sync (phone calls) error:', eventErr);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('GA4 Sync error:', e);
+        throw new Error(`GA4 Analytics Sync failed: ${e.message || String(e)}`);
       }
     }
 
     // 2. Fetch GSC Data
     let gscData = { clicks: 0, impressions: 0, ctr: 0, position: 0 };
-    if (auth && client?.gsc_site_url) {
+    if (client?.gsc_site_url) {
       try {
         const searchconsole = google.searchconsole({ version: 'v1', auth });
         const { response } = await fetchGscWithSelfHeal(
@@ -617,28 +618,32 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
         }
       } catch (e: any) {
         console.error('GSC Sync error after self-heal:', e.message);
+        throw new Error(`GSC Search Console Sync failed: ${e.message || String(e)}`);
       }
     }
 
-    // Apply beautiful fallback statistics if data is missing or returns 0
-    const fallback = getSeedFallback(client.name, client.short_code, startDate);
-    if (gscData.clicks === 0) {
-      gscData.clicks = fallback.gsc_clicks;
-      gscData.impressions = fallback.gsc_impressions;
-      gscData.ctr = fallback.gsc_ctr;
-      gscData.position = fallback.gsc_position;
-    }
-    if (ga4Data.traffic === 0) {
-      ga4Data.traffic = fallback.ga4_traffic;
-      ga4Data.newUsers = fallback.ga4_new_users;
-      ga4Data.returningUsers = fallback.ga4_returning_users;
-      ga4Data.organicTraffic = fallback.ga4_organic_traffic;
-    }
-    if (ga4Data.organicTraffic === 0 && ga4Data.traffic > 0) {
-      ga4Data.organicTraffic = Math.round(ga4Data.traffic * 0.72);
-    }
-    if (phoneCallsCount === 0) {
-      phoneCallsCount = fallback.phone_calls;
+    // Auto-save/persist the successfully synced data to Supabase weekly_data table
+    const { error: saveError } = await supabase
+      .from('weekly_data')
+      .upsert({
+        client_id: clientId,
+        week_start_date: startDate,
+        gsc_clicks: gscData.clicks,
+        gsc_impressions: gscData.impressions,
+        gsc_ctr: parseFloat(gscData.ctr.toFixed(2)),
+        gsc_position: parseFloat(gscData.position.toFixed(2)),
+        ga4_traffic: ga4Data.traffic,
+        ga4_new_users: ga4Data.newUsers,
+        ga4_returning_users: ga4Data.returningUsers,
+        ga4_organic_traffic: ga4Data.organicTraffic,
+        phone_calls: phoneCallsCount,
+        imported_at: new Date().toISOString(),
+        import_source: 'live_sync'
+      }, { onConflict: 'client_id, week_start_date' });
+
+    if (saveError) {
+      console.error(`[SYNC SAVE ERROR] Failed to auto-save weekly data for client ${clientId} on week ${startDate}:`, saveError.message);
+      throw new Error(`Database auto-save failed: ${saveError.message}`);
     }
 
     res.json({
@@ -666,7 +671,7 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
   if (!startDate || !endDate) return res.status(400).json({ error: 'startDate and endDate are required' });
 
   try {
-    const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
+    const auth = await getAuthenticatedClient(req, clientId);
     
     const { data: client, error: clientError } = await supabase
       .from('clients')
@@ -725,8 +730,9 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
           ga4Data.newUsers = totalNewUsers;
           ga4Data.returningUsers = Math.max(0, totalActiveUsers - totalNewUsers);
           ga4Data.organicTraffic = organicSessions;
-        } catch (e) {
+        } catch (e: any) {
           console.error('GA4 Live Fetch error:', e);
+          throw new Error(`GA4 Analytics sync failed: ${e.message || String(e)}`);
         }
 
         try {
@@ -809,13 +815,17 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
 
         } catch (e: any) {
           console.error('GSC Live Fetch self-heal failure:', e.message);
-          // Log the error to Supabase import_logs for easy remote debugging
-          await supabase.from('import_logs').insert({
-            client_id: clientId,
-            operation_type: 'live_metrics_gsc_keywords',
-            status: 'Failed',
-            message: `GSC keywords fetch failed: ${e.message || String(e)}`
-          }).catch(() => null);
+          try {
+            await supabase.from('import_logs').insert({
+              client_id: clientId,
+              operation_type: 'live_metrics_gsc_keywords',
+              status: 'Failed',
+              message: `GSC keywords fetch failed: ${e.message || String(e)}`
+            });
+          } catch (err) {
+            console.error('Failed to log import error:', err);
+          }
+          throw new Error(`GSC Search Console sync failed: ${e.message || String(e)}`);
         }
       }
     }
@@ -873,29 +883,6 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
       } catch (err: any) {
         console.error('[LEADS API] Failed to fetch custom Lead API:', err.message);
       }
-    }
-
-    // Apply beautiful fallback statistics if data is missing or returns 0
-    const fallback = getSeedFallback(client.name, client.short_code, startDate as string);
-    if (gscData.clicks === 0) {
-      gscData.clicks = fallback.gsc_clicks;
-      gscData.impressions = fallback.gsc_impressions;
-      gscData.ctr = fallback.gsc_ctr;
-      gscData.position = fallback.gsc_position;
-      gscData.top3 = fallback.gsc_top3;
-      gscData.top10 = fallback.gsc_top10;
-    }
-    if (ga4Data.traffic === 0) {
-      ga4Data.traffic = fallback.ga4_traffic;
-      ga4Data.newUsers = fallback.ga4_new_users;
-      ga4Data.returningUsers = fallback.ga4_returning_users;
-      ga4Data.organicTraffic = fallback.ga4_organic_traffic;
-    }
-    if (ga4Data.organicTraffic === 0 && ga4Data.traffic > 0) {
-      ga4Data.organicTraffic = Math.round(ga4Data.traffic * 0.72);
-    }
-    if (phoneCallsCount === 0) {
-      phoneCallsCount = fallback.phone_calls;
     }
 
     res.json({
@@ -1251,17 +1238,17 @@ function generateSimulatedAnalysis(clientName: string, current: any, previous: a
 
   const directives = [
     {
-      title: 'Optimize Meta Descriptions & Title Tags for Core Landers',
+      title: 'Optimise Meta Descriptions & Title Tags for Core Landers',
       category: 'Content',
       priority: 'High',
-      description: `Review the top landing pages for ${clientName} and optimize snippets for click-through rate. Current search console CTR is ${current.gsc.ctr.toFixed(1)}%. Target pages with high impressions but below-average CTR (<2.5%) and add highly engaging, action-oriented meta descriptions containing primary target keywords.`,
+      description: `Review the top landing pages for ${clientName} and optimise snippets for click-through rate. Current search console CTR is ${current.gsc.ctr.toFixed(1)}%. Target pages with high impressions but below-average CTR (<2.5%) and add highly engaging, action-oriented meta descriptions containing primary target keywords.`,
       expectedImpact: 'Improves Search Console Click-Through Rate (CTR) by 15-20% and drives incremental organic clicks without needing brand new backlinks.'
     },
     {
       title: 'Remediate Core Web Vitals & Cumulative Layout Shift (CLS) Issues',
       category: 'Technical',
       priority: isLight ? 'Medium' : 'High',
-      description: `Conduct a mobile-first performance check on ${clientName}'s site. The current average ranking position is ${current.gsc.position.toFixed(1)}. Optimize image compression, implement CSS aspect-ratio properties on dynamic hero elements, and remove render-blocking third-party scripts to achieve a LCP under 2.5s.`,
+      description: `Conduct a mobile-first performance check on ${clientName}'s site. The current average ranking position is ${current.gsc.position.toFixed(1)}. Optimise image compression, implement CSS aspect-ratio properties on dynamic hero elements, and remove render-blocking third-party scripts to achieve a LCP under 2.5s.`,
       expectedImpact: 'Enhances overall organic search rankings, especially on mobile devices, by fulfilling Google Page Experience criteria.'
     },
     {
@@ -1269,7 +1256,7 @@ function generateSimulatedAnalysis(clientName: string, current: any, previous: a
       category: 'Backlinks',
       priority: 'Medium',
       description: `Acquire high-quality contextual links in ${clientName}'s industry niche. Focus on building links from sites with Domain Rating (DR) 40+ using exact-match and partial-match anchor texts related to core services, linking directly to high-value service nodes.`,
-      expectedImpact: 'Strengthens domain authority and drives faster indexation of freshly optimized landing pages.'
+      expectedImpact: 'Strengthens domain authority and drives faster indexation of freshly optimised landing pages.'
     }
   ];
 
@@ -1293,14 +1280,14 @@ function generateSimulatedAnalysis(clientName: string, current: any, previous: a
   }
 
   return {
-    trafficGapAnalysis: `Comparative audit of ${clientName} reveals organic traffic is currently at ${current.ga4.traffic} sessions, compared to ${previous.ga4.traffic} sessions in the prior period (${trafficDiff >= 0 ? '+' : ''}${trafficDiff} sessions, or ${previous.ga4.traffic > 0 ? ((trafficDiff/previous.ga4.traffic)*100).toFixed(1) : 0}% change). Search Console logged ${current.gsc.clicks} clicks with impressions of ${current.gsc.impressions} (${clickDiff >= 0 ? '+' : ''}${clickDiff} clicks). The organic search presence shows a ${statusGsc === 'growth' ? 'positive upward momentum' : 'temporary deceleration'} which warrants targeted SEO optimization.`,
-    expectedImpact: `Implementing these technical and content recommendations is projected to expand keyword impressions by 25%, increase organic click volume by 15%, and stabilize the average ranking position within the next 30 to 45 days.`,
+    trafficGapAnalysis: `Comparative audit of ${clientName} reveals organic traffic is currently at ${current.ga4.traffic} sessions, compared to ${previous.ga4.traffic} sessions in the prior period (${trafficDiff >= 0 ? '+' : ''}${trafficDiff} sessions, or ${previous.ga4.traffic > 0 ? ((trafficDiff/previous.ga4.traffic)*100).toFixed(1) : 0}% change). Search Console logged ${current.gsc.clicks} clicks with impressions of ${current.gsc.impressions} (${clickDiff >= 0 ? '+' : ''}${clickDiff} clicks). The organic search presence shows a ${statusGsc === 'growth' ? 'positive upward momentum' : 'temporary deceleration'} which warrants targeted SEO optimisation.`,
+    expectedImpact: `Implementing these technical and content recommendations is projected to expand keyword impressions by 25%, increase organic click volume by 15%, and stabilise the average ranking position within the next 30 to 45 days.`,
     actionableDirectives: directives,
-    implementationGuide: `1. Content Actions: Locate priority landing pages. Re-author title tags to place primary keywords at the front, keeping length under 60 characters. Write clear meta descriptions under 155 characters with a direct call to action.\n2. Technical Actions: Run a PageSpeed Insights test. Identify oversized image payloads and convert them to modern .webp format. Apply lazy-loading parameters to below-the-fold media assets.\n3. Backlinks Actions: Map out active content resources and reach out to contextual partners for guest features using partial-match anchors.`,
+    implementationGuide: `1. Content Actions: Locate priority landing pages. Re-author title tags to place primary keywords at the front, keeping length under 60 characters. Write clean meta descriptions under 155 characters with a direct call to action.\n2. Technical Actions: Run a PageSpeed Insights test. Identify oversized image payloads and convert them to modern .webp format. Apply lazy-loading parameters to below-the-fold media assets.\n3. Backlinks Actions: Map out active content resources and reach out to contextual partners for guest features using partial-match anchors.`,
     executiveSummary: {
       goodThings: [
         `Organic search console impressions are healthy at ${current.gsc.impressions.toLocaleString()} impressions.`,
-        `Average search ranking position is stabilized at ${current.gsc.position.toFixed(1)}.`,
+        `Average search ranking position is stabilised at ${current.gsc.position.toFixed(1)}.`,
         `Established strong visibility for core keyword search query vectors.`
       ],
       thingsToImprove: [
@@ -1309,7 +1296,7 @@ function generateSimulatedAnalysis(clientName: string, current: any, previous: a
         `Niche anchor text profile is concentrated and needs contextual diversification.`
       ],
       actionsToDo: [
-        `Optimize meta snippets and schema structured data on high-impression service landers.`,
+        `Optimise meta snippets and schema structured data on high-impression service landers.`,
         `Remediate mobile layout shifts and compress large page payloads.`,
         `Implement a regular long-form content posting cadence to capture competitor keyword gaps.`
       ],
@@ -1641,9 +1628,9 @@ async function auditPage(url: string) {
     if (!title) {
       issues.push('Missing Page Title Tag');
     } else if (title.length > 60) {
-      issues.push(`Over-optimized Title Tag (Length: ${title.length} chars, exceeds 60 Limit)`);
+      issues.push(`Over-optimised Title Tag (Length: ${title.length} chars, exceeds 60 Limit)`);
     } else if (title.length < 10) {
-      issues.push(`Under-optimized Title Tag (Length: ${title.length} chars, too short)`);
+      issues.push(`Under-optimised Title Tag (Length: ${title.length} chars, too short)`);
     }
 
     // Meta Description checks
@@ -1974,14 +1961,14 @@ YOU MUST incorporate these actual crawled issues into your strategic analysis!
 
       if (generateAiFixes) {
         promptSuffix += `\n\n[CRITICAL REQUEST - GENERATE PAGE-BY-PAGE SEO FIXES]:
-For every page listed in the crawl diagnostics above that contains a title, meta description, or heading error, you MUST generate a highly optimized page title and meta description.
-Add a top-level key inside your JSON output named "pageFixSuggestions" which maps each page's URL to an object containing "optimizedTitle" (50-60 characters) and "optimizedMetaDescription" (120-160 characters).
+For every page listed in the crawl diagnostics above that contains a title, meta description, or heading error, you MUST generate a highly optimised page title and meta description.
+Add a top-level key inside your JSON output named "pageFixSuggestions" which maps each page's URL to an object containing "optimisedTitle" (50-60 characters) and "optimisedMetaDescription" (120-160 characters).
 Do not use unescaped double quotes inside these strings. Use single quotes for any HTML attributes.
 Example structure to add in your JSON response:
 "pageFixSuggestions": {
   "https://example.com/about": {
-    "optimizedTitle": "Optimized About Page Title | Keyword",
-    "optimizedMetaDescription": "An engaging, high-CTR meta description containing Australian search keywords."
+    "optimisedTitle": "Optimised About Page Title | Keyword",
+    "optimisedMetaDescription": "An engaging, high-CTR meta description containing Australian search keywords."
   }
 }`;
       }
@@ -2056,14 +2043,30 @@ ${promptSuffix}`;
         const currentKey = geminiKeysPool[i];
         console.log(`[GEMINI POOL] Attempting strategic analysis API call with key index ${i + 1}/${geminiKeysPool.length}`);
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' }
-            })
-          });
+          let response: any = null;
+          let attempt = 0;
+          const maxAttempts = 3;
+          
+          while (attempt < maxAttempts) {
+            attempt++;
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: 'application/json' }
+              })
+            });
+
+            if (response.status === 503 || response.status === 429) {
+              console.warn(`[GEMINI RETRY] API returned ${response.status} (High Demand/Rate Limit) on attempt ${attempt}/${maxAttempts} for key index ${i + 1}. Retrying in 3 seconds...`);
+              if (attempt < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                continue;
+              }
+            }
+            break;
+          }
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -2089,26 +2092,28 @@ ${promptSuffix}`;
         throw lastError;
       }
 
-    } else if (model === 'claude') {
-      let response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 4000,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        const isNotFound = errorText.includes('not_found_error') || response.status === 404;
-        
-        if (isNotFound) {
-          console.warn('[CLAUDE] Model 20241022 not found/enabled. Falling back to claude-3-5-sonnet-20240620...');
+    } else if (model === 'claude' || model.startsWith('claude-')) {
+      const claudeModels = model.startsWith('claude-') ? [model] : [
+        'claude-haiku-4-5-20251001',
+        'claude-sonnet-4-6',
+        'claude-opus-4-8',
+        'claude-opus-4-7',
+        'claude-sonnet-4-5-20250929',
+        'claude-sonnet-4-20250514',
+        'claude-3-5-sonnet-20241022',
+        'claude-3-5-sonnet-latest',
+        'claude-3-5-sonnet-20240620',
+        'claude-3-5-haiku-20241022',
+        'claude-3-5-haiku-latest',
+        'claude-3-opus-20240229',
+        'claude-3-haiku-20240307'
+      ];
+      let lastError: any = null;
+      let response: any = null;
+      
+      for (const mName of claudeModels) {
+        console.log(`[CLAUDE POOL] Attempting strategic analysis API call with model: ${mName}`);
+        try {
           response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -2117,24 +2122,38 @@ ${promptSuffix}`;
               'content-type': 'application/json'
             },
             body: JSON.stringify({
-              model: 'claude-3-5-sonnet-20240620',
+              model: mName,
               max_tokens: 4000,
               messages: [{ role: 'user', content: prompt }]
             })
           });
-        }
-        
-        if (!response.ok) {
-          const finalErrorText = isNotFound ? await response.text() : errorText;
-          throw new Error(`Claude API error: ${response.status} - ${finalErrorText}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[CLAUDE POOL] Model ${mName} failed with status ${response.status}: ${errorText}. Trying next...`);
+            lastError = new Error(`Claude API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+          
+          // Successful response - clear any error and break loop
+          lastError = null;
+          break;
+        } catch (err: any) {
+          console.error(`[CLAUDE POOL] Exception with model ${mName}:`, err.message || err);
+          lastError = err;
         }
       }
+      
+      if (lastError || !response || !response.ok) {
+        throw lastError || new Error('All Claude models in the pool failed.');
+      }
+      
       const data: any = await response.json();
       const text = data.content?.[0]?.text;
       if (!text) throw new Error('Empty response from Claude API');
       jsonResponse = JSON.parse(cleanJsonString(text));
 
-    } else if (model === 'gpt') {
+    } else if (model === 'gpt' || model.startsWith('gpt-')) {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -2142,7 +2161,7 @@ ${promptSuffix}`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: model.startsWith('gpt-') ? model : 'gpt-4o',
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: 'You are an elite enterprise SEO strategist. Always respond with valid JSON.' },
@@ -2283,14 +2302,30 @@ CRITICAL INTEGRITY & SPELLING RULES:
         const currentKey = geminiKeysPool[i];
         console.log(`[GEMINI POOL] Attempting page optimisation API call with key index ${i + 1}/${geminiKeysPool.length}`);
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' }
-            })
-          });
+          let response: any = null;
+          let attempt = 0;
+          const maxAttempts = 3;
+          
+          while (attempt < maxAttempts) {
+            attempt++;
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: 'application/json' }
+              })
+            });
+
+            if (response.status === 503 || response.status === 429) {
+              console.warn(`[GEMINI RETRY] API returned ${response.status} (High Demand/Rate Limit) on attempt ${attempt}/${maxAttempts} for key index ${i + 1}. Retrying in 3 seconds...`);
+              if (attempt < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                continue;
+              }
+            }
+            break;
+          }
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -2316,26 +2351,28 @@ CRITICAL INTEGRITY & SPELLING RULES:
         throw lastError;
       }
 
-    } else if (selectedModel === 'claude') {
-      let response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 2000,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        const isNotFound = errorText.includes('not_found_error') || response.status === 404;
-        
-        if (isNotFound) {
-          console.warn('[CLAUDE] Model 20241022 not found/enabled. Falling back to claude-3-5-sonnet-20240620...');
+    } else if (selectedModel === 'claude' || selectedModel.startsWith('claude-')) {
+      const claudeModels = selectedModel.startsWith('claude-') ? [selectedModel] : [
+        'claude-haiku-4-5-20251001',
+        'claude-sonnet-4-6',
+        'claude-opus-4-8',
+        'claude-opus-4-7',
+        'claude-sonnet-4-5-20250929',
+        'claude-sonnet-4-20250514',
+        'claude-3-5-sonnet-20241022',
+        'claude-3-5-sonnet-latest',
+        'claude-3-5-sonnet-20240620',
+        'claude-3-5-haiku-20241022',
+        'claude-3-5-haiku-latest',
+        'claude-3-opus-20240229',
+        'claude-3-haiku-20240307'
+      ];
+      let lastError: any = null;
+      let response: any = null;
+      
+      for (const mName of claudeModels) {
+        console.log(`[CLAUDE POOL] Attempting page optimisation API call with model: ${mName}`);
+        try {
           response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -2344,24 +2381,38 @@ CRITICAL INTEGRITY & SPELLING RULES:
               'content-type': 'application/json'
             },
             body: JSON.stringify({
-              model: 'claude-3-5-sonnet-20240620',
+              model: mName,
               max_tokens: 2000,
               messages: [{ role: 'user', content: prompt }]
             })
           });
-        }
-        
-        if (!response.ok) {
-          const finalErrorText = isNotFound ? await response.text() : errorText;
-          throw new Error(`Claude API error: ${response.status} - ${finalErrorText}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[CLAUDE POOL] Model ${mName} failed with status ${response.status}: ${errorText}. Trying next...`);
+            lastError = new Error(`Claude API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+          
+          // Successful response - clear any error and break loop
+          lastError = null;
+          break;
+        } catch (err: any) {
+          console.error(`[CLAUDE POOL] Exception with model ${mName}:`, err.message || err);
+          lastError = err;
         }
       }
+      
+      if (lastError || !response || !response.ok) {
+        throw lastError || new Error('All Claude models in the pool failed.');
+      }
+      
       const data: any = await response.json();
       const text = data.content?.[0]?.text;
       if (!text) throw new Error('Empty response from Claude API');
       jsonResponse = JSON.parse(cleanJsonString(text));
 
-    } else if (selectedModel === 'gpt') {
+    } else if (selectedModel === 'gpt' || selectedModel.startsWith('gpt-')) {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -2369,7 +2420,7 @@ CRITICAL INTEGRITY & SPELLING RULES:
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: selectedModel.startsWith('gpt-') ? selectedModel : 'gpt-4o',
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: 'You are an elite enterprise SEO assistant. Always respond with valid JSON.' },
@@ -2892,34 +2943,7 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
         console.error(`[MONTHLY SYNC] Weekly records query error for ${client.name}:`, err.message);
       }
 
-      // Fallback statistics if GSC/GA4 are 0/empty
-      const fallback = getSeedFallback(client.name, client.short_code, startOfMonthStr);
-      if (gscClicks === 0) {
-        gscClicks = fallback.gsc_clicks;
-        gscImpressions = fallback.gsc_impressions;
-        gscCtr = fallback.gsc_ctr;
-        gscPosition = fallback.gsc_position;
-        gscTop3 = fallback.gsc_top3;
-        gscTop10 = fallback.gsc_top10;
-      }
-      if (ga4Traffic === 0) {
-        ga4Traffic = fallback.ga4_traffic;
-        ga4NewUsers = fallback.ga4_new_users;
-        ga4ReturningUsers = fallback.ga4_returning_users;
-        ga4OrganicTraffic = fallback.ga4_organic_traffic;
-      }
-      if (ga4OrganicTraffic === 0 && ga4Traffic > 0) {
-        ga4OrganicTraffic = Math.round(ga4Traffic * 0.72);
-      }
-      if (phoneCallsCount === 0) {
-        phoneCallsCount = fallback.phone_calls;
-      }
-      if (leadsTotal === 0) {
-        leadsTotal = Math.round(phoneCallsCount * 0.4) || 2;
-      }
-      if (ahrefsDr === 0) {
-        ahrefsDr = fallback.ahrefs_dr || 10;
-      }
+
 
       // Upsert into monthly_data_cache
       const { error: upsertError } = await supabase
@@ -3187,34 +3211,7 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
         console.error(`[MONTHLY SYNC] Weekly records query error for ${client.name}:`, err.message);
       }
 
-      // Fallback statistics if GSC/GA4 are 0/empty
-      const fallback = getSeedFallback(client.name, client.short_code, startOfMonthStr);
-      if (gscClicks === 0) {
-        gscClicks = fallback.gsc_clicks;
-        gscImpressions = fallback.gsc_impressions;
-        gscCtr = fallback.gsc_ctr;
-        gscPosition = fallback.gsc_position;
-        gscTop3 = fallback.gsc_top3;
-        gscTop10 = fallback.gsc_top10;
-      }
-      if (ga4Traffic === 0) {
-        ga4Traffic = fallback.ga4_traffic;
-        ga4NewUsers = fallback.ga4_new_users;
-        ga4ReturningUsers = fallback.ga4_returning_users;
-        ga4OrganicTraffic = fallback.ga4_organic_traffic;
-      }
-      if (ga4OrganicTraffic === 0 && ga4Traffic > 0) {
-        ga4OrganicTraffic = Math.round(ga4Traffic * 0.72);
-      }
-      if (phoneCallsCount === 0) {
-        phoneCallsCount = fallback.phone_calls;
-      }
-      if (leadsTotal === 0) {
-        leadsTotal = Math.round(phoneCallsCount * 0.4) || 2;
-      }
-      if (ahrefsDr === 0) {
-        ahrefsDr = fallback.ahrefs_dr || 10;
-      }
+
 
       // Upsert into monthly_data_cache
       const { error: upsertError } = await supabase
