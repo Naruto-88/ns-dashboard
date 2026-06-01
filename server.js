@@ -612,12 +612,16 @@ app.get("/api/clients/:clientId/live-metrics", async (req, res) => {
           gscData.top10 = keywordRows.filter((r) => r.position !== void 0 && Number(r.position) <= 10).length;
         } catch (e) {
           console.error("GSC Live Fetch self-heal failure:", e.message);
-          await supabase.from("import_logs").insert({
-            client_id: clientId,
-            operation_type: "live_metrics_gsc_keywords",
-            status: "Failed",
-            message: `GSC keywords fetch failed: ${e.message || String(e)}`
-          }).catch(() => null);
+          try {
+            await supabase.from("import_logs").insert({
+              client_id: clientId,
+              operation_type: "live_metrics_gsc_keywords",
+              status: "Failed",
+              message: `GSC keywords fetch failed: ${e.message || String(e)}`
+            });
+          } catch (err) {
+            console.error("Failed to log import error:", err);
+          }
           throw new Error(`GSC Search Console sync failed: ${e.message || String(e)}`);
         }
       }
@@ -947,17 +951,17 @@ function generateSimulatedAnalysis(clientName, current, previous, analysisType) 
   const statusGsc = clickDiff >= 0 ? "growth" : "decline";
   const directives = [
     {
-      title: "Optimize Meta Descriptions & Title Tags for Core Landers",
+      title: "Optimise Meta Descriptions & Title Tags for Core Landers",
       category: "Content",
       priority: "High",
-      description: `Review the top landing pages for ${clientName} and optimize snippets for click-through rate. Current search console CTR is ${current.gsc.ctr.toFixed(1)}%. Target pages with high impressions but below-average CTR (<2.5%) and add highly engaging, action-oriented meta descriptions containing primary target keywords.`,
+      description: `Review the top landing pages for ${clientName} and optimise snippets for click-through rate. Current search console CTR is ${current.gsc.ctr.toFixed(1)}%. Target pages with high impressions but below-average CTR (<2.5%) and add highly engaging, action-oriented meta descriptions containing primary target keywords.`,
       expectedImpact: "Improves Search Console Click-Through Rate (CTR) by 15-20% and drives incremental organic clicks without needing brand new backlinks."
     },
     {
       title: "Remediate Core Web Vitals & Cumulative Layout Shift (CLS) Issues",
       category: "Technical",
       priority: isLight ? "Medium" : "High",
-      description: `Conduct a mobile-first performance check on ${clientName}'s site. The current average ranking position is ${current.gsc.position.toFixed(1)}. Optimize image compression, implement CSS aspect-ratio properties on dynamic hero elements, and remove render-blocking third-party scripts to achieve a LCP under 2.5s.`,
+      description: `Conduct a mobile-first performance check on ${clientName}'s site. The current average ranking position is ${current.gsc.position.toFixed(1)}. Optimise image compression, implement CSS aspect-ratio properties on dynamic hero elements, and remove render-blocking third-party scripts to achieve a LCP under 2.5s.`,
       expectedImpact: "Enhances overall organic search rankings, especially on mobile devices, by fulfilling Google Page Experience criteria."
     },
     {
@@ -965,7 +969,7 @@ function generateSimulatedAnalysis(clientName, current, previous, analysisType) 
       category: "Backlinks",
       priority: "Medium",
       description: `Acquire high-quality contextual links in ${clientName}'s industry niche. Focus on building links from sites with Domain Rating (DR) 40+ using exact-match and partial-match anchor texts related to core services, linking directly to high-value service nodes.`,
-      expectedImpact: "Strengthens domain authority and drives faster indexation of freshly optimized landing pages."
+      expectedImpact: "Strengthens domain authority and drives faster indexation of freshly optimised landing pages."
     }
   ];
   if (!isLight) {
@@ -987,16 +991,16 @@ function generateSimulatedAnalysis(clientName, current, previous, analysisType) 
     );
   }
   return {
-    trafficGapAnalysis: `Comparative audit of ${clientName} reveals organic traffic is currently at ${current.ga4.traffic} sessions, compared to ${previous.ga4.traffic} sessions in the prior period (${trafficDiff >= 0 ? "+" : ""}${trafficDiff} sessions, or ${previous.ga4.traffic > 0 ? (trafficDiff / previous.ga4.traffic * 100).toFixed(1) : 0}% change). Search Console logged ${current.gsc.clicks} clicks with impressions of ${current.gsc.impressions} (${clickDiff >= 0 ? "+" : ""}${clickDiff} clicks). The organic search presence shows a ${statusGsc === "growth" ? "positive upward momentum" : "temporary deceleration"} which warrants targeted SEO optimization.`,
-    expectedImpact: `Implementing these technical and content recommendations is projected to expand keyword impressions by 25%, increase organic click volume by 15%, and stabilize the average ranking position within the next 30 to 45 days.`,
+    trafficGapAnalysis: `Comparative audit of ${clientName} reveals organic traffic is currently at ${current.ga4.traffic} sessions, compared to ${previous.ga4.traffic} sessions in the prior period (${trafficDiff >= 0 ? "+" : ""}${trafficDiff} sessions, or ${previous.ga4.traffic > 0 ? (trafficDiff / previous.ga4.traffic * 100).toFixed(1) : 0}% change). Search Console logged ${current.gsc.clicks} clicks with impressions of ${current.gsc.impressions} (${clickDiff >= 0 ? "+" : ""}${clickDiff} clicks). The organic search presence shows a ${statusGsc === "growth" ? "positive upward momentum" : "temporary deceleration"} which warrants targeted SEO optimisation.`,
+    expectedImpact: `Implementing these technical and content recommendations is projected to expand keyword impressions by 25%, increase organic click volume by 15%, and stabilise the average ranking position within the next 30 to 45 days.`,
     actionableDirectives: directives,
-    implementationGuide: `1. Content Actions: Locate priority landing pages. Re-author title tags to place primary keywords at the front, keeping length under 60 characters. Write clear meta descriptions under 155 characters with a direct call to action.
+    implementationGuide: `1. Content Actions: Locate priority landing pages. Re-author title tags to place primary keywords at the front, keeping length under 60 characters. Write clean meta descriptions under 155 characters with a direct call to action.
 2. Technical Actions: Run a PageSpeed Insights test. Identify oversized image payloads and convert them to modern .webp format. Apply lazy-loading parameters to below-the-fold media assets.
 3. Backlinks Actions: Map out active content resources and reach out to contextual partners for guest features using partial-match anchors.`,
     executiveSummary: {
       goodThings: [
         `Organic search console impressions are healthy at ${current.gsc.impressions.toLocaleString()} impressions.`,
-        `Average search ranking position is stabilized at ${current.gsc.position.toFixed(1)}.`,
+        `Average search ranking position is stabilised at ${current.gsc.position.toFixed(1)}.`,
         `Established strong visibility for core keyword search query vectors.`
       ],
       thingsToImprove: [
@@ -1005,7 +1009,7 @@ function generateSimulatedAnalysis(clientName, current, previous, analysisType) 
         `Niche anchor text profile is concentrated and needs contextual diversification.`
       ],
       actionsToDo: [
-        `Optimize meta snippets and schema structured data on high-impression service landers.`,
+        `Optimise meta snippets and schema structured data on high-impression service landers.`,
         `Remediate mobile layout shifts and compress large page payloads.`,
         `Implement a regular long-form content posting cadence to capture competitor keyword gaps.`
       ],
@@ -1287,9 +1291,9 @@ async function auditPage(url) {
     if (!title) {
       issues.push("Missing Page Title Tag");
     } else if (title.length > 60) {
-      issues.push(`Over-optimized Title Tag (Length: ${title.length} chars, exceeds 60 Limit)`);
+      issues.push(`Over-optimised Title Tag (Length: ${title.length} chars, exceeds 60 Limit)`);
     } else if (title.length < 10) {
-      issues.push(`Under-optimized Title Tag (Length: ${title.length} chars, too short)`);
+      issues.push(`Under-optimised Title Tag (Length: ${title.length} chars, too short)`);
     }
     const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([\s\S]*?)["']/i) || html.match(/<meta[^>]*content=["']([\s\S]*?)["'][^>]*name=["']description["']/i);
     const description = descMatch ? descMatch[1].trim() : "";
@@ -1317,7 +1321,14 @@ async function auditPage(url) {
     if (missingAltCount > 0) {
       issues.push(`${missingAltCount} Images Lacking ALT tags (Hinders image search rankings)`);
     }
-    return { url, issues, title: title || "Untitled Page" };
+    return {
+      url,
+      issues,
+      title: title || "Untitled Page",
+      titleLength: title.length,
+      metaLength: description.length,
+      wordCount
+    };
   } catch (err) {
     return { url, error: `Failed to fetch page: ${err.message}` };
   }
@@ -1389,7 +1400,10 @@ async function crawlSite(siteUrl) {
     }
     if (urlList.length === 0) {
       urlList = [cleanUrl];
-      const homepageRes = await fetch(cleanUrl, { signal: AbortSignal.timeout(5e3) }).catch(() => null);
+      const homepageRes = await fetch(cleanUrl, {
+        headers: sitemapHeaders,
+        signal: AbortSignal.timeout(1e4)
+      }).catch(() => null);
       if (homepageRes && homepageRes.ok) {
         const homeHtml = await homepageRes.text();
         const linkMatches = homeHtml.match(/href=["'](\/[^"']+)["']/g) || [];
@@ -1412,9 +1426,17 @@ async function crawlSite(siteUrl) {
       return !blockedUrlKeywords.some((kw) => lower.includes(kw));
     });
     const targetUrls = filteredUrls.slice(0, 100);
-    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets for parallel audit.`);
-    const auditPromises = targetUrls.map((url) => auditPage(url));
-    const results = await Promise.all(auditPromises);
+    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets. Processing with concurrency limit 5...`);
+    const results = [];
+    const concurrencyLimit = 5;
+    for (let i = 0; i < targetUrls.length; i += concurrencyLimit) {
+      const batch = targetUrls.slice(i, i + concurrencyLimit);
+      const batchResults = await Promise.all(batch.map((url) => auditPage(url)));
+      results.push(...batchResults);
+      if (i + concurrencyLimit < targetUrls.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
     results.forEach((r) => scannedPages.push(r));
   } catch (err) {
     console.error(`[CRAWLER] Error crawling:`, err);
@@ -1422,16 +1444,27 @@ async function crawlSite(siteUrl) {
     scannedPages.push(fallback);
   }
   let totalIssues = 0;
-  let totalValidPages = 0;
+  let totalPagesCount = scannedPages.length;
+  let hasHomepageError = false;
   scannedPages.forEach((p) => {
-    if (!p.error) {
-      totalValidPages++;
+    const isHomepage = p.url === cleanUrl || p.url === cleanUrl + "/";
+    if (p.error) {
+      if (isHomepage) {
+        hasHomepageError = true;
+        totalIssues += 8;
+      } else {
+        totalIssues += 4;
+      }
+    } else {
       totalIssues += p.issues?.length || 0;
     }
   });
   const baseScore = 100;
-  const deduction = totalValidPages > 0 ? totalIssues / totalValidPages * 10 : 0;
-  const healthScore = Math.max(50, Math.round(baseScore - deduction));
+  const deduction = totalPagesCount > 0 ? totalIssues / totalPagesCount * 10 : 0;
+  let healthScore = Math.max(50, Math.round(baseScore - deduction));
+  if (hasHomepageError) {
+    healthScore = Math.min(60, healthScore);
+  }
   return {
     scannedPages,
     healthScore,
@@ -1488,7 +1521,7 @@ app.post("/api/ai/analyze", async (req, res) => {
       apiKey = keysMap["gpt"] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || "";
     }
     if (simulate || !apiKey) {
-      console.log(`[AI ANALYZE] Running in simulation mode for client: ${client.name} (simulate=${simulate}, hasKey=${!!apiKey})`);
+      console.log(`[AI ANALYZE] Running in SIMULATION mode. Selected model parameter: "${model}", Client: "${client.name}" (simulate=${simulate}, hasKey=${!!apiKey})`);
       const simulatedResult = generateSimulatedAnalysis(client.name, currentMetrics, previousMetrics, analysisType);
       let simulatedCrawl = null;
       if (runTechnicalCrawl) {
@@ -1572,14 +1605,14 @@ YOU MUST incorporate these actual crawled issues into your strategic analysis!
         promptSuffix += `
 
 [CRITICAL REQUEST - GENERATE PAGE-BY-PAGE SEO FIXES]:
-For every page listed in the crawl diagnostics above that contains a title, meta description, or heading error, you MUST generate a highly optimized page title and meta description.
-Add a top-level key inside your JSON output named "pageFixSuggestions" which maps each page's URL to an object containing "optimizedTitle" (50-60 characters) and "optimizedMetaDescription" (120-160 characters).
+For every page listed in the crawl diagnostics above that contains a title, meta description, or heading error, you MUST generate a highly optimised page title and meta description.
+Add a top-level key inside your JSON output named "pageFixSuggestions" which maps each page's URL to an object containing "optimisedTitle" (50-60 characters) and "optimisedMetaDescription" (120-160 characters).
 Do not use unescaped double quotes inside these strings. Use single quotes for any HTML attributes.
 Example structure to add in your JSON response:
 "pageFixSuggestions": {
   "https://example.com/about": {
-    "optimizedTitle": "Optimized About Page Title | Keyword",
-    "optimizedMetaDescription": "An engaging, high-CTR meta description containing Australian search keywords."
+    "optimisedTitle": "Optimised About Page Title | Keyword",
+    "optimisedMetaDescription": "An engaging, high-CTR meta description containing Australian search keywords."
   }
 }`;
       }
@@ -1644,20 +1677,38 @@ CRITICAL JSON INTEGRITY & SPELLING RULES:
 
 ${promptSuffix}`;
     let jsonResponse = null;
+    console.log(`[AI ANALYZE] ==================== START OF FINAL PROMPT (Model: ${model}, Client: ${client.name}) ====================`);
+    console.log(prompt);
+    console.log(`[AI ANALYZE] ==================== END OF FINAL PROMPT ====================`);
     if (model === "gemini") {
+      console.log(`[AI ANALYZE] ROUTING TO GEMINI API: model="gemini-2.5-flash", client="${client.name}"`);
       let lastError = null;
       for (let i = 0; i < geminiKeysPool.length; i++) {
         const currentKey = geminiKeysPool[i];
         console.log(`[GEMINI POOL] Attempting strategic analysis API call with key index ${i + 1}/${geminiKeysPool.length}`);
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: "application/json" }
-            })
-          });
+          let response = null;
+          let attempt = 0;
+          const maxAttempts = 3;
+          while (attempt < maxAttempts) {
+            attempt++;
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+              })
+            });
+            if (response.status === 503 || response.status === 429) {
+              console.warn(`[GEMINI RETRY] API returned ${response.status} (High Demand/Rate Limit) on attempt ${attempt}/${maxAttempts} for key index ${i + 1}. Retrying in 3 seconds...`);
+              if (attempt < maxAttempts) {
+                await new Promise((resolve) => setTimeout(resolve, 3e3));
+                continue;
+              }
+            }
+            break;
+          }
           if (!response.ok) {
             const errorText = await response.text();
             console.warn(`[GEMINI POOL] Key index ${i + 1} failed with status ${response.status}. Rotating...`);
@@ -1678,8 +1729,14 @@ ${promptSuffix}`;
       if (lastError) {
         throw lastError;
       }
-    } else if (model === "claude") {
-      const claudeModels = [
+    } else if (model === "claude" || model.startsWith("claude-")) {
+      const claudeModels = model.startsWith("claude-") ? [model] : [
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-6",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-sonnet-4-5-20250929",
+        "claude-sonnet-4-20250514",
         "claude-3-5-sonnet-20241022",
         "claude-3-5-sonnet-latest",
         "claude-3-5-sonnet-20240620",
@@ -1690,6 +1747,7 @@ ${promptSuffix}`;
       ];
       let lastError = null;
       let response = null;
+      console.log(`[AI ANALYZE] ROUTING TO ANTHROPIC CLAUDE API: client="${client.name}", pool=${JSON.stringify(claudeModels)}`);
       for (const mName of claudeModels) {
         console.log(`[CLAUDE POOL] Attempting strategic analysis API call with model: ${mName}`);
         try {
@@ -1726,7 +1784,9 @@ ${promptSuffix}`;
       const text = data.content?.[0]?.text;
       if (!text) throw new Error("Empty response from Claude API");
       jsonResponse = JSON.parse(cleanJsonString(text));
-    } else if (model === "gpt") {
+    } else if (model === "gpt" || model.startsWith("gpt-")) {
+      const activeGptModel = model.startsWith("gpt-") ? model : "gpt-4o";
+      console.log(`[AI ANALYZE] ROUTING TO OPENAI GPT API: model="${activeGptModel}", client="${client.name}"`);
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1734,7 +1794,7 @@ ${promptSuffix}`;
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: activeGptModel,
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: "You are an elite enterprise SEO strategist. Always respond with valid JSON." },
@@ -1860,14 +1920,28 @@ CRITICAL INTEGRITY & SPELLING RULES:
         const currentKey = geminiKeysPool[i];
         console.log(`[GEMINI POOL] Attempting page optimisation API call with key index ${i + 1}/${geminiKeysPool.length}`);
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: "application/json" }
-            })
-          });
+          let response = null;
+          let attempt = 0;
+          const maxAttempts = 3;
+          while (attempt < maxAttempts) {
+            attempt++;
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+              })
+            });
+            if (response.status === 503 || response.status === 429) {
+              console.warn(`[GEMINI RETRY] API returned ${response.status} (High Demand/Rate Limit) on attempt ${attempt}/${maxAttempts} for key index ${i + 1}. Retrying in 3 seconds...`);
+              if (attempt < maxAttempts) {
+                await new Promise((resolve) => setTimeout(resolve, 3e3));
+                continue;
+              }
+            }
+            break;
+          }
           if (!response.ok) {
             const errorText = await response.text();
             console.warn(`[GEMINI POOL] Key index ${i + 1} failed with status ${response.status}. Rotating...`);
@@ -1888,8 +1962,14 @@ CRITICAL INTEGRITY & SPELLING RULES:
       if (lastError) {
         throw lastError;
       }
-    } else if (selectedModel === "claude") {
-      const claudeModels = [
+    } else if (selectedModel === "claude" || selectedModel.startsWith("claude-")) {
+      const claudeModels = selectedModel.startsWith("claude-") ? [selectedModel] : [
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-6",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-sonnet-4-5-20250929",
+        "claude-sonnet-4-20250514",
         "claude-3-5-sonnet-20241022",
         "claude-3-5-sonnet-latest",
         "claude-3-5-sonnet-20240620",
@@ -1936,7 +2016,7 @@ CRITICAL INTEGRITY & SPELLING RULES:
       const text = data.content?.[0]?.text;
       if (!text) throw new Error("Empty response from Claude API");
       jsonResponse = JSON.parse(cleanJsonString(text));
-    } else if (selectedModel === "gpt") {
+    } else if (selectedModel === "gpt" || selectedModel.startsWith("gpt-")) {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1944,7 +2024,7 @@ CRITICAL INTEGRITY & SPELLING RULES:
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: selectedModel.startsWith("gpt-") ? selectedModel : "gpt-4o",
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: "You are an elite enterprise SEO assistant. Always respond with valid JSON." },

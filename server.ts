@@ -1666,7 +1666,14 @@ async function auditPage(url: string) {
       issues.push(`${missingAltCount} Images Lacking ALT tags (Hinders image search rankings)`);
     }
 
-    return { url, issues, title: title || 'Untitled Page' };
+    return { 
+      url, 
+      issues, 
+      title: title || 'Untitled Page',
+      titleLength: title.length,
+      metaLength: description.length,
+      wordCount: wordCount
+    };
   } catch (err: any) {
     return { url, error: `Failed to fetch page: ${err.message}` };
   }
@@ -1746,7 +1753,10 @@ async function crawlSite(siteUrl: string) {
 
     if (urlList.length === 0) {
       urlList = [cleanUrl];
-      const homepageRes = await fetch(cleanUrl, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+      const homepageRes = await fetch(cleanUrl, { 
+        headers: sitemapHeaders, 
+        signal: AbortSignal.timeout(10000) 
+      }).catch(() => null);
       if (homepageRes && homepageRes.ok) {
         const homeHtml = await homepageRes.text();
         const linkMatches = homeHtml.match(/href=["'](\/[^"']+)["']/g) || [];
@@ -1774,10 +1784,18 @@ async function crawlSite(siteUrl: string) {
     });
 
     const targetUrls = filteredUrls.slice(0, 100);
-    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets for parallel audit.`);
+    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets. Processing with concurrency limit 5...`);
 
-    const auditPromises = targetUrls.map(url => auditPage(url));
-    const results = await Promise.all(auditPromises);
+    const results: any[] = [];
+    const concurrencyLimit = 5;
+    for (let i = 0; i < targetUrls.length; i += concurrencyLimit) {
+      const batch = targetUrls.slice(i, i + concurrencyLimit);
+      const batchResults = await Promise.all(batch.map(url => auditPage(url)));
+      results.push(...batchResults);
+      if (i + concurrencyLimit < targetUrls.length) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small 100ms throttle pause
+      }
+    }
     results.forEach(r => scannedPages.push(r));
   } catch (err: any) {
     console.error(`[CRAWLER] Error crawling:`, err);
@@ -1786,17 +1804,31 @@ async function crawlSite(siteUrl: string) {
   }
 
   let totalIssues = 0;
-  let totalValidPages = 0;
+  let totalPagesCount = scannedPages.length;
+  let hasHomepageError = false;
+
   scannedPages.forEach(p => {
-    if (!p.error) {
-      totalValidPages++;
+    const isHomepage = p.url === cleanUrl || p.url === cleanUrl + '/';
+    if (p.error) {
+      if (isHomepage) {
+        hasHomepageError = true;
+        totalIssues += 8; // Heavy penalty for broken homepage
+      } else {
+        totalIssues += 4; // Penalty for other broken pages
+      }
+    } else {
       totalIssues += (p.issues?.length || 0);
     }
   });
 
   const baseScore = 100;
-  const deduction = totalValidPages > 0 ? (totalIssues / totalValidPages) * 10 : 0;
-  const healthScore = Math.max(50, Math.round(baseScore - deduction));
+  const deduction = totalPagesCount > 0 ? (totalIssues / totalPagesCount) * 10 : 0;
+  let healthScore = Math.max(50, Math.round(baseScore - deduction));
+  
+  if (hasHomepageError) {
+    // If the homepage is broken, cap the health score at 60 to reflect critical unavailability
+    healthScore = Math.min(60, healthScore);
+  }
 
   return {
     scannedPages,
@@ -1876,7 +1908,7 @@ app.post('/api/ai/analyze', async (req, res) => {
 
     // 4. Fallback to simulation if simulate parameter is passed, OR no API key is available
     if (simulate || !apiKey) {
-      console.log(`[AI ANALYZE] Running in simulation mode for client: ${client.name} (simulate=${simulate}, hasKey=${!!apiKey})`);
+      console.log(`[AI ANALYZE] Running in SIMULATION mode. Selected model parameter: "${model}", Client: "${client.name}" (simulate=${simulate}, hasKey=${!!apiKey})`);
       const simulatedResult = generateSimulatedAnalysis(client.name, currentMetrics, previousMetrics, analysisType);
       
       let simulatedCrawl = null;
@@ -2037,7 +2069,12 @@ ${promptSuffix}`;
     // 6. Invoke selected LLM API
     let jsonResponse: any = null;
 
+    console.log(`[AI ANALYZE] ==================== START OF FINAL PROMPT (Model: ${model}, Client: ${client.name}) ====================`);
+    console.log(prompt);
+    console.log(`[AI ANALYZE] ==================== END OF FINAL PROMPT ====================`);
+
     if (model === 'gemini') {
+      console.log(`[AI ANALYZE] ROUTING TO GEMINI API: model="gemini-2.5-flash", client="${client.name}"`);
       let lastError: any = null;
       for (let i = 0; i < geminiKeysPool.length; i++) {
         const currentKey = geminiKeysPool[i];
@@ -2111,6 +2148,7 @@ ${promptSuffix}`;
       let lastError: any = null;
       let response: any = null;
       
+      console.log(`[AI ANALYZE] ROUTING TO ANTHROPIC CLAUDE API: client="${client.name}", pool=${JSON.stringify(claudeModels)}`);
       for (const mName of claudeModels) {
         console.log(`[CLAUDE POOL] Attempting strategic analysis API call with model: ${mName}`);
         try {
@@ -2154,6 +2192,8 @@ ${promptSuffix}`;
       jsonResponse = JSON.parse(cleanJsonString(text));
 
     } else if (model === 'gpt' || model.startsWith('gpt-')) {
+      const activeGptModel = model.startsWith('gpt-') ? model : 'gpt-4o';
+      console.log(`[AI ANALYZE] ROUTING TO OPENAI GPT API: model="${activeGptModel}", client="${client.name}"`);
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -2161,7 +2201,7 @@ ${promptSuffix}`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: model.startsWith('gpt-') ? model : 'gpt-4o',
+          model: activeGptModel,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: 'You are an elite enterprise SEO strategist. Always respond with valid JSON.' },
