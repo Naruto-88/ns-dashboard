@@ -52,16 +52,28 @@ export default function GoalsAndTargets() {
     target_dr: 0
   });
 
-  // Calculate elapsed proportion of the current month
   const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const currentDay = today.getDate();
+  
+  const [selectedMonthStr, setSelectedMonthStr] = useState(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`);
+  
+  // Calculate elapsed proportion of the selected month
+  const [selYear, selMonth] = selectedMonthStr.split('-').map(Number); // selMonth is 1-12
+  const isCurrentMonth = selYear === today.getFullYear() && selMonth === today.getMonth() + 1;
+  const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+  const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
   const elapsedPercent = (currentDay / daysInMonth) * 100;
   const daysRemaining = daysInMonth - currentDay;
 
-  const monthName = today.toLocaleString('default', { month: 'long' });
+  const monthDate = new Date(selYear, selMonth - 1, 1);
+  const monthName = monthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  // Generate last 12 months for dropdown
+  const monthOptions = Array.from({ length: 12 }).map((_, i) => {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    return { value, label };
+  });
 
   const [addingActionFor, setAddingActionFor] = useState<ClientWithActuals | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
@@ -75,12 +87,11 @@ export default function GoalsAndTargets() {
     try {
       const clientList = await getClients();
       
-      const monthStr = String(currentMonth + 1).padStart(2, '0');
-      const startOfMonth = `${currentYear}-${monthStr}-01`;
+      const startOfMonth = `${selectedMonthStr}-01`;
       
       // If live sync requested, trigger the server-side cron first to refresh the monthly cache
       if (forceLive) {
-        const syncSuccess = await triggerMonthlySync();
+        const syncSuccess = await triggerMonthlySync(startOfMonth);
         if (!syncSuccess) {
           throw new Error('Monthly cache sync request failed. Please check Google OAuth connectivity.');
         }
@@ -137,7 +148,7 @@ export default function GoalsAndTargets() {
 
   useEffect(() => {
     fetchClientTargetsAndActuals();
-  }, []);
+  }, [selectedMonthStr]);
 
   const handleOpenEditor = (client: ClientWithActuals) => {
     setEditingClient(client);
@@ -274,10 +285,21 @@ export default function GoalsAndTargets() {
             Goals & Performance Targets
           </h2>
           <p className={`text-sm font-medium   mt-1 italic ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>
-            Month-end target velocity • {monthName} {currentYear} • {daysRemaining} Days Remaining
+            Month-end target velocity • {monthName} • {daysRemaining === 0 ? 'Month Ended' : `${daysRemaining} Days Remaining`}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={selectedMonthStr}
+            onChange={(e) => setSelectedMonthStr(e.target.value)}
+            className={`px-4 py-2.5 border rounded-2xl text-sm font-medium focus:outline-none transition-all cursor-pointer ${
+              isWhite ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
+            }`}
+          >
+            {monthOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
           <div className="relative">
             <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isWhite ? 'text-[#607a80]' : 'text-zinc-600'}`} size={16} />
             <input 
@@ -292,11 +314,15 @@ export default function GoalsAndTargets() {
           </div>
               <button
                 onClick={() => fetchClientTargetsAndActuals(true)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium   transition-all shadow-xl active:scale-95 ${
-                  isWhite 
-                    ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20' 
-                    : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20'
+                disabled={!isCurrentMonth || isLiveSyncing}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-xl ${
+                  !isCurrentMonth 
+                    ? 'opacity-50 cursor-not-allowed bg-zinc-500 text-white shadow-none'
+                    : isWhite 
+                      ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-[#76c9be]/20 active:scale-95' 
+                      : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/20 active:scale-95'
                 }`}
+                title={!isCurrentMonth ? "Live Sync is disabled for past months to prevent overwriting historical data." : ""}
               >
                 <Clock size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
                 Live Sync

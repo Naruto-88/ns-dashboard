@@ -132,9 +132,10 @@ export const getMonthlyCache = async (monthStartDate: string): Promise<MonthlyCa
   }
 };
 
-export const triggerMonthlySync = async (): Promise<boolean> => {
+export const triggerMonthlySync = async (month?: string): Promise<boolean> => {
   try {
-    const response = await fetch('/api/cron/sync-monthly-cache');
+    const url = month ? `/api/cron/sync-monthly-cache?month=${month}` : '/api/cron/sync-monthly-cache';
+    const response = await fetch(url);
     return response.ok;
   } catch (error) {
     console.error('Error triggering monthly sync:', error);

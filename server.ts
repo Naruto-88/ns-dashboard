@@ -3616,14 +3616,22 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
     const { data: clients, error: clientErr } = await supabase.from('clients').select('*');
     if (clientErr) throw clientErr;
 
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth(); // 0-11
+    const requestedMonth = req.query.month as string;
+    let targetYear: number, targetMonth: number;
+    if (requestedMonth && /^\d{4}-\d{2}-\d{2}$/.test(requestedMonth)) {
+      const parts = requestedMonth.split('-');
+      targetYear = parseInt(parts[0], 10);
+      targetMonth = parseInt(parts[1], 10) - 1;
+    } else {
+      const today = new Date();
+      targetYear = today.getFullYear();
+      targetMonth = today.getMonth(); // 0-11
+    }
 
-    const monthStr = String(currentMonth + 1).padStart(2, '0');
-    const startOfMonthStr = `${currentYear}-${monthStr}-01`;
-    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const endOfMonthStr = `${currentYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+    const monthStr = String(targetMonth + 1).padStart(2, '0');
+    const startOfMonthStr = `${targetYear}-${monthStr}-01`;
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const endOfMonthStr = `${targetYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
     // Sequential sync to respect rate limits
     for (const client of clients || []) {
@@ -3805,17 +3813,21 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
         }
       }
 
-      // 3. Blogs published & Ahrefs DR
+      // 3. Blogs published, Ahrefs DR & Fallback for Manual Leads
       try {
         const { data: weeklyRecords } = await supabase
           .from('weekly_data')
-          .select('blogs_published, ahrefs_dr, week_start_date')
+          .select('blogs_published, ahrefs_dr, leads_total, week_start_date')
           .eq('client_id', client.id)
           .gte('week_start_date', startOfMonthStr)
           .lte('week_start_date', endOfMonthStr);
 
         if (weeklyRecords) {
           blogsPublishedCount = weeklyRecords.reduce((sum, r) => sum + (r.blogs_published || 0), 0);
+          
+          if (leadsTotal === 0) {
+            leadsTotal = weeklyRecords.reduce((sum, r) => sum + (r.leads_total || 0), 0);
+          }
 
           // Get latest non-zero Ahrefs DR from weekly records
           const sortedWeekly = [...weeklyRecords].sort((a,b) => b.week_start_date.localeCompare(a.week_start_date));
