@@ -3249,9 +3249,6 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
           const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
           const c = parseInt(r.metricValues?.[0]?.value || '0');
           if (ev.includes('call') || ev.includes('phone') || ev === 'click_to_call') ga4.phone_calls += c;
-          if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(ev)) {
-             ga4.leads_total += c;
-          }
         }
       } catch(e) { console.error("GA4 error for", client.name, e.message); }
       return ga4;
@@ -3497,10 +3494,6 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
                 eventName === 'phone_click'
               ) {
                 phoneCallsCount += count;
-              }
-
-              if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(eventName)) {
-                leadsTotal += count;
               }
             }
 
@@ -3765,10 +3758,6 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
                 eventName === 'phone_click'
               ) {
                 phoneCallsCount += count;
-              }
-
-              if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(eventName)) {
-                leadsTotal += count;
               }
             }
 
@@ -4120,7 +4109,7 @@ app.get('/api/clients/:clientId/sync-ahrefs-data', async (req, res) => {
       if (!drRes.ok) {
         const errorText = await drRes.text();
         console.error(`[AHREFS] Domain Rating API error (${drRes.status}):`, errorText);
-        // Do not crash the endpoint, just set DR to 0
+        throw new Error(`Ahrefs API Error (${drRes.status}): ${errorText}`);
       } else {
         const drData = await drRes.json();
         dr = Math.round(Number(drData.domain_rating?.domain_rating) || 0);
@@ -4133,7 +4122,7 @@ app.get('/api/clients/:clientId/sync-ahrefs-data', async (req, res) => {
       if (!statsRes.ok) {
         const errorText = await statsRes.text();
         console.error(`[AHREFS] Backlinks Stats API error (${statsRes.status}):`, errorText);
-        // Do not crash the endpoint, just set to 0
+        throw new Error(`Ahrefs API Error (${statsRes.status}): ${errorText}`);
       } else {
         const statsData = await statsRes.json();
         backlinks = Math.round(Number(statsData.metrics?.[0]?.live_backlinks) || 0);
