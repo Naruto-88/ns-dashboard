@@ -13,7 +13,7 @@ import {
   Trash2,
   Edit2
 } from 'lucide-react';
-import { format, isPast, parseISO, isToday } from 'date-fns';
+import { format, isPast, parseISO, isToday, subDays } from 'date-fns';
 import { DateRange, DatePreset, getDatePresetRange } from '../lib/seoUtils';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ClientSelector from '../components/ClientSelector';
@@ -127,19 +127,34 @@ export default function ActionCenter() {
       return false;
     }
 
-    // Date Filter (Created or Deadline within range)
-    const actionDate = action.created_at;
-    if (actionDate < range.startDate || actionDate > range.endDate + 'T23:59:59') {
-      return false;
-    }
+    const isCompleted = action.status === 'completed';
 
     // Status filter
-    const isCompleted = action.status === 'completed';
-    if (filter === 'pending') return !isCompleted;
-    if (filter === 'completed') return isCompleted;
+    if (filter === 'pending' && isCompleted) return false;
+    if (filter === 'completed' && !isCompleted) return false;
     if (filter === 'overdue') {
-      return !isCompleted && action.deadline && isPast(parseISO(action.deadline)) && !isToday(parseISO(action.deadline));
+      if (isCompleted || !action.deadline || !isPast(parseISO(action.deadline)) || isToday(parseISO(action.deadline))) {
+        return false;
+      }
     }
+
+    // Date Filter:
+    // 1. Pending and Overdue tasks should ALWAYS be visible regardless of date range so they aren't forgotten
+    // 2. Completed tasks or 'All' tasks use the date range, but we adjust for the 2-day GSC lag to include today's actions
+    if (filter === 'completed' || filter === 'all') {
+      const actionDate = action.created_at;
+      // If the endDate is set to 2 days ago (due to GSC presets), we still want to show actions created today
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const adjustedEndDate = (range.endDate === format(subDays(new Date(), 2), 'yyyy-MM-dd')) 
+        ? todayStr 
+        : range.endDate;
+
+      if (actionDate < range.startDate || actionDate > adjustedEndDate + 'T23:59:59') {
+        // Only hide if it's completed. If it's pending/overdue, we keep it in 'all' view too
+        if (isCompleted) return false;
+      }
+    }
+    
     return true;
   });
 

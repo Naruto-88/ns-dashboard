@@ -2601,20 +2601,20 @@ app.get("/api/cron/sync-dashboard-cache", async (req, res) => {
     const subDays = (d, days) => new Date(d.getTime() - days * 24 * 60 * 60 * 1e3);
     const today = /* @__PURE__ */ new Date();
     const periods = {};
-    let rCurEnd = subDays(today, 3);
+    let rCurEnd = subDays(today, 2);
     rCurEnd.setHours(23, 59, 59, 999);
-    let rCurStart = subDays(today, 9);
+    let rCurStart = subDays(today, 8);
     rCurStart.setHours(0, 0, 0, 0);
     let rPrevStart = subDays(rCurStart, 7);
     let rPrevEnd = subDays(rCurEnd, 7);
     periods["rolling"] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
-    let d28CurEnd = subDays(today, 3);
+    let d28CurEnd = subDays(today, 2);
     d28CurEnd.setHours(23, 59, 59, 999);
-    let d28CurStart = subDays(today, 30);
+    let d28CurStart = subDays(today, 29);
     d28CurStart.setHours(0, 0, 0, 0);
-    let d28PrevEnd = subDays(today, 31);
+    let d28PrevEnd = subDays(today, 30);
     d28PrevEnd.setHours(23, 59, 59, 999);
-    let d28PrevStart = subDays(today, 58);
+    let d28PrevStart = subDays(today, 57);
     d28PrevStart.setHours(0, 0, 0, 0);
     periods["28days"] = { curStart: d28CurStart, curEnd: d28CurEnd, prevStart: d28PrevStart, prevEnd: d28PrevEnd };
     let mCurStart = startOfMonth(subMonths(today, 1));
@@ -2626,13 +2626,14 @@ app.get("/api/cron/sync-dashboard-cache", async (req, res) => {
     let mPrevEnd = endOfMonth(subMonths(today, 2));
     mPrevEnd.setHours(23, 59, 59, 999);
     periods["monthly"] = { curStart: mCurStart, curEnd: mCurEnd, prevStart: mPrevStart, prevEnd: mPrevEnd };
+    const addDays = (d, days) => new Date(d.getTime() + days * 24 * 60 * 60 * 1e3);
     let m3CurEnd = subDays(today, 2);
     m3CurEnd.setHours(23, 59, 59, 999);
-    let m3CurStart = subDays(m3CurEnd, 89);
+    let m3CurStart = addDays(subMonths(m3CurEnd, 3), 1);
     m3CurStart.setHours(0, 0, 0, 0);
     let m3PrevEnd = subDays(m3CurStart, 1);
     m3PrevEnd.setHours(23, 59, 59, 999);
-    let m3PrevStart = subDays(m3PrevEnd, 89);
+    let m3PrevStart = addDays(subMonths(m3PrevEnd, 3), 1);
     m3PrevStart.setHours(0, 0, 0, 0);
     periods["3months"] = { curStart: m3CurStart, curEnd: m3CurEnd, prevStart: m3PrevStart, prevEnd: m3PrevEnd };
     const formatDate = (d) => {
@@ -2738,9 +2739,6 @@ app.get("/api/cron/sync-dashboard-cache", async (req, res) => {
           const ev = (r.dimensionValues?.[0]?.value || "").toLowerCase();
           const c = parseInt(r.metricValues?.[0]?.value || "0");
           if (ev.includes("call") || ev.includes("phone") || ev === "click_to_call") ga4.phone_calls += c;
-          if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(ev)) {
-            ga4.leads_total += c;
-          }
         }
       } catch (e) {
         console.error("GA4 error for", client.name, e.message);
@@ -2939,9 +2937,6 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
               if (eventName.includes("call") || eventName.includes("phone") || eventName === "click_to_call" || eventName === "phone_click") {
                 phoneCallsCount += count;
               }
-              if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(eventName)) {
-                leadsTotal += count;
-              }
             }
           } catch (e) {
             console.error(`[MONTHLY SYNC] GA4 error for ${client.name}:`, e.message);
@@ -3021,13 +3016,21 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
     }
     const { data: clients, error: clientErr } = await supabase.from("clients").select("*");
     if (clientErr) throw clientErr;
-    const today = /* @__PURE__ */ new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const monthStr = String(currentMonth + 1).padStart(2, "0");
-    const startOfMonthStr = `${currentYear}-${monthStr}-01`;
-    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const endOfMonthStr = `${currentYear}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
+    const requestedMonth = req.query.month;
+    let targetYear, targetMonth;
+    if (requestedMonth && /^\d{4}-\d{2}-\d{2}$/.test(requestedMonth)) {
+      const parts = requestedMonth.split("-");
+      targetYear = parseInt(parts[0], 10);
+      targetMonth = parseInt(parts[1], 10) - 1;
+    } else {
+      const today = /* @__PURE__ */ new Date();
+      targetYear = today.getFullYear();
+      targetMonth = today.getMonth();
+    }
+    const monthStr = String(targetMonth + 1).padStart(2, "0");
+    const startOfMonthStr = `${targetYear}-${monthStr}-01`;
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const endOfMonthStr = `${targetYear}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
     for (const client of clients || []) {
       console.log(`[MONTHLY SYNC] Syncing ${client.name} for ${startOfMonthStr}...`);
       let gscClicks = 0;
@@ -3136,9 +3139,6 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
               if (eventName.includes("call") || eventName.includes("phone") || eventName === "click_to_call" || eventName === "phone_click") {
                 phoneCallsCount += count;
               }
-              if (client.lead_event_names && client.lead_event_names.toLowerCase().includes(eventName)) {
-                leadsTotal += count;
-              }
             }
           } catch (e) {
             console.error(`[MONTHLY SYNC] GA4 error for ${client.name}:`, e.message);
@@ -3167,9 +3167,12 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
         }
       }
       try {
-        const { data: weeklyRecords } = await supabase.from("weekly_data").select("blogs_published, ahrefs_dr, week_start_date").eq("client_id", client.id).gte("week_start_date", startOfMonthStr).lte("week_start_date", endOfMonthStr);
+        const { data: weeklyRecords } = await supabase.from("weekly_data").select("blogs_published, ahrefs_dr, leads_total, week_start_date").eq("client_id", client.id).gte("week_start_date", startOfMonthStr).lte("week_start_date", endOfMonthStr);
         if (weeklyRecords) {
           blogsPublishedCount = weeklyRecords.reduce((sum, r) => sum + (r.blogs_published || 0), 0);
+          if (leadsTotal === 0) {
+            leadsTotal = weeklyRecords.reduce((sum, r) => sum + (r.leads_total || 0), 0);
+          }
           const sortedWeekly = [...weeklyRecords].sort((a, b) => b.week_start_date.localeCompare(a.week_start_date));
           ahrefsDr = sortedWeekly.find((r) => (r.ahrefs_dr || 0) > 0)?.ahrefs_dr || 0;
         }
@@ -3397,6 +3400,7 @@ app.get("/api/clients/:clientId/sync-ahrefs-data", async (req, res) => {
       if (!drRes.ok) {
         const errorText = await drRes.text();
         console.error(`[AHREFS] Domain Rating API error (${drRes.status}):`, errorText);
+        throw new Error(`Ahrefs API Error (${drRes.status}): ${errorText}`);
       } else {
         const drData = await drRes.json();
         dr = Math.round(Number(drData.domain_rating?.domain_rating) || 0);
@@ -3406,6 +3410,7 @@ app.get("/api/clients/:clientId/sync-ahrefs-data", async (req, res) => {
       if (!statsRes.ok) {
         const errorText = await statsRes.text();
         console.error(`[AHREFS] Backlinks Stats API error (${statsRes.status}):`, errorText);
+        throw new Error(`Ahrefs API Error (${statsRes.status}): ${errorText}`);
       } else {
         const statsData = await statsRes.json();
         backlinks = Math.round(Number(statsData.metrics?.[0]?.live_backlinks) || 0);
