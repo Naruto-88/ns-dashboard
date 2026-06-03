@@ -2290,6 +2290,144 @@ ${cleanJsonString(text)}
     res.status(500).json({ error: error.message || String(error) });
   }
 });
+app.post("/api/ai/traffic-drop-analyse", async (req, res) => {
+  const { clientId, model, startDate, endDate, gscData } = req.body;
+  if (!clientId || !model || !startDate || !endDate || !gscData) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+  try {
+    const { data: client, error: clientErr } = await supabase.from("clients").select("*").eq("id", clientId).single();
+    if (clientErr || !client) return res.status(404).json({ error: "Client not found" });
+    const { data: cachedRows } = await supabase.from("ai_audit_history").select("*").eq("client_id", clientId).eq("model", model).eq("analysis_type", "traffic_drop").eq("start_date", startDate).eq("end_date", endDate).order("created_at", { ascending: false });
+    if (cachedRows && cachedRows.length > 0) {
+      const cachedRow = cachedRows[0];
+      if (cachedRow.result && Object.keys(cachedRow.result).length > 0) {
+        console.log(`[CACHE HIT] Traffic drop analysis for ${client.name}`);
+        const cachedResult = typeof cachedRow.result === "string" ? JSON.parse(cachedRow.result) : cachedRow.result;
+        return res.json({
+          ...cachedResult,
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 },
+          cached: true
+        });
+      }
+    }
+    const { data: keysData } = await supabase.from("api_keys").select("*");
+    const keysMap = {};
+    if (keysData) keysData.forEach((k) => keysMap[k.id] = k.key_value);
+    const geminiKey = keysMap["gemini"] || process.env.GEMINI_API_KEY || "";
+    const claudeKey = keysMap["claude"] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || "";
+    const gptKey = keysMap["gpt"] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || "";
+    const dir = gscData.clicks < gscData.prevClicks ? "DECREASED" : "increased";
+    const prompt = `Given this GSC data for ${client.name} for the period ${startDate} to ${endDate}, explain in 3-5 sentences why traffic has ${dir}, citing the actual numbers. Then give ONE specific action to address it. Use ONLY these exact numbers, never invent or estimate any figure.
+Data:
+${JSON.stringify(gscData, null, 2)}
+
+Return strictly as JSON with this structure:
+{
+  "analysis": "...",
+  "action": "..."
+}
+
+CRITICAL JSON INTEGRITY RULES:
+1. Do NOT insert literal unescaped raw newlines inside any string property value; instead, represent newlines using the '\\n' control character.
+2. Do NOT insert unescaped raw double quotes (") inside any string property value. Either strictly escape them as \\" or use single quotes instead.
+3. Make sure the JSON parses perfectly and has no trailing commas.`;
+    let jsonResponse = null;
+    let promptTokens = 0, completionTokens = 0, costUsd = 0;
+    const parseAIResponse = (text) => {
+      let cleaned = text;
+      cleaned = cleaned.replace(/```json/gi, "").replace(/```/g, "").trim();
+      try {
+        return JSON.parse(cleaned);
+      } catch (e1) {
+        try {
+          return JSON.parse(cleanJsonString(cleaned));
+        } catch (e2) {
+          let ultraClean = cleaned.replace(/[\n\r\t]/g, " ");
+          return JSON.parse(ultraClean);
+        }
+      }
+    };
+    if (model === "gemini") {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+        })
+      });
+      if (!response.ok) throw new Error("Gemini API Error");
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error("Empty response from Gemini");
+      jsonResponse = parseAIResponse(text);
+      promptTokens = data.usageMetadata?.promptTokenCount || 0;
+      completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
+      costUsd = promptTokens / 1e6 * 0.075 + completionTokens / 1e6 * 0.3;
+    } else if (model === "claude") {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": claudeKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-latest",
+          max_tokens: 2048,
+          temperature: 0.2,
+          system: "Respond strictly in JSON matching the requested structure.",
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      if (!response.ok) throw new Error("Claude API Error");
+      const data = await response.json();
+      const text = data.content[0].text;
+      if (!text) throw new Error("Empty response from Claude");
+      jsonResponse = parseAIResponse(text);
+      promptTokens = data.usage?.input_tokens || 0;
+      completionTokens = data.usage?.output_tokens || 0;
+      costUsd = promptTokens / 1e6 * 3 + completionTokens / 1e6 * 15;
+    } else {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${gptKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      if (!response.ok) throw new Error("GPT API Error");
+      const data = await response.json();
+      const text = data.choices[0].message.content;
+      if (!text) throw new Error("Empty response from GPT");
+      jsonResponse = parseAIResponse(text);
+      promptTokens = data.usage?.prompt_tokens || 0;
+      completionTokens = data.usage?.completion_tokens || 0;
+      costUsd = promptTokens / 1e6 * 2.5 + completionTokens / 1e6 * 10;
+    }
+    const finalResult = {
+      analysis: jsonResponse.analysis,
+      action: jsonResponse.action,
+      usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens, cost_usd: costUsd }
+    };
+    await supabase.from("ai_audit_history").insert([{
+      client_id: clientId,
+      model,
+      analysis_type: "traffic_drop",
+      start_date: startDate,
+      end_date: endDate,
+      result: { analysis: finalResult.analysis, action: finalResult.action },
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      cost_usd: costUsd,
+      model_used: model
+    }]);
+    res.json(finalResult);
+  } catch (error) {
+    console.error("Traffic drop analyse error:", error);
+    res.status(500).json({ error: String(error) });
+  }
+});
 app.post("/api/ai/optimise-page", async (req, res) => {
   const { clientId, url, pageTitle, issues, model, simulate } = req.body;
   if (!url) {
@@ -3008,7 +3146,7 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
   }
 });
 app.get("/api/cron/sync-monthly-cache", async (req, res) => {
-  console.log("[CRON] Starting Monthly Cache Sync for all clients...");
+  console.log("[CRON] Starting Monthly Cache Sync for all clients... VERSION 2");
   try {
     const auth = await getAuthenticatedClient(req).catch(() => null);
     if (!auth) {
@@ -3167,11 +3305,17 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
         }
       }
       try {
-        const { data: weeklyRecords } = await supabase.from("weekly_data").select("blogs_published, ahrefs_dr, leads_total, week_start_date").eq("client_id", client.id).gte("week_start_date", startOfMonthStr).lte("week_start_date", endOfMonthStr);
+        const { data: weeklyRecords } = await supabase.from("weekly_data").select("blogs_published, ahrefs_dr, leads_total, leads_legit, week_start_date").eq("client_id", client.id).gte("week_start_date", startOfMonthStr).lte("week_start_date", endOfMonthStr);
+        if (client.name.toLowerCase().includes("goldspar")) {
+          console.log(`[DEBUG GOLDSPAR OUTSIDE] start: ${startOfMonthStr}, end: ${endOfMonthStr}, records:`, weeklyRecords);
+        }
         if (weeklyRecords) {
           blogsPublishedCount = weeklyRecords.reduce((sum, r) => sum + (r.blogs_published || 0), 0);
           if (leadsTotal === 0) {
             leadsTotal = weeklyRecords.reduce((sum, r) => sum + (r.leads_total || 0), 0);
+          }
+          if (leadsLegit === 0) {
+            leadsLegit = weeklyRecords.reduce((sum, r) => sum + (r.leads_legit || 0), 0);
           }
           const sortedWeekly = [...weeklyRecords].sort((a, b) => b.week_start_date.localeCompare(a.week_start_date));
           ahrefsDr = sortedWeekly.find((r) => (r.ahrefs_dr || 0) > 0)?.ahrefs_dr || 0;

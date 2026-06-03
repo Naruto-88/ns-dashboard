@@ -116,7 +116,7 @@ export default function GoalsAndTargets() {
         const actualClicks = cacheRecord?.gsc_clicks || 0;
         const actualSessions = cacheRecord?.ga4_traffic || 0;
         const actualBlogs = cacheRecord?.blogs_published || 0;
-        const actualLeads = cacheRecord?.leads_total || 0;
+        const actualLeads = cacheRecord?.leads_legit || cacheRecord?.leads_total || 0;
         const actualDR = cacheRecord?.ahrefs_dr || 0;
         
         const pendingActions = pendingActionsData.filter(a => a.client_id === client.id);

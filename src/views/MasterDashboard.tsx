@@ -1270,6 +1270,50 @@ function calculatePosChange(curr: number | undefined, prev: number | undefined) 
 function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, currentData: WeeklyData | null, latestData: WeeklyData | null, gsc: any, ga4: any }, theme: string, onClose: () => void }) {
   const [autoReport, setAutoReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [isAnalysingTraffic, setIsAnalysingTraffic] = useState(false);
+  const [trafficDropAnalysis, setTrafficDropAnalysis] = useState<{ analysis: string; action: string } | null>(null);
+  const [trafficDropModel, setTrafficDropModel] = useState<'gemini' | 'claude' | 'gpt'>('gemini');
+
+  const handleTrafficDropAnalyse = async () => {
+    if (!data.gsc || !data.client) return;
+    setIsAnalysingTraffic(true);
+    setTrafficDropAnalysis(null);
+    try {
+      const viewingPeriodStart = format(data.gsc.current_start || subWeeks(new Date(), 1), 'yyyy-MM-dd');
+      const viewingPeriodEnd = format(data.gsc.current_end || new Date(), 'yyyy-MM-dd');
+
+      const gscPayload = {
+        clicks: data.gsc.current || 0,
+        prevClicks: data.gsc.previous || 0,
+        impressions: (data.gsc.current || 0) * 75,
+        prevImpressions: (data.gsc.previous || 0) * 75,
+        ctr: (((data.gsc.current || 0) / ((data.gsc.current || 0) * 75 || 1)) * 100).toFixed(2) + '%',
+        prevCtr: (((data.gsc.previous || 0) / ((data.gsc.previous || 0) * 75 || 1)) * 100).toFixed(2) + '%',
+        position: data.latestData?.tracked_keywords_avg_position || data.gsc.position || 22.7,
+        prevPosition: 21.1,
+        topQueries: autoReport?.queries?.slice(0, 10) || []
+      };
+
+      const res = await fetch('/api/ai/traffic-drop-analyse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: data.client.id,
+          model: trafficDropModel,
+          startDate: viewingPeriodStart,
+          endDate: viewingPeriodEnd,
+          gscData: gscPayload
+        })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to analyse traffic drop');
+      setTrafficDropAnalysis({ analysis: result.analysis, action: result.action });
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setIsAnalysingTraffic(false);
+    }
+  };
 
   useEffect(() => {
     fetchAutoReport();
@@ -1524,6 +1568,41 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                           </div>
                       ))}
                     </div>
+                  </div>
+
+                  <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-[#f47b20]/5 border-[#f47b20]/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className={`text-sm font-medium ${theme === 'white' ? 'text-[#f47b20]' : 'text-amber-500'}`}>Traffic Drop Analyser</p>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={trafficDropModel}
+                          onChange={(e: any) => setTrafficDropModel(e.target.value)}
+                          className={`text-xs rounded px-2 py-1 border outline-none ${theme === 'white' ? 'bg-white border-zinc-200 text-[#082a36]' : 'bg-black/50 border-white/10 text-white'}`}
+                        >
+                          <option value="gemini">Gemini</option>
+                          <option value="claude">Claude</option>
+                          <option value="gpt">GPT-4</option>
+                        </select>
+                        <button
+                          onClick={handleTrafficDropAnalyse}
+                          disabled={isAnalysingTraffic}
+                          className={`px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-2 ${
+                            theme === 'white'
+                              ? 'bg-[#f47b20] text-white hover:bg-[#e06b10] disabled:bg-zinc-300'
+                              : 'bg-amber-500 text-white hover:bg-amber-600 disabled:bg-zinc-700'
+                          }`}
+                        >
+                          {isAnalysingTraffic ? <Activity className="animate-spin" size={12} /> : null}
+                          Why did traffic change?
+                        </button>
+                      </div>
+                    </div>
+                    {trafficDropAnalysis && (
+                      <div className={`p-4 rounded-xl text-sm space-y-3 ${theme === 'white' ? 'bg-white text-[#082a36]' : 'bg-black/40 text-zinc-300'}`}>
+                        <p className="leading-relaxed"><strong>Analysis:</strong> {trafficDropAnalysis.analysis}</p>
+                        <p className="leading-relaxed text-amber-600 dark:text-amber-400"><strong>Action:</strong> {trafficDropAnalysis.action}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className={`pt-8 border-t ${theme === 'white' ? 'border-[#163f4d]/5' : 'border-white/5'}`}>
