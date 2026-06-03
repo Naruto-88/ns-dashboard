@@ -589,6 +589,44 @@ export const saveApiKey = async (id: string, keyValue: string): Promise<void> =>
   }
 };
 
+export const mapApiError = (status: number, rawError: string): Error => {
+  const lowerErr = rawError.toLowerCase();
+  
+  if (
+    lowerErr.includes('missing') ||
+    lowerErr.includes('not configured') ||
+    lowerErr.includes('api key') ||
+    status === 401 ||
+    (status === 400 && lowerErr.includes('key'))
+  ) {
+    return new Error('AI model not configured, contact admin');
+  } else if (
+    lowerErr.includes('truncation') ||
+    lowerErr.includes('max_tokens') ||
+    lowerErr.includes('cut off') ||
+    lowerErr.includes('incomplete json')
+  ) {
+    return new Error('Report was too large, please retry');
+  } else if (
+    status === 429 ||
+    lowerErr.includes('rate limit') ||
+    lowerErr.includes('too many requests') ||
+    lowerErr.includes('quota')
+  ) {
+    return new Error('AI service busy, try again shortly');
+  } else if (
+    status === 504 ||
+    status === 502 ||
+    status === 408 ||
+    lowerErr.includes('timeout') ||
+    lowerErr.includes('took too long')
+  ) {
+    return new Error('Audit took too long, please retry');
+  } else {
+    return new Error(rawError);
+  }
+};
+
 export const runAiAnalysis = async (params: {
   clientId: string;
   model: string;
@@ -605,11 +643,62 @@ export const runAiAnalysis = async (params: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params)
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'AI Analysis failed');
-    return data;
-  } catch (error) {
+
+    if (!response.ok) {
+      const status = response.status;
+      let rawError = 'AI Analysis failed';
+      try {
+        const data = await response.json();
+        rawError = data.error || rawError;
+      } catch (e) {
+        // response might not be JSON (e.g. timeout HTML or raw text)
+      }
+
+      console.warn(`[AI SERVICE ERROR] status=${status} message="${rawError}"`);
+      throw mapApiError(status, rawError);
+    }
+
+    return await response.json();
+  } catch (error: any) {
     console.error('Error in runAiAnalysis:', error);
+    throw error;
+  }
+};
+
+export const runAiSinglePageOptimise = async (params: {
+  clientId: string;
+  url: string;
+  pageTitle: string;
+  issues: string[];
+  model: string;
+  simulate?: boolean;
+}): Promise<any> => {
+  try {
+    const response = await fetch('/api/ai/optimise-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      let rawError = 'Optimization failed';
+      try {
+        const data = await response.json();
+        rawError = data.error || rawError;
+      } catch (e) {
+        try {
+          rawError = await response.text() || rawError;
+        } catch (_) {}
+      }
+
+      console.warn(`[AI OPTIMISE SERVICE ERROR] status=${status} message="${rawError}"`);
+      throw mapApiError(status, rawError);
+    }
+
+    return await response.json();
+  } catch (error: any) {
+    console.error('Error in runAiSinglePageOptimise:', error);
     throw error;
   }
 };

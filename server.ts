@@ -513,7 +513,9 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
 
     // Calculate dates
     const startDate = weekStart as string;
-    const endDate = new Date(new Date(startDate).getTime() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const parts = startDate.split('-').map(Number);
+    const startUTC = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const endDate = new Date(startUTC.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     // 1. Fetch GA4 Data
     let ga4Data = { traffic: 0, newUsers: 0, returningUsers: 0, organicTraffic: 0 };
@@ -924,8 +926,12 @@ app.get('/api/clients/:clientId/insights', async (req, res) => {
 
     try {
       // Calculate previous period
-      const start = new Date(startDate as string);
-      const end = new Date(endDate as string);
+      const parseUTC = (dStr: string) => {
+        const parts = dStr.split('-').map(Number);
+        return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+      };
+      const start = parseUTC(startDate as string);
+      const end = parseUTC(endDate as string);
       const duration = end.getTime() - start.getTime() + (24 * 60 * 60 * 1000);
       const prevStartDate = new Date(start.getTime() - duration).toISOString().split('T')[0];
       const prevEndDate = new Date(end.getTime() - duration).toISOString().split('T')[0];
@@ -1212,6 +1218,21 @@ async function fetchPeriodMetrics(client: any, startDate: string, endDate: strin
 
 function cleanJsonString(str: string): string {
   let cleaned = str.trim();
+  
+  // Find first '{'
+  const firstBrace = cleaned.indexOf('{');
+  if (firstBrace === -1) {
+    return '{}'; // No JSON start found
+  }
+  
+  // Find last '}'
+  let lastBrace = cleaned.lastIndexOf('}');
+  
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+  
+  cleaned = cleaned.trim();
   if (cleaned.startsWith('```json')) {
     cleaned = cleaned.substring(7);
   } else if (cleaned.startsWith('```')) {
@@ -1221,12 +1242,244 @@ function cleanJsonString(str: string): string {
     cleaned = cleaned.substring(0, cleaned.length - 3);
   }
   cleaned = cleaned.trim();
+
+  let repaired = '';
+  let inString = false;
+  let stack: ('{' | '[')[] = [];
+  let expectKey = false;
+  let expectValue = false;
   
-  // Remove trailing commas in objects and arrays which crash native JSON.parse
-  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  // Keep track of the stack state at each character index so we can backtrack on truncation
+  let lastValidBraceIndex = -1;
+  let stackAtLastValidBrace: ('{' | '[')[] = [];
   
-  return cleaned;
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    const nextChar = cleaned[i + 1] || '';
+    
+    if (inString) {
+      if (char === '\\') {
+        repaired += char + nextChar;
+        i++;
+        continue;
+      }
+      if (char === '\n') {
+        repaired += '\\n';
+        continue;
+      }
+      if (char === '\r') {
+        continue;
+      }
+      if (char === '"') {
+        // Determine if this is the structural closing quote of the string.
+        let nextNonWs = '';
+        let scan = i + 1;
+        while (scan < cleaned.length) {
+          const sChar = cleaned[scan];
+          if (sChar !== ' ' && sChar !== '\t' && sChar !== '\n' && sChar !== '\r') {
+            nextNonWs = sChar;
+            break;
+          }
+          scan++;
+        }
+        
+        const currentContainer = stack[stack.length - 1];
+        let isValidClosing = false;
+        
+        if (nextNonWs === '') {
+          isValidClosing = true;
+        } else if (currentContainer === '{') {
+          if (expectKey) {
+            if (nextNonWs === ':') {
+              isValidClosing = true;
+            }
+          } else {
+            if (nextNonWs === '}') {
+              // Verify what comes after the '}'
+              let afterBrace = '';
+              let scanNext = scan + 1;
+              while (scanNext < cleaned.length) {
+                const sChar = cleaned[scanNext];
+                if (sChar !== ' ' && sChar !== '\t' && sChar !== '\n' && sChar !== '\r') {
+                  afterBrace = sChar;
+                  break;
+                }
+                scanNext++;
+              }
+              
+              let isStructuralBrace = afterBrace === ',' || afterBrace === ']' || afterBrace === '}' || afterBrace === '';
+              
+              if (isStructuralBrace) {
+                if (afterBrace === ',') {
+                  let afterComma = '';
+                  let scanComma = scanNext + 1;
+                  while (scanComma < cleaned.length) {
+                    const sChar = cleaned[scanComma];
+                    if (sChar !== ' ' && sChar !== '\t' && sChar !== '\n' && sChar !== '\r') {
+                      afterComma = sChar;
+                      break;
+                    }
+                    scanComma++;
+                  }
+                  if (afterComma === '{' || afterComma === ']') {
+                    isValidClosing = true;
+                  }
+                } else {
+                  isValidClosing = true;
+                }
+              }
+            } else if (nextNonWs === ',') {
+              let afterComma = '';
+              let scanAfter = scan + 1;
+              while (scanAfter < cleaned.length) {
+                const sChar = cleaned[scanAfter];
+                if (sChar !== ' ' && sChar !== '\t' && sChar !== '\n' && sChar !== '\r') {
+                  afterComma = sChar;
+                  break;
+                }
+                scanAfter++;
+              }
+              
+              if (afterComma === '"') {
+                let scanKey = scanAfter + 1;
+                let foundClosing = false;
+                let keyHasColon = false;
+                while (scanKey < cleaned.length) {
+                  const kChar = cleaned[scanKey];
+                  if (kChar === '\\') {
+                    scanKey += 2;
+                    continue;
+                  }
+                  if (kChar === '"') {
+                    foundClosing = true;
+                    let scanColon = scanKey + 1;
+                    while (scanColon < cleaned.length) {
+                      const cChar = cleaned[scanColon];
+                      if (cChar !== ' ' && cChar !== '\t' && cChar !== '\n' && cChar !== '\r') {
+                        if (cChar === ':') {
+                          keyHasColon = true;
+                        }
+                        break;
+                      }
+                      scanColon++;
+                    }
+                    break;
+                  }
+                  scanKey++;
+                }
+                if (foundClosing && keyHasColon) {
+                  isValidClosing = true;
+                }
+              }
+            }
+          }
+        } else if (currentContainer === '[') {
+          if (nextNonWs === ']') {
+            isValidClosing = true;
+          } else if (nextNonWs === ',') {
+            let afterComma = '';
+            let scanAfter = scan + 1;
+            while (scanAfter < cleaned.length) {
+              const sChar = cleaned[scanAfter];
+              if (sChar !== ' ' && sChar !== '\t' && sChar !== '\n' && sChar !== '\r') {
+                afterComma = sChar;
+                break;
+              }
+              scanAfter++;
+            }
+            
+            if (afterComma === ']') {
+              isValidClosing = true;
+            } else if (afterComma === '{') {
+              isValidClosing = true;
+            } else if (afterComma === '[') {
+              isValidClosing = true;
+            } else if (afterComma === '"') {
+              isValidClosing = true;
+            }
+          }
+        }
+        
+        if (isValidClosing) {
+          inString = false;
+          repaired += char;
+          if (currentContainer === '{') {
+            if (expectKey) {
+              expectKey = false;
+            } else {
+              expectValue = false;
+            }
+          }
+        } else {
+          repaired += '\\"';
+        }
+      } else {
+        repaired += char;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+        repaired += char;
+        const currentContainer = stack[stack.length - 1];
+        if (currentContainer === '{') {
+          if (!expectValue) {
+            expectKey = true;
+          }
+        }
+      } else {
+        repaired += char;
+        if (char === '{') {
+          stack.push('{');
+          expectKey = true;
+          expectValue = false;
+        } else if (char === '[') {
+          stack.push('[');
+        } else if (char === '}') {
+          stack.pop();
+          expectValue = false;
+          expectKey = false;
+          // Capture index of the last fully completed object structure
+          lastValidBraceIndex = repaired.length;
+          stackAtLastValidBrace = [...stack];
+        } else if (char === ']') {
+          stack.pop();
+          expectValue = false;
+          expectKey = false;
+        } else if (char === ':') {
+          expectValue = true;
+          expectKey = false;
+        } else if (char === ',') {
+          const currentContainer = stack[stack.length - 1];
+          if (currentContainer === '{') {
+            expectKey = true;
+            expectValue = false;
+          }
+        }
+      }
+    }
+  }
+  
+  // Truncation healing safeguard:
+  // If we ended with unclosed containers (stack is not empty) and have a valid backtracking checkpoint
+  if (stack.length > 0 && lastValidBraceIndex !== -1) {
+    // Slice clean up to the last known fully completed object
+    repaired = repaired.substring(0, lastValidBraceIndex);
+    // Gracefully pop and append the matching JSON structural close symbols
+    for (let j = stackAtLastValidBrace.length - 1; j >= 0; j--) {
+      const container = stackAtLastValidBrace[j];
+      if (container === '[') {
+        repaired += ']';
+      } else if (container === '{') {
+        repaired += '}';
+      }
+    }
+  } else {
+    repaired = repaired.replace(/,\s*([\]}])/g, '$1');
+  }
+  
+  return repaired;
 }
+
 
 function generateSimulatedAnalysis(clientName: string, current: any, previous: any, analysisType: string) {
   const isLight = analysisType === 'light';
@@ -1679,7 +1932,7 @@ async function auditPage(url: string) {
   }
 }
 
-async function crawlSite(siteUrl: string) {
+async function crawlSite(siteUrl: string, maxPages: number = 100) {
   let cleanUrl = siteUrl.trim();
   if (cleanUrl.startsWith('sc-domain:')) {
     cleanUrl = 'https://' + cleanUrl.replace('sc-domain:', '');
@@ -1783,8 +2036,8 @@ async function crawlSite(siteUrl: string) {
       return !blockedUrlKeywords.some(kw => lower.includes(kw));
     });
 
-    const targetUrls = filteredUrls.slice(0, 100);
-    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets. Processing with concurrency limit 5...`);
+    const targetUrls = filteredUrls.slice(0, maxPages);
+    console.log(`[CRAWLER] Scanned and filtered ${targetUrls.length} targets (configured cap: ${maxPages}). Processing with concurrency limit 5...`);
 
     const results: any[] = [];
     const concurrencyLimit = 5;
@@ -1803,12 +2056,30 @@ async function crawlSite(siteUrl: string) {
     scannedPages.push(fallback);
   }
 
+  const normaliseForHomepageComparison = (urlStr: string) => {
+    try {
+      const parsed = new URL(urlStr);
+      const host = parsed.hostname.replace(/^www\./i, '');
+      const path = parsed.pathname.replace(/\/$/, '');
+      return `${host}${path}`.toLowerCase().trim();
+    } catch {
+      return urlStr
+        .replace(/^https?:\/\//i, '')
+        .replace(/^www\./i, '')
+        .replace(/\/$/, '')
+        .toLowerCase()
+        .trim();
+    }
+  };
+
+  const cleanUrlNormalised = normaliseForHomepageComparison(cleanUrl);
+
   let totalIssues = 0;
   let totalPagesCount = scannedPages.length;
   let hasHomepageError = false;
 
   scannedPages.forEach(p => {
-    const isHomepage = p.url === cleanUrl || p.url === cleanUrl + '/';
+    const isHomepage = normaliseForHomepageComparison(p.url) === cleanUrlNormalised;
     if (p.error) {
       if (isHomepage) {
         hasHomepageError = true;
@@ -1823,11 +2094,15 @@ async function crawlSite(siteUrl: string) {
 
   const baseScore = 100;
   const deduction = totalPagesCount > 0 ? (totalIssues / totalPagesCount) * 10 : 0;
-  let healthScore = Math.max(50, Math.round(baseScore - deduction));
+  let healthScore = Math.round(baseScore - deduction);
   
   if (hasHomepageError) {
-    // If the homepage is broken, cap the health score at 60 to reflect critical unavailability
-    healthScore = Math.min(60, healthScore);
+    // If the homepage is broken, cap the health score at 35 (critical unavailability)
+    healthScore = Math.min(35, healthScore);
+    healthScore = Math.max(10, healthScore); // Ensure a sensible floor for UI
+  } else {
+    // Healthy pages floor at 50
+    healthScore = Math.max(50, healthScore);
   }
 
   return {
@@ -1838,9 +2113,9 @@ async function crawlSite(siteUrl: string) {
   };
 }
 
-// POST AI Strategic Analysis
+// POST AI
 app.post('/api/ai/analyze', async (req, res) => {
-  const { clientId, model, analysisType, startDate, endDate, simulate, runTechnicalCrawl, generateAiFixes } = req.body;
+  const { clientId, model, analysisType, startDate, endDate, simulate, runTechnicalCrawl, generateAiFixes, maxPages } = req.body;
 
   if (!clientId || !model || !analysisType || !startDate || !endDate) {
     return res.status(400).json({ error: 'clientId, model, analysisType, startDate, and endDate are required' });
@@ -1858,14 +2133,55 @@ app.post('/api/ai/analyze', async (req, res) => {
       return res.status(404).json({ error: 'Client not found' });
     }
 
+    // Cache Check (before LLM call or metrics/crawl calls)
+    try {
+      const { data: cachedRows, error: cacheQueryError } = await supabase
+        .from('ai_audit_history')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('model', model)
+        .eq('analysis_type', analysisType)
+        .eq('start_date', startDate)
+        .eq('end_date', endDate)
+        .order('created_at', { ascending: false });
+
+      if (!cacheQueryError && cachedRows && cachedRows.length > 0) {
+        const cachedRow = cachedRows[0];
+        if (cachedRow.result && Object.keys(cachedRow.result).length > 0) {
+          console.log(`[CACHE HIT] client=${clientId} model=${model} dates=${startDate} to ${endDate}`);
+          
+          const cachedResult = typeof cachedRow.result === 'string'
+            ? JSON.parse(cachedRow.result)
+            : cachedRow.result;
+
+          const responsePayload = {
+            ...cachedResult,
+            usage: {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              cost_usd: 0.0000,
+              model_used: 'CACHED_HIT'
+            }
+          };
+          return res.json(responsePayload);
+        }
+      }
+    } catch (cacheErr) {
+      console.warn('[CACHE CHECK ERROR] Failed to query or parse cached audit:', cacheErr);
+    }
+
     // 2. Fetch current & previous period metrics
     const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
     const analytics = google.analyticsdata({ version: 'v1beta', auth });
     const searchconsole = google.searchconsole({ version: 'v1', auth });
 
     // Calculate previous period dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const parseUTC = (dStr: string) => {
+      const parts = dStr.split('-').map(Number);
+      return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    };
+    const start = parseUTC(startDate);
+    const end = parseUTC(endDate);
     const duration = end.getTime() - start.getTime() + (24 * 60 * 60 * 1000);
     const prevStartDate = new Date(start.getTime() - duration).toISOString().split('T')[0];
     const prevEndDate = new Date(end.getTime() - duration).toISOString().split('T')[0];
@@ -1875,15 +2191,15 @@ app.post('/api/ai/analyze', async (req, res) => {
       fetchPeriodMetrics(client, prevStartDate, prevEndDate, auth, analytics, searchconsole, clientId)
     ]);
 
-    // 3. Optional: Run technical page crawl
+    // 3. Obtain technical crawl cap limit (ISSUE 3)
     let crawlDiagnostics: any = null;
     if (runTechnicalCrawl && client.gsc_site_url) {
-      crawlDiagnostics = await crawlSite(client.gsc_site_url);
+      const defaultCap = analysisType === 'light' ? 15 : 100;
+      const parsedMaxPages = maxPages ? parseInt(maxPages) : defaultCap;
+      crawlDiagnostics = await crawlSite(client.gsc_site_url, parsedMaxPages);
     }
 
-    // 3. Obtain LLM API Key
-    let apiKey = '';
-    let geminiKeysPool: string[] = [];
+    // 4. Obtain LLM API Keys separately per provider (ISSUE 1 & 4)
     const { data: keysData } = await supabase.from('api_keys').select('*');
     const keysMap: Record<string, string> = {};
     if (keysData) {
@@ -1892,23 +2208,25 @@ app.post('/api/ai/analyze', async (req, res) => {
       });
     }
 
-    if (model === 'gemini') {
-      geminiKeysPool = [
-        keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
-        keysMap['gemini_2'] || '',
-        keysMap['gemini_3'] || '',
-        keysMap['gemini_4'] || ''
-      ].map(k => k?.trim()).filter(Boolean);
-      apiKey = geminiKeysPool[0] || '';
-    } else if (model === 'claude') {
-      apiKey = keysMap['claude'] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-    } else if (model === 'gpt') {
-      apiKey = keysMap['gpt'] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || '';
-    }
+    const geminiKeysPool = [
+      keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
+      keysMap['gemini_2'] || '',
+      keysMap['gemini_3'] || '',
+      keysMap['gemini_4'] || ''
+    ].map(k => k?.trim()).filter(Boolean);
+    const primaryGeminiKey = geminiKeysPool[0] || '';
 
-    // 4. Fallback to simulation if simulate parameter is passed, OR no API key is available
-    if (simulate || !apiKey) {
-      console.log(`[AI ANALYZE] Running in SIMULATION mode. Selected model parameter: "${model}", Client: "${client.name}" (simulate=${simulate}, hasKey=${!!apiKey})`);
+    const claudeKey = (keysMap['claude'] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || '').trim();
+    const gptKey = (keysMap['gpt'] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+
+    console.log(`[AI ANALYZE] Key Verification Logs - Client: "${client.name}"`);
+    console.log(` - Gemini API Key present: ${!!primaryGeminiKey} (pool size: ${geminiKeysPool.length})`);
+    console.log(` - Claude/Anthropic API Key present: ${!!claudeKey}`);
+    console.log(` - GPT/OpenAI API Key present: ${!!gptKey}`);
+
+    // 5. Fallback to simulation ONLY when simulate === true is EXPLICITLY requested (ISSUE 1)
+    if (simulate === true) {
+      console.log(`[AI ANALYZE] Running in EXPLICIT SIMULATION mode. Selected model: "${model}", Client: "${client.name}"`);
       const simulatedResult = generateSimulatedAnalysis(client.name, currentMetrics, previousMetrics, analysisType);
       
       let simulatedCrawl = null;
@@ -1925,42 +2243,42 @@ app.post('/api/ai/analyze', async (req, res) => {
             { 
               url: `${cleanUrl}/`, 
               title: 'Home - Premium SEO Services', 
+              titleLength: 30,
+              metaLength: 0,
+              wordCount: 320,
               issues: ['3 Images Lacking ALT tags']
             },
             { 
               url: `${cleanUrl}/about`, 
               title: 'About Us - Our Agency Story', 
+              titleLength: 28,
+              metaLength: 0,
+              wordCount: 450,
               issues: ['Missing Meta Description Tag']
             },
             { 
               url: `${cleanUrl}/services`, 
               title: 'Core Marketing Solutions & Audits', 
+              titleLength: 72,
+              metaLength: 155,
+              wordCount: 890,
               issues: ['Over-optimised Title Tag (Length: 72 chars, exceeds 60 Limit)', '2 Images Lacking ALT tags']
             },
             { 
               url: `${cleanUrl}/blog`, 
               title: 'Resource Hub & SEO Insights', 
+              titleLength: 30,
+              metaLength: 140,
+              wordCount: 1200,
               issues: []
             },
             { 
               url: `${cleanUrl}/contact`, 
               title: 'Contact Us', 
+              titleLength: 10,
+              metaLength: 0,
+              wordCount: 180,
               issues: ['Under-optimised Title Tag (Length: 10 chars, too short)', 'Missing Meta Description Tag']
-            },
-            { 
-              url: `${cleanUrl}/services/seo`, 
-              title: 'Search Engine Optimisation (SEO)', 
-              issues: ['Multiple Primary Headings Detected (2 H1 tags, should only be one)']
-            },
-            { 
-              url: `${cleanUrl}/portfolio`, 
-              title: 'Our Client Success Work', 
-              issues: ['Missing Page Title Tag']
-            },
-            { 
-              url: `${cleanUrl}/privacy-policy`, 
-              title: 'Privacy Policy', 
-              issues: []
             }
           ]
         };
@@ -1974,13 +2292,63 @@ app.post('/api/ai/analyze', async (req, res) => {
       });
     }
 
+    // Enforce strict key checks per provider when simulate is false (ISSUE 1)
+    if (model === 'gemini') {
+      if (!primaryGeminiKey) {
+        console.error('[AI ANALYZE ERROR] Blocked: Missing GEMINI_API_KEY for model "gemini".');
+        return res.status(400).json({ error: 'Missing GEMINI_API_KEY — cannot run Gemini analysis' });
+      }
+    } else if (model === 'claude' || model.startsWith('claude-')) {
+      if (!claudeKey) {
+        console.error(`[AI ANALYZE ERROR] Blocked: Missing ANTHROPIC_API_KEY for model "${model}".`);
+        return res.status(400).json({ error: `Missing ANTHROPIC_API_KEY — cannot run Claude analysis (${model})` });
+      }
+    } else if (model === 'gpt' || model.startsWith('gpt-')) {
+      if (!gptKey) {
+        console.error(`[AI ANALYZE ERROR] Blocked: Missing OPENAI_API_KEY for model "${model}".`);
+        return res.status(400).json({ error: `Missing OPENAI_API_KEY — cannot run GPT analysis (${model})` });
+      }
+    } else {
+      // Final fallback else to prevent route hangs on invalid model strings (ISSUE 2)
+      console.error(`[AI ANALYZE ERROR] Blocked: Unknown model parameter "${model}".`);
+      return res.status(400).json({ error: `Unknown model: ${model}` });
+    }
+
     // 5. Build prompt
     let promptSuffix = '';
     if (crawlDiagnostics) {
+      let totalAltIssues = 0;
+      let thinMetaCount = 0;
+      let thinContentCount = 0;
+
+      if (crawlDiagnostics.scannedPages) {
+        crawlDiagnostics.scannedPages.forEach((p: any) => {
+          if (p.issues) {
+            p.issues.forEach((issue: string) => {
+              const altMatch = issue.match(/(\d+)\s+images?\s+lacking\s+alt/i);
+              if (altMatch) {
+                totalAltIssues += parseInt(altMatch[1]);
+              }
+              if (issue.toLowerCase().includes('meta description too short') || issue.toLowerCase().includes('missing meta description')) {
+                thinMetaCount++;
+              }
+              if (issue.toLowerCase().includes('thin content penalty')) {
+                thinContentCount++;
+              }
+            });
+          }
+        });
+      }
+
       promptSuffix = `\n\n[CRITICAL CRAWLER DIAGNOSTICS - ACTUAL ON-PAGE TECHNICAL ERRORS FOUND ON SITE]:
 Total Pages Crawled: ${crawlDiagnostics.totalPages}
 Technical Health Score: ${crawlDiagnostics.healthScore}/100
 Total Issues Found: ${crawlDiagnostics.totalIssues}
+
+[PRE-COMPUTED AGGREGATE CRAWL TOTALS (DO NOT COMPUTE THESE YOURSELF)]:
+- Total images missing ALT tags across all crawled pages: ${totalAltIssues}
+- Total pages with thin or short meta descriptions: ${thinMetaCount}
+- Total pages with thin body content (<250 words): ${thinContentCount}
 
 Detailed URL Error Breakdown:
 ${JSON.stringify(crawlDiagnostics.scannedPages, null, 2)}
@@ -1989,7 +2357,10 @@ YOU MUST incorporate these actual crawled issues into your strategic analysis!
 1. Include recommendations to fix these exact technical on-page issues inside the "Technical" actionableDirectives, specifying how to resolve them on those specific URLs.
 2. In the "executiveSummary.thingsToImprove" list, mention these crawled errors specifically (e.g. meta tags missing, alt images missing).
 3. In the "executiveSummary.actionsToDo" list, include the remediation tasks for these errors.
-4. Inside the "implementationGuide" playbook, write detailed instructions on exactly how to fix these exact errors (e.g., specific html attributes or changes).`;
+4. Inside the "implementationGuide" playbook, write detailed instructions on exactly how to fix these exact errors (e.g., specific html attributes or changes).
+5. CLARITY REQUIREMENT (No Contradictions): When a page has a thin META DESCRIPTION but healthy body CONTENT (or vice versa), explicitly distinguish the two — e.g. 'strong content but a thin meta description' — so it never reads as a contradiction (e.g. explicitly state that the page has excellent, comprehensive content depth but simply needs its snippet metadata optimised).
+6. ARITHMETIC REQUIREMENT (No Manual Summing): Use the pre-computed totals provided above under '[PRE-COMPUTED AGGREGATE CRAWL TOTALS]'. You MUST NOT compute, sum, or calculate aggregate numbers yourself — only reference and narrate the exact figures given to you in that section.
+7. COMPARATIVE ARITHMETIC REQUIREMENT (No Manual Deltas or % Changes): Use the exact metrics, absolute differences, and relative percentage changes provided under '[PRE-COMPUTED PERIOD-OVER-PERIOD METRICS & DELTAS]'. You MUST NOT compute, calculate, or derive absolute differences or percentage changes yourself — only reference and narrate the exact figures given to you in that section (e.g. quote exactly that clicks fell from 179 to 121 (-58, -32.4%) or CTR dropped from 1.30% to 0.82% (-0.48 percentage points, -36.7%)).`;
 
       if (generateAiFixes) {
         promptSuffix += `\n\n[CRITICAL REQUEST - GENERATE PAGE-BY-PAGE SEO FIXES]:
@@ -2006,29 +2377,49 @@ Example structure to add in your JSON response:
       }
     }
 
+    // Pre-compute period-over-period differences and relative percentage changes
+    const computeDeltaAndPct = (current: number, previous: number, isPercentage = false, isPosition = false) => {
+      const delta = current - previous;
+      const pct = previous !== 0 ? (delta / previous) * 100 : 0;
+      
+      const deltaSign = delta > 0 ? '+' : '';
+      const pctSign = pct > 0 ? '+' : '';
+      
+      const formattedCurrent = isPercentage ? `${current.toFixed(2)}%` : current.toFixed(isPosition ? 2 : 0);
+      const formattedPrevious = isPercentage ? `${previous.toFixed(2)}%` : previous.toFixed(isPosition ? 2 : 0);
+      
+      const formattedDelta = isPercentage 
+        ? `${deltaSign}${delta.toFixed(2)} percentage points` 
+        : `${deltaSign}${delta.toFixed(isPosition ? 2 : 0)}`;
+        
+      return {
+        fullString: `${formattedPrevious} → ${formattedCurrent} (${formattedDelta}, ${pctSign}${pct.toFixed(1)}%)`
+      };
+    };
+
+    const clicksComp = computeDeltaAndPct(currentMetrics.gsc.clicks, previousMetrics.gsc.clicks);
+    const impressionsComp = computeDeltaAndPct(currentMetrics.gsc.impressions, previousMetrics.gsc.impressions);
+    const ctrComp = computeDeltaAndPct(currentMetrics.gsc.ctr, previousMetrics.gsc.ctr, true);
+    const positionComp = computeDeltaAndPct(currentMetrics.gsc.position, previousMetrics.gsc.position, false, true);
+    const trafficComp = computeDeltaAndPct(currentMetrics.ga4.traffic, previousMetrics.ga4.traffic);
+
     const prompt = `You are a high-priced enterprise SEO Consultant conducting an organic growth audit for the client "${client.name}".
 Selected Time Period: ${startDate} to ${endDate}
 Previous Period (for comparison): ${prevStartDate} to ${prevEndDate}
 Analysis Level: ${analysisType.toUpperCase()} (Light Audit focuses on core issues, Deep Audit is comprehensive).
 
-Here is the GSC and GA4 metrics for both periods:
-CURRENT PERIOD:
-- Google Search Console Clicks: ${currentMetrics.gsc.clicks}
-- Google Search Console Impressions: ${currentMetrics.gsc.impressions}
-- Search CTR: ${currentMetrics.gsc.ctr.toFixed(2)}%
-- Average Search Ranking Position: ${currentMetrics.gsc.position.toFixed(2)}
+[PRE-COMPUTED PERIOD-OVER-PERIOD METRICS & DELTAS (USE THESE EXACT FIGURES, DO NOT COMPUTE DELTAS YOURSELF)]:
+- Google Search Console Clicks: ${clicksComp.fullString}
+- Google Search Console Impressions: ${impressionsComp.fullString}
+- Search CTR: ${ctrComp.fullString}
+- Average Search Ranking Position: ${positionComp.fullString}
+- Google Analytics 4 Total Organic/Referral Traffic (Sessions): ${trafficComp.fullString}
+
+CURRENT PERIOD (ADDITIONAL DETAIL):
 - Top 3 Ranking Keywords Count: ${currentMetrics.gsc.top3}
 - Top 10 Ranking Keywords Count: ${currentMetrics.gsc.top10}
-- Google Analytics 4 Total Organic/Referral Traffic (Sessions): ${currentMetrics.ga4.traffic}
 - GA4 New Users: ${currentMetrics.ga4.newUsers}
 - GA4 Returning Users: ${currentMetrics.ga4.returningUsers}
-
-PREVIOUS PERIOD:
-- Google Search Console Clicks: ${previousMetrics.gsc.clicks}
-- Google Search Console Impressions: ${previousMetrics.gsc.impressions}
-- Search CTR: ${previousMetrics.gsc.ctr.toFixed(2)}%
-- Average Search Ranking Position: ${previousMetrics.gsc.position.toFixed(2)}
-- Google Analytics 4 Organic/Referral Traffic: ${previousMetrics.ga4.traffic}
 
 TOP KEYWORDS RECORDED IN CURRENT PERIOD:
 ${JSON.stringify(currentMetrics.gsc.topQueries, null, 2)}
@@ -2058,8 +2449,46 @@ Based on this data, construct an expert, highly actionable audit. Provide your r
 
 Do not return markdown code blocks in your JSON values. 
 
+ANTI-HALLUCINATION REQUIREMENT:
+You must ONLY reference URLs, keywords, positions, CTRs, and error messages that explicitly appear in the provided data. You must NEVER invent or fabricate URLs, keywords, positions, CTRs, or errors that are not in the data — but you MAY calculate grounded projections derived from those actual numbers as explicitly permitted under the PROJECTIONS rule below. You MUST NOT perform manual calculations or arithmetic to sum or calculate crawl totals — use ONLY the exact numbers provided in the '[PRE-COMPUTED AGGREGATE CRAWL TOTALS]' section.
+
+FORCED KEYWORD USAGE RULES:
+You MUST reference at least 3 specific keywords by name from the TOP KEYWORDS list, along with their exact position and CTR. You MUST explicitly flag keywords that are ranking less than 10 (<10) but have a low CTR as priority organic search opportunities.
+
+AUDIT DEPTH REQUIREMENTS:
+Since the Selected Analysis Level is ${analysisType.toUpperCase()}:
+${analysisType === 'light' 
+  ? `- You MUST generate exactly 3 to 4 actionableDirectives in total. The implementationGuide must be a highly concise, straightforward guide.` 
+  : `- You MUST generate exactly 6 to 8 actionableDirectives in total, spanning across Technical, Content, and Backlinks categories. In the implementationGuide, you MUST provide clear before/after HTML code snippet examples for developer implementation, and you MUST address every single URL listed in the crawled technical diagnostics.`}
+
+DATA-DRIVEN PRIORITY RULES:
+- Any broken/inaccessible pages (e.g., HTTP 403, 404, or fetching errors) and search engine crawlability blockers MUST always be assigned "High" priority.
+- Any keywords experiencing a CTR drop of >15% or a click drop of >20% compared to the previous period MUST always be assigned "High" priority.
+- Purely cosmetic or non-critical design issues must be assigned "Low" priority.
+- You MUST order the actionableDirectives array starting with the highest-leverage ("High" priority) directives first.
+
+SEO JUDGMENT RULES:
+- Keywords ranking at position >30 are NOT realistic quick-win CTR opportunities. Treat them as low priority. Focus CTR/content directives on keywords at position 4-20 (especially 8-15, "near page one").
+- If a query looks like garbage, code, or a non-human string (e.g. "219+159"), do NOT build a directive around it — note it as a data anomaly to investigate instead.
+- If a crawled page seems irrelevant to the client's business (e.g. a finance site with a software/activator page), flag it for review/possible removal rather than suggesting on-page fixes.
+KEYWORD VARIANT HANDLING (near-duplicates):
+- topQueries may contain near-duplicate variants (e.g. "dreamboats", "dreamboats sydney", "sydney dream boats", "dream boats", "dreamboat"). These are DISTINCT queries, each with its own position and CTR.
+- Treat every variant as a separate row. Never merge, dedupe, collapse, or drop a variant — even if two look almost identical.
+- When you cite a keyword, quote ONLY that exact variant's own position and CTR from the data. Never borrow a position or CTR from a different variant.
+- If two variants share the same position (e.g. both at Position 1), that is expected and correct — report both separately with their own CTRs.
+- Before writing, list every variant you will reference with its exact position and CTR, and verify each number comes from that variant's own row.
+- Do NOT silently omit a top query just because it resembles another. If it is in the data, it must appear in the report.
+
+PROJECTIONS (grounded, no hype):
+- Do NOT state percentage-growth projections (no "300% growth", "2x traffic", "+50% CTR").
+- DO give absolute estimates grounded in the actual input numbers. Derive, don't invent:
+  * CTR fix: added clicks ≈ current weekly impressions for that page/keyword × realistic CTR uplift (e.g. 0.82% → 1.2%). State the impression base you used.
+  * Ranking/visibility fix: give a conservative weekly click or impression RANGE and state the assumption behind it.
+- Every estimate must tie back to a number that actually appears in the input data.
+- If you lack the data to ground an estimate, write "directional only" instead of a number.
+
 CRITICAL JSON INTEGRITY & SPELLING RULES:
-1. YOU MUST write all JSON values and text exclusively in Australian English (British spelling rules). You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). NEVER use the letter 'z' in these words! Use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'.
+1. YOU MUST write all JSON prose and text values exclusively in British / Australian English. You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). Use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'. However, do not modify technical terms, code snippets, or official brand names that naturally use other spelling conventions.
 2. You MUST ensure that any HTML code snippets or developer instructions you provide inside the JSON values DO NOT contain unescaped raw double quotes ("). Either strictly escape them as \\\" (e.g. \\\"logo.png\\\") OR use single quotes (') for all HTML attributes (e.g. <img src=\'logo.png\' alt=\'logo\'>). This is absolutely critical to prevent JSON parsing crashes.
 3. Do not insert literal unescaped raw newlines inside any string property value; instead, represent newlines using the '\\n' control character.
 4. Make sure the JSON parses perfectly and has no trailing commas.
@@ -2068,6 +2497,11 @@ ${promptSuffix}`;
 
     // 6. Invoke selected LLM API
     let jsonResponse: any = null;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let rateInput = 0;
+    let rateOutput = 0;
+    let modelUsedUsed = '';
 
     console.log(`[AI ANALYZE] ==================== START OF FINAL PROMPT (Model: ${model}, Client: ${client.name}) ====================`);
     console.log(prompt);
@@ -2117,6 +2551,12 @@ ${promptSuffix}`;
           if (!text) throw new Error('Empty response from Gemini API');
           jsonResponse = JSON.parse(cleanJsonString(text));
           
+          promptTokens = data.usageMetadata?.promptTokenCount || 0;
+          completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
+          rateInput = 0.30;
+          rateOutput = 2.50;
+          modelUsedUsed = 'gemini-2.5-flash';
+          
           // Successful response - clear any error and break loop
           lastError = null;
           break;
@@ -2130,23 +2570,41 @@ ${promptSuffix}`;
       }
 
     } else if (model === 'claude' || model.startsWith('claude-')) {
-      const claudeModels = model.startsWith('claude-') ? [model] : [
-        'claude-haiku-4-5-20251001',
+      let claudeModels: string[] = [];
+      if (model.startsWith('claude-')) {
+        claudeModels = [model];
+      } else {
+        // Plain "claude" default comparable to gpt-4o and gemini-2.5-flash in 2026
+        // Set to current mid-tier Anthropic model
+        claudeModels = [
+          'claude-sonnet-4-6',
+          'claude-sonnet-4-5-20250929'
+        ];
+      }
+
+      // Safe resilient fallbacks (Newest/Current generation prioritized)
+      const allFallbackModels = [
         'claude-sonnet-4-6',
         'claude-opus-4-8',
         'claude-opus-4-7',
         'claude-sonnet-4-5-20250929',
-        'claude-sonnet-4-20250514',
-        'claude-3-5-sonnet-20241022',
+        'claude-haiku-4-5-20251001',
         'claude-3-5-sonnet-latest',
+        'claude-3-5-sonnet-20241022',
         'claude-3-5-sonnet-20240620',
-        'claude-3-5-haiku-20241022',
         'claude-3-5-haiku-latest',
         'claude-3-opus-20240229',
         'claude-3-haiku-20240307'
       ];
+      allFallbackModels.forEach(m => {
+        if (!claudeModels.includes(m)) {
+          claudeModels.push(m);
+        }
+      });
+
       let lastError: any = null;
       let response: any = null;
+      let successfulModel = '';
       
       console.log(`[AI ANALYZE] ROUTING TO ANTHROPIC CLAUDE API: client="${client.name}", pool=${JSON.stringify(claudeModels)}`);
       for (const mName of claudeModels) {
@@ -2155,29 +2613,39 @@ ${promptSuffix}`;
           response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
-              'x-api-key': apiKey,
+              'x-api-key': claudeKey,
               'anthropic-version': '2023-06-01',
               'content-type': 'application/json'
             },
             body: JSON.stringify({
               model: mName,
-              max_tokens: 4000,
+              max_tokens: 32000,
               messages: [{ role: 'user', content: prompt }]
             })
           });
           
           if (!response.ok) {
             const errorText = await response.text();
-            console.warn(`[CLAUDE POOL] Model ${mName} failed with status ${response.status}: ${errorText}. Trying next...`);
+            console.error(`\n============================================================\n[CLAUDE CRITICAL ERROR] Model ${mName} failed with status ${response.status}: ${errorText}\n============================================================\n`);
+            
+            // Check for invalid model string or invalid request error (400 / 404) to block silent fallback to legacy models
+            if (response.status === 400 || response.status === 404) {
+              throw new Error(`Claude model "${mName}" is invalid or unavailable (HTTP ${response.status}): ${errorText}`);
+            }
+            
             lastError = new Error(`Claude API error: ${response.status} - ${errorText}`);
             continue;
           }
           
-          // Successful response - clear any error and break loop
+          successfulModel = mName;
           lastError = null;
           break;
         } catch (err: any) {
-          console.error(`[CLAUDE POOL] Exception with model ${mName}:`, err.message || err);
+          console.error(`[CLAUDE POOL] Exception/Error with model ${mName}:`, err.message || err);
+          // Re-throw critical brace-mismatch or explicit throws from above
+          if (err.message && err.message.includes('is invalid or unavailable')) {
+            throw err;
+          }
           lastError = err;
         }
       }
@@ -2186,10 +2654,31 @@ ${promptSuffix}`;
         throw lastError || new Error('All Claude models in the pool failed.');
       }
       
+      console.log(`[CLAUDE SUCCESS] Successfully generated strategic SEO report using Anthropic Claude model: "${successfulModel}"`);
       const data: any = await response.json();
+      console.log(`[CLAUDE RAW RESPONSE] stop_reason: "${data.stop_reason}", content length: ${data.content?.[0]?.text?.length || 0}`);
+      
+      promptTokens = data.usage?.input_tokens || 0;
+      completionTokens = data.usage?.output_tokens || 0;
+      rateInput = 3.00;
+      rateOutput = 15.00;
+      modelUsedUsed = successfulModel;
+
+      if (data.stop_reason === 'max_tokens') {
+        console.error(`\n============================================================\n[CLAUDE TRUNCATION ERROR]: Claude API stopped due to max_tokens (output truncated).\n============================================================\n`);
+        throw new Error('The strategic SEO report generated by Claude was truncated because it exceeded the maximum token limit. Please try again.');
+      }
       const text = data.content?.[0]?.text;
       if (!text) throw new Error('Empty response from Claude API');
-      jsonResponse = JSON.parse(cleanJsonString(text));
+      try {
+        const cleanedText = cleanJsonString(text);
+        jsonResponse = JSON.parse(cleanedText);
+      } catch (err: any) {
+        console.error(`\n============================================================\n[JSON PARSE CRITICAL DIAGNOSTIC ERROR]:\nMessage: ${err.message}\nRaw Text length: ${text.length}\n============================================================\n`);
+        console.error(`--- RAW CLAUDE OUTPUT ---:\n${text}\n-------------------------`);
+        console.error(`--- REPAIRED OUTPUT ---:\n${cleanJsonString(text)}\n-----------------------`);
+        throw err;
+      }
 
     } else if (model === 'gpt' || model.startsWith('gpt-')) {
       const activeGptModel = model.startsWith('gpt-') ? model : 'gpt-4o';
@@ -2197,7 +2686,7 @@ ${promptSuffix}`;
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${gptKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -2217,13 +2706,60 @@ ${promptSuffix}`;
       const text = data.choices?.[0]?.message?.content;
       if (!text) throw new Error('Empty response from GPT API');
       jsonResponse = JSON.parse(cleanJsonString(text));
+
+      promptTokens = data.usage?.prompt_tokens || 0;
+      completionTokens = data.usage?.completion_tokens || 0;
+      rateInput = 2.50;
+      rateOutput = 10.00;
+      modelUsedUsed = activeGptModel;
     }
-    res.json({
+
+    const costUsd = (promptTokens / 1000000) * rateInput + (completionTokens / 1000000) * rateOutput;
+
+    const finalResult = {
       ...jsonResponse,
       currentMetrics,
       previousMetrics,
-      crawlDiagnostics
-    });
+      crawlDiagnostics,
+      usage: {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        cost_usd: parseFloat(costUsd.toFixed(6)),
+        rate_input_usd_per_million: rateInput,
+        rate_output_usd_per_million: rateOutput,
+        model_used: modelUsedUsed
+      }
+    };
+
+    // Write directly to history database from the backend (covers both UI requests and node scripts)
+    try {
+      const { error: saveError } = await supabase
+        .from('ai_audit_history')
+        .insert([{
+          client_id: clientId,
+          model: model,
+          analysis_type: analysisType,
+          start_date: startDate,
+          end_date: endDate,
+          result: finalResult,
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          cost_usd: parseFloat(costUsd.toFixed(6)),
+          rate_input_usd_per_million: rateInput,
+          rate_output_usd_per_million: rateOutput,
+          model_used: modelUsedUsed
+        }]);
+
+      if (saveError) {
+        console.error('[COST LOG ERROR] Failed to write to ai_audit_history:', saveError);
+      } else {
+        console.log('[COST LOG SUCCESS] Row written successfully to database.');
+      }
+    } catch (dbErr) {
+      console.error('[COST LOG ERROR] Exception while writing database history:', dbErr);
+    }
+
+    res.json(finalResult);
 
   } catch (error: any) {
     console.error('AI Strategic Analysis error:', error);
@@ -2241,9 +2777,9 @@ app.post('/api/ai/optimise-page', async (req, res) => {
   }
 
   try {
-    // Obtain LLM API Key
-    let apiKey = '';
-    let geminiKeysPool: string[] = [];
+    const selectedModel = model || 'claude';
+
+    // Fetch API Keys
     const { data: keysData } = await supabase.from('api_keys').select('*');
     const keysMap: Record<string, string> = {};
     if (keysData) {
@@ -2252,24 +2788,19 @@ app.post('/api/ai/optimise-page', async (req, res) => {
       });
     }
 
-    const selectedModel = model || 'gemini';
-    if (selectedModel === 'gemini') {
-      geminiKeysPool = [
-        keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
-        keysMap['gemini_2'] || '',
-        keysMap['gemini_3'] || '',
-        keysMap['gemini_4'] || ''
-      ].map(k => k?.trim()).filter(Boolean);
-      apiKey = geminiKeysPool[0] || '';
-    } else if (selectedModel === 'claude') {
-      apiKey = keysMap['claude'] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-    } else if (selectedModel === 'gpt') {
-      apiKey = keysMap['gpt'] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || '';
-    }
+    const claudeKey = keysMap['claude'] || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+    const gptKey = keysMap['gpt'] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || '';
+    const geminiKeysPool = [
+      keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
+      keysMap['gemini_2'] || '',
+      keysMap['gemini_3'] || '',
+      keysMap['gemini_4'] || ''
+    ].map(k => k?.trim()).filter(Boolean);
+    const primaryGeminiKey = geminiKeysPool[0] || '';
 
-    // Run simulation if simulate is active OR API key is missing
-    if (simulate || !apiKey) {
-      console.log(`[AI OPTIMISE] Running page simulation for: ${url} (hasKey=${!!apiKey})`);
+    // Run simulation ONLY when simulate === true is EXPLICITLY requested
+    if (simulate === true) {
+      console.log(`[AI OPTIMISE] Running explicit page simulation for: ${url}`);
       let simulatedTitle = pageTitle && pageTitle !== 'Untitled Page' 
         ? `${pageTitle} | Custom SEO Target Australia` 
         : 'Premium SEO Services & Enterprise Scale Strategy | CSG';
@@ -2314,6 +2845,31 @@ app.post('/api/ai/optimise-page', async (req, res) => {
       });
     }
 
+    // Enforce strict key checks per provider when simulate is false
+    let activeKey = '';
+    if (selectedModel === 'gemini') {
+      if (!primaryGeminiKey) {
+        console.error('[AI OPTIMISE ERROR] Blocked: Missing GEMINI_API_KEY for model "gemini".');
+        return res.status(400).json({ error: 'Missing GEMINI_API_KEY — cannot run Gemini page optimisation' });
+      }
+      activeKey = primaryGeminiKey;
+    } else if (selectedModel === 'claude' || selectedModel.startsWith('claude-')) {
+      if (!claudeKey) {
+        console.error(`[AI OPTIMISE ERROR] Blocked: Missing ANTHROPIC_API_KEY for model "${selectedModel}".`);
+        return res.status(400).json({ error: `Missing ANTHROPIC_API_KEY — cannot run Claude page optimisation (${selectedModel})` });
+      }
+      activeKey = claudeKey;
+    } else if (selectedModel === 'gpt' || selectedModel.startsWith('gpt-')) {
+      if (!gptKey) {
+        console.error(`[AI OPTIMISE ERROR] Blocked: Missing OPENAI_API_KEY for model "${selectedModel}".`);
+        return res.status(400).json({ error: `Missing OPENAI_API_KEY — cannot run GPT page optimisation (${selectedModel})` });
+      }
+      activeKey = gptKey;
+    } else {
+      console.error(`[AI OPTIMISE ERROR] Blocked: Unknown model parameter "${selectedModel}".`);
+      return res.status(400).json({ error: `Unknown model: ${selectedModel}` });
+    }
+
     // Build targeted prompt in Australian English
     const prompt = `You are a high-priced enterprise SEO Consultant conducting audits in Australia. Conduct an on-page audit and write specific code corrections for a single URL.
 Page URL: ${url}
@@ -2328,8 +2884,14 @@ Provide your response as a valid, parsable JSON object strictly conforming to th
   "codePatch": "Write a clean HTML developer code snippet showing exactly what tags the developer should insert inside their page to resolve the specific issues listed. (For alt images, write exact <img src='...' alt='custom descriptive alt'> tags; for headings, show demoted H1s; for title/meta errors, show the correct tags. Use single quotes for any HTML attributes in the code to ensure JSON string validity!)"
 }
 
+CRITICAL SEO RULES & JUDGMENT:
+- The optimised title MUST be 50-60 characters (count them) and MUST be SHORTER than the original title if the issue is "title too long" or "over-optimised title". Do NOT just append text to the original title.
+- Decode HTML entities: NEVER output "&amp;" inside your title or meta description — always use a real "&" or rephrase the wording to avoid it completely.
+- The meta description MUST be highly specific to THIS page's actual topic (deduce this logically from the URL path and current title), keep it strictly between 120-160 characters, and NEVER use a generic corporate or agency blurb.
+- The codePatch MUST contain the actual CORRECTED tags containing the new short title or the new meta description, not a copy of the original broken tag.
+
 CRITICAL INTEGRITY & SPELLING RULES:
-1. YOU MUST write all JSON values and text exclusively in Australian English (British spelling rules). You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). NEVER use the letter 'z' in these words! Also use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'.
+1. YOU MUST write all JSON values and text exclusively in British / Australian English. You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). Use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'. However, do not modify technical terms, code snippets, or official brand names that naturally use other spelling conventions.
 2. You MUST ensure that the HTML code snippet inside the "codePatch" JSON value DOES NOT contain unescaped raw double quotes ("). Strictly use single quotes (') for all HTML attributes (e.g. <meta name='description' content='value'>).
 3. Do not insert literal unescaped raw newlines inside any string property value; instead, represent newlines using the '\\n' control character.
 4. Make sure the JSON parses perfectly. Do not include any text before or after the JSON structure.`;
@@ -2340,7 +2902,7 @@ CRITICAL INTEGRITY & SPELLING RULES:
       let lastError: any = null;
       for (let i = 0; i < geminiKeysPool.length; i++) {
         const currentKey = geminiKeysPool[i];
-        console.log(`[GEMINI POOL] Attempting page optimisation API call with key index ${i + 1}/${geminiKeysPool.length}`);
+        console.log(`[AI OPTIMISE] ROUTING TO GEMINI API: model="gemini-2.5-flash", url="${url}"`);
         try {
           let response: any = null;
           let attempt = 0;
@@ -2392,37 +2954,53 @@ CRITICAL INTEGRITY & SPELLING RULES:
       }
 
     } else if (selectedModel === 'claude' || selectedModel.startsWith('claude-')) {
-      const claudeModels = selectedModel.startsWith('claude-') ? [selectedModel] : [
-        'claude-haiku-4-5-20251001',
+      let claudeModels: string[] = [];
+      if (selectedModel.startsWith('claude-')) {
+        claudeModels = [selectedModel];
+      } else {
+        // Plain "claude" default comparable to gpt-4o and gemini-2.5-flash
+        claudeModels = [
+          'claude-sonnet-4-6',
+          'claude-sonnet-4-5-20250929'
+        ];
+      }
+      
+      const allFallbackModels = [
         'claude-sonnet-4-6',
         'claude-opus-4-8',
         'claude-opus-4-7',
         'claude-sonnet-4-5-20250929',
-        'claude-sonnet-4-20250514',
-        'claude-3-5-sonnet-20241022',
+        'claude-haiku-4-5-20251001',
         'claude-3-5-sonnet-latest',
+        'claude-3-5-sonnet-20241022',
         'claude-3-5-sonnet-20240620',
-        'claude-3-5-haiku-20241022',
         'claude-3-5-haiku-latest',
         'claude-3-opus-20240229',
         'claude-3-haiku-20240307'
       ];
+      allFallbackModels.forEach(m => {
+        if (!claudeModels.includes(m)) {
+          claudeModels.push(m);
+        }
+      });
+
       let lastError: any = null;
       let response: any = null;
+      let successfulModel = '';
       
       for (const mName of claudeModels) {
-        console.log(`[CLAUDE POOL] Attempting page optimisation API call with model: ${mName}`);
+        console.log(`[AI OPTIMISE] ROUTING TO ANTHROPIC CLAUDE API: model="${mName}", url="${url}"`);
         try {
           response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
-              'x-api-key': apiKey,
+              'x-api-key': activeKey,
               'anthropic-version': '2023-06-01',
               'content-type': 'application/json'
             },
             body: JSON.stringify({
               model: mName,
-              max_tokens: 2000,
+              max_tokens: 4000,
               messages: [{ role: 'user', content: prompt }]
             })
           });
@@ -2434,7 +3012,7 @@ CRITICAL INTEGRITY & SPELLING RULES:
             continue;
           }
           
-          // Successful response - clear any error and break loop
+          successfulModel = mName;
           lastError = null;
           break;
         } catch (err: any) {
@@ -2448,19 +3026,25 @@ CRITICAL INTEGRITY & SPELLING RULES:
       }
       
       const data: any = await response.json();
+      if (data.stop_reason === 'max_tokens') {
+        console.error(`\n============================================================\n[CLAUDE OPTIMISE TRUNCATION ERROR]: Claude API stopped due to max_tokens (output truncated).\n============================================================\n`);
+        throw new Error('Page optimisation report was truncated because it exceeded the maximum token limit. Please try again.');
+      }
       const text = data.content?.[0]?.text;
       if (!text) throw new Error('Empty response from Claude API');
       jsonResponse = JSON.parse(cleanJsonString(text));
 
     } else if (selectedModel === 'gpt' || selectedModel.startsWith('gpt-')) {
+      const activeGptModel = selectedModel.startsWith('gpt-') ? selectedModel : 'gpt-4o';
+      console.log(`[AI OPTIMISE] ROUTING TO OPENAI GPT API: model="${activeGptModel}", url="${url}"`);
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${activeKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: selectedModel.startsWith('gpt-') ? selectedModel : 'gpt-4o',
+          model: activeGptModel,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: 'You are an elite enterprise SEO assistant. Always respond with valid JSON.' },
@@ -2518,17 +3102,17 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     const periods = {};
     
     // 1. Rolling 7D (3-day delay to match GSC browser exactly)
-    let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
-    let rCurStart = subDays(today, 9); rCurStart.setHours(0,0,0,0);
+    let rCurEnd = subDays(today, 2); rCurEnd.setHours(23,59,59,999);
+    let rCurStart = subDays(today, 8); rCurStart.setHours(0,0,0,0);
     let rPrevStart = subDays(rCurStart, 7);
     let rPrevEnd = subDays(rCurEnd, 7);
     periods['rolling'] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
 
     // 2. Last 28 Days (3-day delay to match GSC browser exactly)
-    let d28CurEnd = subDays(today, 3); d28CurEnd.setHours(23,59,59,999);
-    let d28CurStart = subDays(today, 30); d28CurStart.setHours(0,0,0,0);
-    let d28PrevEnd = subDays(today, 31); d28PrevEnd.setHours(23,59,59,999);
-    let d28PrevStart = subDays(today, 58); d28PrevStart.setHours(0,0,0,0);
+    let d28CurEnd = subDays(today, 2); d28CurEnd.setHours(23,59,59,999);
+    let d28CurStart = subDays(today, 29); d28CurStart.setHours(0,0,0,0);
+    let d28PrevEnd = subDays(today, 30); d28PrevEnd.setHours(23,59,59,999);
+    let d28PrevStart = subDays(today, 57); d28PrevStart.setHours(0,0,0,0);
     periods['28days'] = { curStart: d28CurStart, curEnd: d28CurEnd, prevStart: d28PrevStart, prevEnd: d28PrevEnd };
 
     // 3. MoM Monthly
@@ -2538,11 +3122,12 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     let mPrevEnd = endOfMonth(subMonths(today, 2)); mPrevEnd.setHours(23,59,59,999);
     periods['monthly'] = { curStart: mCurStart, curEnd: mCurEnd, prevStart: mPrevStart, prevEnd: mPrevEnd };
 
-    // 4. New 3 Months (3M) - Rolling 90 Days (2-day delay to match GSC rolling 3M exactly)
+    // 4. New 3 Months (3M) - Matches GSC exactly (Exactly 3 months back + 1 day)
+    const addDays = (d, days) => new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
     let m3CurEnd = subDays(today, 2); m3CurEnd.setHours(23,59,59,999);
-    let m3CurStart = subDays(m3CurEnd, 89); m3CurStart.setHours(0,0,0,0);
+    let m3CurStart = addDays(subMonths(m3CurEnd, 3), 1); m3CurStart.setHours(0,0,0,0);
     let m3PrevEnd = subDays(m3CurStart, 1); m3PrevEnd.setHours(23,59,59,999);
-    let m3PrevStart = subDays(m3PrevEnd, 89); m3PrevStart.setHours(0,0,0,0);
+    let m3PrevStart = addDays(subMonths(m3PrevEnd, 3), 1); m3PrevStart.setHours(0,0,0,0);
     periods['3months'] = { curStart: m3CurStart, curEnd: m3CurEnd, prevStart: m3PrevStart, prevEnd: m3PrevEnd };
 
     const formatDate = (d) => {

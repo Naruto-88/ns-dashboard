@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
-import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays } from 'date-fns';
+import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays, addDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface DashboardRow {
@@ -178,22 +178,22 @@ export default function MasterDashboard() {
         prevEnd = new Date(currentEnd.getTime() - duration);
         prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === 'rolling') {
-        currentEnd = subDays(today, 3);
+        currentEnd = subDays(today, 2);
         currentEnd.setHours(23, 59, 59, 999);
-        currentStart = subDays(today, 9);
+        currentStart = subDays(today, 8);
         currentStart.setHours(0, 0, 0, 0);
         prevEnd = subDays(currentStart, 1);
         prevEnd.setHours(23, 59, 59, 999);
         prevStart = subDays(prevEnd, 6);
         prevStart.setHours(0, 0, 0, 0);
       } else if (viewMode === '28days') {
-        currentEnd = subDays(today, 3);
+        currentEnd = subDays(today, 2);
         currentEnd.setHours(23, 59, 59, 999);
-        currentStart = subDays(today, 30);
+        currentStart = subDays(today, 29);
         currentStart.setHours(0, 0, 0, 0);
-        prevEnd = subDays(today, 31);
+        prevEnd = subDays(today, 30);
         prevEnd.setHours(23, 59, 59, 999);
-        prevStart = subDays(today, 58);
+        prevStart = subDays(today, 57);
         prevStart.setHours(0, 0, 0, 0);
       } else if (viewMode === 'monthly') {
         currentStart = startOfMonth(subMonths(today, 1));
@@ -204,15 +204,18 @@ export default function MasterDashboard() {
         prevStart.setHours(0, 0, 0, 0);
         prevEnd = endOfMonth(subMonths(today, 2));
         prevEnd.setHours(23, 59, 59, 999);
-      } else {
-        // 3months - Rolling 90 Days (ending 2 days ago to match GSC rolling 3M exactly)
+      } else if (viewMode === '3months') {
+        // 3months - Matches GSC native 3 Months (Exactly 3 months back + 1 day)
         currentEnd = subDays(today, 2);
         currentEnd.setHours(23, 59, 59, 999);
-        currentStart = subDays(currentEnd, 89);
+        let m3Start = subMonths(currentEnd, 3);
+        currentStart = addDays(m3Start, 1);
         currentStart.setHours(0, 0, 0, 0);
+        
         prevEnd = subDays(currentStart, 1);
         prevEnd.setHours(23, 59, 59, 999);
-        prevStart = subDays(prevEnd, 89);
+        let p3Start = subMonths(prevEnd, 3);
+        prevStart = addDays(p3Start, 1);
         prevStart.setHours(0, 0, 0, 0);
       }
 

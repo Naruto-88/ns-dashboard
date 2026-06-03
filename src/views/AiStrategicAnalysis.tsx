@@ -24,7 +24,7 @@ import {
   ChevronUp,
   Trash2
 } from 'lucide-react';
-import { getClients, runAiAnalysis, updateClient, Client } from '../services/dataService';
+import { getClients, runAiAnalysis, runAiSinglePageOptimise, updateClient, Client } from '../services/dataService';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
@@ -148,8 +148,8 @@ export default function AiStrategicAnalysis() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedModel, setSelectedModel] = useState<'gemini' | 'claude' | 'gpt'>('gpt');
-  const [selectedClaudeModel, setSelectedClaudeModel] = useState<string>('claude-haiku-4-5-20251001');
+  const [selectedModel, setSelectedModel] = useState<'gemini' | 'claude' | 'gpt'>('claude');
+  const [selectedClaudeModel, setSelectedClaudeModel] = useState<string>('claude-sonnet-4-6');
   const [selectedGptModel, setSelectedGptModel] = useState<string>('gpt-4o-mini');
   const [analysisType, setAnalysisType] = useState<'light' | 'deep'>('light');
   const [simulate, setSimulate] = useState(true); // Default to simulation mode to prevent initial API cost blockers
@@ -160,15 +160,15 @@ export default function AiStrategicAnalysis() {
   const [pageOptimizations, setPageOptimizations] = useState<Record<string, { title: string; metaDescription: string; codePatch: string; loading?: boolean }>>({});
   const [activeDrawerTabs, setActiveDrawerTabs] = useState<Record<string, 'targets' | 'issues' | 'code'>>({});
 
-  // Default dates: GSC has a ~3 day data-lag. Set end date to 3 days ago, start date to 10 days ago.
+  // Default dates: GSC has a ~2 day data-lag. Set end date to 2 days ago, start date to 8 days ago.
   const today = new Date();
-  const past3Days = new Date(today);
-  past3Days.setDate(today.getDate() - 3);
-  const past10Days = new Date(today);
-  past10Days.setDate(today.getDate() - 10);
+  const past2Days = new Date(today);
+  past2Days.setDate(today.getDate() - 2);
+  const past8Days = new Date(today);
+  past8Days.setDate(today.getDate() - 8);
 
-  const [startDate, setStartDate] = useState(past10Days.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(past3Days.toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(past8Days.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(past2Days.toISOString().split('T')[0]);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -271,21 +271,7 @@ export default function AiStrategicAnalysis() {
       playSuccessChime();
       setSuccessMsg(`Strategic audit successfully synthesized and cached in history!`);
       
-      try {
-        await supabase
-          .from('ai_audit_history')
-          .insert([{
-            client_id: selectedClientId,
-            model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
-            analysis_type: analysisType,
-            start_date: startDate,
-            end_date: endDate,
-            result: response
-          }]);
-        fetchHistory(selectedClientId);
-      } catch (saveErr) {
-        console.warn('Could not save to history table:', saveErr);
-      }
+      fetchHistory(selectedClientId);
     } catch (e: any) {
       console.error(e);
       setError(e.message || 'The LLM failed to return valid JSON. Please check API integration credentials in Settings or toggle simulation mode.');
@@ -329,27 +315,15 @@ export default function AiStrategicAnalysis() {
     }));
 
     try {
-      const response = await fetch('/api/ai/optimise-page', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          clientId: selectedClientId,
-          url: pageUrl,
-          pageTitle,
-          issues,
-          model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
-          simulate
-        })
+      const data = await runAiSinglePageOptimise({
+        clientId: selectedClientId,
+        url: pageUrl,
+        pageTitle,
+        issues,
+        model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
+        simulate
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API error: ${response.status} - ${errText}`);
-      }
-
-      const data = await response.json();
       setPageOptimizations(prev => ({
         ...prev,
         [pageUrl]: {
@@ -566,14 +540,14 @@ export default function AiStrategicAnalysis() {
             <label className="text-sm font-medium normal-case tracking-normal text-zinc-500">LLM Synthesis Engine</label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: 'gemini', label: 'Gemini', tooltip: 'Use Google Gemini 1.5 Pro to conduct advanced analytics on Search Console patterns and keyword metrics' },
-                { id: 'claude', label: 'Claude', tooltip: 'Use Anthropic Claude 3.5 Sonnet for premium deep content synthesis and copy directives' },
-                { id: 'gpt', label: 'GPT-4o', tooltip: 'Use OpenAI GPT-4o for precise code audits, site layout shifts, and structured tech tasks' }
+                { id: 'claude', label: 'Claude (Default)', tooltip: 'Claude Sonnet 4-6: Supreme depth, 10/10 keyword accuracy, custom code & schemas. Premium client deliverables. (~100s)' },
+                { id: 'gemini', label: 'Gemini (Fast)', tooltip: 'Gemini 2.5 Flash: Lightning-fast, 9/10 keyword accuracy. Great for quick internal scans or high-volume days. (~30s)' },
+                { id: 'gpt', label: 'GPT-4o', tooltip: 'GPT-4o: Standard scan. Available but deprioritised due to minor keyword variant-merging issues. (~20s)' }
               ].map(m => (
                 <Tooltip key={m.id} content={m.tooltip} className="w-full">
                   <button
                     onClick={() => setSelectedModel(m.id as any)}
-                    className={`w-full py-2 px-3 border rounded-xl text-sm font-medium normal-case tracking-normal transition-all ${
+                    className={`w-full py-2 px-1.5 border rounded-xl text-xs font-semibold normal-case tracking-tight transition-all truncate ${
                       selectedModel === m.id
                         ? (isWhite ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20')
                         : (isWhite ? 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100' : 'bg-zinc-950 border-white/5 text-zinc-400 hover:bg-zinc-900')
@@ -821,7 +795,9 @@ export default function AiStrategicAnalysis() {
               AI AUDIT PREPARATION SYSTEM
             </h4>
             <p className="text-sm text-zinc-500 normal-case tracking-normal font-medium max-w-md mx-auto leading-relaxed">
-              Synthesizing historical search console clusters and organic conversion sessions.
+              {selectedModel === 'claude' 
+                ? 'Claude Sonnet 4-6 is conducting a comprehensive, highly accurate deep audit (~100s). Please do not close this window.' 
+                : 'Synthesizing historical search console clusters and organic conversion sessions.'}
             </p>
           </div>
           <div className={`inline-block py-2 px-4 rounded-xl border font-mono text-sm font-medium tracking-normal ${

@@ -1,4 +1,4 @@
-import { subDays, subMonths, startOfMonth, endOfMonth, differenceInDays, format, parseISO, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
+import { subDays, subMonths, startOfMonth, endOfMonth, differenceInDays, format, parseISO, startOfWeek, endOfWeek, subWeeks, addDays } from 'date-fns';
 
 export interface DateRange {
   startDate: string;
@@ -14,8 +14,8 @@ export function getDatePresetRange(preset: DatePreset, custom?: DateRange): Date
 
   switch (preset) {
     case 'rolling_7d':
-      // Matches Master Dashboard Rolling 7D (Accounting for GSC 3-day lag)
-      end = subDays(today, 3);
+      // Matches Master Dashboard Rolling 7D (Accounting for GSC 2-day lag)
+      end = subDays(today, 2);
       start = subDays(end, 6);
       break;
     case 'last_week':
@@ -25,7 +25,8 @@ export function getDatePresetRange(preset: DatePreset, custom?: DateRange): Date
       end = endOfWeek(lastWeekDate, { weekStartsOn: 1 });
       break;
     case 'last_28_days':
-      start = subDays(today, 28);
+      end = subDays(today, 2);
+      start = subDays(end, 27);
       break;
     case 'last_month':
       const lastMonth = subMonths(today, 1);
@@ -33,14 +34,17 @@ export function getDatePresetRange(preset: DatePreset, custom?: DateRange): Date
       end = endOfMonth(lastMonth);
       break;
     case 'last_3_months':
-      start = subDays(today, 90);
+      end = subDays(today, 2);
+      start = addDays(subMonths(end, 3), 1);
       break;
     case 'custom':
       if (custom) return custom;
-      start = subDays(today, 7);
+      end = subDays(today, 2);
+      start = subDays(end, 6);
       break;
     default:
-      start = subDays(today, 7);
+      end = subDays(today, 2);
+      start = subDays(end, 6);
   }
 
   return {
