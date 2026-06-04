@@ -3409,7 +3409,8 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
                 requestBody: {
                   startDate: startOfMonthStr,
                   endDate: endOfMonthStr,
-                  dimensions: []
+                  dimensions: [],
+                  dataState: 'all'
                 }
               })
             );
@@ -3434,7 +3435,8 @@ app.get('/api/cron/sync-monthly-cache', async (req, res) => {
                   startDate: startOfMonthStr,
                   endDate: endOfMonthStr,
                   dimensions: ['query'],
-                  rowLimit: 1000
+                  rowLimit: 1000,
+                  dataState: 'all'
                 }
               })
             );
