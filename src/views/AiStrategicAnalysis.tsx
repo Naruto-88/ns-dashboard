@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import React from 'react';
+import StrategicReportViewer from '../components/StrategicReportViewer';
 import { 
   BrainCircuit, 
   Sparkles, 
@@ -29,7 +30,7 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
 
-interface ActionableDirective {
+export interface ActionableDirective {
   title: string;
   category: 'Technical' | 'Content' | 'Backlinks';
   priority: 'High' | 'Medium' | 'Low';
@@ -37,14 +38,14 @@ interface ActionableDirective {
   expectedImpact: string;
 }
 
-interface ExecutiveSummary {
+export interface ExecutiveSummary {
   goodThings: string[];
   thingsToImprove: string[];
   actionsToDo: string[];
   expectedResults: string[];
 }
 
-interface AnalysisResult {
+export interface AnalysisResult {
   trafficGapAnalysis: string;
   expectedImpact: string;
   actionableDirectives: ActionableDirective[];
@@ -349,87 +350,6 @@ export default function AiStrategicAnalysis() {
 
   return (
     <div className="space-y-8 pb-16">
-      <style>{`
-        @media print {
-          /* Hide sidebar, control console, notifications, buttons, and general UI noise */
-          aside,
-          nav,
-          button,
-          .no-print,
-          .tooltip-container,
-          select,
-          input,
-          .control-console,
-          header,
-          .top-header,
-          .success-notification,
-          .error-notification {
-            display: none !important;
-          }
-          
-          /* Full page layout reset */
-          body,
-          main,
-          #root,
-          .layout-container {
-            background: white !important;
-            color: black !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-          }
-          
-          /* Hide parent layout main wrapper paddings and border elements */
-          main {
-            padding: 0 !important;
-            margin: 0 !important;
-            border: none !important;
-          }
-          
-          /* Make container print-friendly */
-          .printable-report {
-            display: block !important;
-            background: white !important;
-            color: black !important;
-            padding: 20px !important;
-            width: 100% !important;
-          }
-          
-          /* Cards printing adjustments */
-          .printable-card {
-            background: white !important;
-            border: 1px solid #cbd5e1 !important;
-            color: black !important;
-            box-shadow: none !important;
-            page-break-inside: avoid !important;
-            margin-bottom: 24px !important;
-            padding: 24px !important;
-            border-radius: 12px !important;
-          }
-          
-          /* High contrast colors for print text */
-          .printable-text-primary {
-            color: #0f172a !important;
-          }
-          .printable-text-secondary {
-            color: #475569 !important;
-          }
-          
-          /* Force page break before directives list if it overflows */
-          .directives-registry {
-            page-break-before: auto !important;
-          }
-          
-          /* Implementation playbook styling */
-          .playbook-container {
-            background: #f8fafc !important;
-            border: 1px solid #cbd5e1 !important;
-            color: #334155 !important;
-            padding: 16px !important;
-            font-family: monospace !important;
-          }
-        }
-      `}</style>
 
       {/* Top Header */}
       <div className="print:hidden">
@@ -842,279 +762,18 @@ export default function AiStrategicAnalysis() {
 
       {/* Audit Output Results Dashboard */}
       {result && (
-        <div className="space-y-8 animate-in fade-in duration-300">
-          
-          {/* Print-Only Professional Letterhead */}
-          <div className="hidden print:block mb-8 pb-6 border-b-2 border-slate-900">
-            <div className="flex justify-between items-end">
-              <div>
-                <h1 className="text-2xl font-medium normal-case tracking-tight text-slate-900 italic">SEO STRATEGIC AUDIT REPORT</h1>
-                <p className="text-sm font-medium text-slate-500 normal-case tracking-normal mt-1">OPERATIONAL INTELLIGENCE PLATFORM</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-slate-950 normal-case">{selectedClient?.name || 'Client Audit'}</p>
-                <p className="text-sm font-medium text-slate-500 normal-case mt-0.5">
-                  Period: {startDate} to {endDate}
-                </p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-slate-100">
-              <div>
-                <span className="text-sm font-medium text-slate-400 normal-case tracking-normal block">Synthesis Engine</span>
-                <span className="text-sm font-medium text-slate-800 normal-case">{selectedModel} LLM</span>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-slate-400 normal-case tracking-normal block">Analysis Level</span>
-                <span className="text-sm font-medium text-slate-800 normal-case">{analysisType} Audit</span>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-slate-400 normal-case tracking-normal block">Generated Date</span>
-                <span className="text-sm font-medium text-slate-800 normal-case">{new Date().toLocaleDateString()}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 1: Traffic Gap Analysis Summary & Impact */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Gap Analysis */}
-            <div className={`printable-card p-6 sm:p-8 rounded-[24px] border shadow-2xl lg:col-span-2 backdrop-blur-xl ${
-              isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
-            }`}>
-              <div className="flex items-center gap-2 mb-4">
-                <Globe size={16} className="text-blue-400" />
-                <h4 className={`text-sm font-medium normal-case tracking-normal ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                  Performance Gap Audit
-                </h4>
-              </div>
-
-              {result.currentMetrics && result.previousMetrics && (
-                <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 border-b pb-6 ${
-                  isWhite ? 'border-zinc-200' : 'border-white/5'
-                }`}>
-                  {[
-                    {
-                      label: 'GSC Clicks',
-                      curr: result.currentMetrics.gsc?.clicks ?? 0,
-                      prev: result.previousMetrics.gsc?.clicks ?? 0,
-                      format: (v: number) => v.toLocaleString()
-                    },
-                    {
-                      label: 'GSC Impressions',
-                      curr: result.currentMetrics.gsc?.impressions ?? 0,
-                      prev: result.previousMetrics.gsc?.impressions ?? 0,
-                      format: (v: number) => v.toLocaleString()
-                    },
-                    {
-                      label: 'Search CTR',
-                      curr: result.currentMetrics.gsc?.ctr ?? 0,
-                      prev: result.previousMetrics.gsc?.ctr ?? 0,
-                      format: (v: number) => `${v.toFixed(2)}%`
-                    },
-                    {
-                      label: 'GA4 Traffic',
-                      curr: result.currentMetrics.ga4?.traffic ?? 0,
-                      prev: result.previousMetrics.ga4?.traffic ?? 0,
-                      format: (v: number) => v.toLocaleString()
-                    }
-                  ].map((m, idx) => {
-                    const diff = m.curr - m.prev;
-                    const percent = m.prev > 0 ? (diff / m.prev) * 100 : 0;
-                    const isPositive = diff >= 0;
-                    return (
-                      <div key={idx} className={`p-4 rounded-2xl border ${
-                        isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950/40 border-white/5'
-                      }`}>
-                        <span className="text-sm font-medium normal-case tracking-normal text-zinc-500 block mb-1">
-                          {m.label}
-                        </span>
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-sm font-medium font-mono ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                            {m.format(m.curr)}
-                          </span>
-                          <span className={`text-sm font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {isPositive ? '▲' : '▼'} {Math.abs(percent).toFixed(1)}%
-                          </span>
-                        </div>
-                        <span className="text-sm text-zinc-500 font-medium block mt-1">
-                          Prev: {m.format(m.prev)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className={`text-sm font-medium leading-relaxed tracking-wide space-y-3.5 text-left ${
-                isWhite ? 'text-zinc-600' : 'text-zinc-300'
-              }`}>
-                {result.trafficGapAnalysis ? (
-                  result.trafficGapAnalysis.split('\n').filter(p => p.trim().length > 0).map((paragraph, pIdx) => {
-                    const isBullet = paragraph.trim().startsWith('- ') || paragraph.trim().startsWith('* ');
-                    const isNumbered = /^\d+\.\s/.test(paragraph.trim());
-
-                    if (isBullet) {
-                      const cleanText = paragraph.trim().substring(2);
-                      return (
-                        <ul key={pIdx} className="list-disc pl-5 my-1 text-left">
-                          <li className="leading-relaxed">
-                            {highlightKeyTerms(cleanText)}
-                          </li>
-                        </ul>
-                      );
-                    }
-
-                    if (isNumbered) {
-                      const match = paragraph.trim().match(/^(\d+\.)\s(.*)/);
-                      const marker = match ? match[1] : '';
-                      const cleanText = match ? match[2] : paragraph.trim();
-                      return (
-                        <div key={pIdx} className="flex gap-2 my-1 pl-2 text-left">
-                          <span className="font-medium text-blue-500 font-mono">{marker}</span>
-                          <span className="leading-relaxed">{highlightKeyTerms(cleanText)}</span>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <p key={pIdx} className="text-left font-medium leading-relaxed">
-                        {highlightKeyTerms(paragraph)}
-                      </p>
-                    );
-                  })
-                ) : null}
-              </div>
-            </div>
-
-            {/* Expected Impact Summary */}
-            <div className={`printable-card p-6 sm:p-8 rounded-[24px] border shadow-2xl backdrop-blur-xl flex flex-col justify-between ${
-              isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
-            }`}>
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp size={16} className="text-emerald-400" />
-                  <h4 className={`text-sm font-medium normal-case tracking-normal ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                    Projected SEO Yield
-                  </h4>
-                </div>
-                <div className={`text-sm font-medium leading-relaxed tracking-wide space-y-2 text-left ${
-                  isWhite ? 'text-zinc-600' : 'text-zinc-400'
-                }`}>
-                  {result.expectedImpact ? (
-                    result.expectedImpact.split('\n').filter(p => p.trim().length > 0).map((paragraph, pIdx) => (
-                      <p key={pIdx} className="leading-relaxed">
-                        {highlightKeyTerms(paragraph)}
-                      </p>
-                    ))
-                  ) : null}
-                </div>
-              </div>
-
-              {/* Log actions & Export PDF */}
-              <div className="print:hidden pt-6 mt-6 border-t border-white/5 flex flex-col sm:flex-row gap-3">
-                <Tooltip content="Record these AI recommendations permanently to the active log history of the client node" className="w-full">
-                  <button
-                    onClick={handleCommitToLog}
-                    className={`w-full py-2.5 rounded-xl font-medium text-sm normal-case tracking-normal transition-all hover:scale-[1.02] active:scale-95 shadow-lg border ${
-                      isWhite 
-                        ? 'bg-[#082a36] text-white border-[#082a36]' 
-                        : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700 shadow-zinc-900/50'
-                    }`}
-                  >
-                    Push to Client Log
-                  </button>
-                </Tooltip>
-                <Tooltip content="Print or download this Strategic Analysis Report as a beautifully styled PDF" className="w-full">
-                  <button
-                    onClick={() => window.print()}
-                    className={`w-full py-2.5 rounded-xl font-medium text-sm normal-case tracking-normal transition-all hover:scale-[1.02] active:scale-95 shadow-lg border flex items-center justify-center gap-1.5 ${
-                      isWhite 
-                        ? 'bg-[#f47b20] text-white border-[#f47b20] hover:bg-[#f47b20]/90 shadow-[#f47b20]/20' 
-                        : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500 shadow-blue-500/20'
-                    }`}
-                  >
-                    <FileText size={12} />
-                    Export PDF Report
-                  </button>
-                </Tooltip>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Actionable Directives */}
-          <div>
-            <h3 className={`text-sm font-medium normal-case tracking-normal mb-4 ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-              Strategic Directives Registry
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {result.actionableDirectives.map((directive, idx) => {
-                let catColor = '';
-                let catIcon = FileText;
-                
-                if (directive.category === 'Technical') {
-                  catColor = 'text-blue-400 border-blue-400/20 bg-blue-500/5';
-                  catIcon = Code;
-                } else if (directive.category === 'Backlinks') {
-                  catColor = 'text-purple-400 border-purple-400/20 bg-purple-500/5';
-                  catIcon = Link;
-                } else {
-                  catColor = 'text-amber-400 border-amber-400/20 bg-amber-500/5';
-                  catIcon = FileText;
-                }
-
-                let prioColor = '';
-                if (directive.priority === 'High') prioColor = isWhite ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-red-500/10 text-red-400 border-red-500/20';
-                else if (directive.priority === 'Medium') prioColor = isWhite ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-                else prioColor = isWhite ? 'bg-zinc-100 text-zinc-600 border-zinc-200' : 'bg-zinc-800 text-zinc-400 border-white/5';
-
-                return (
-                  <div
-                    key={idx}
-                    className={`printable-card p-6 rounded-[24px] border shadow-2xl flex flex-col justify-between backdrop-blur-xl ${
-                      isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
-                    }`}
-                  >
-                    <div className="space-y-4">
-                      {/* Priority and category */}
-                      <div className="flex items-center justify-between">
-                        <span className={`px-2 py-0.5 rounded-lg border text-sm font-medium normal-case tracking-normal ${prioColor}`}>
-                          {directive.priority} priority
-                        </span>
-                        
-                        <div className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 text-sm font-medium normal-case tracking-normal ${catColor}`}>
-                          {React.createElement(catIcon, { size: 10 })}
-                          {directive.category}
-                        </div>
-                      </div>
-
-                      {/* Title */}
-                      <h4 className={`text-sm font-medium tracking-tight leading-relaxed italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                        {directive.title}
-                      </h4>
-
-                      {/* Description */}
-                      <p className={`text-sm font-medium tracking-wide leading-relaxed whitespace-pre-line ${isWhite ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                        {renderClickableDescription(directive.description)}
-                      </p>
-                    </div>
-
-                    {/* Yield impact */}
-                    <div className={`mt-6 p-4 rounded-xl border text-sm font-medium tracking-normal leading-normal print:bg-slate-50 print:border-slate-200 print:text-slate-700 ${
-                      isWhite ? 'bg-[#76c9be]/5 border-[#163f4d]/5 text-[#607a80]' : 'bg-zinc-950/40 border-white/5 text-zinc-500'
-                    }`}>
-                      <span className="text-zinc-400 mr-1 italic">Projected Yield:</span>
-                      {directive.expectedImpact}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
+        <div className="animate-in fade-in duration-300 mt-8">
+           <StrategicReportViewer 
+              result={result} 
+              clientName={selectedClient?.name} 
+              propertyUrl={selectedClient?.gsc_site_url} 
+              period={`${startDate} to ${endDate}`} 
+           />
+        </div>
+      )}
           {/* Row 2.5: Deep Technical Crawler Diagnostics */}
-          {result.crawlDiagnostics && (
-            <div className={`printable-card p-6 sm:p-8 rounded-[24px] border shadow-2xl backdrop-blur-xl ${
+          {result?.crawlDiagnostics && (
+            <div className={`p-6 sm:p-8 rounded-[24px] border shadow-2xl backdrop-blur-xl mt-8 ${
               isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
             }`}>
               {/* Header */}
@@ -1125,10 +784,10 @@ export default function AiStrategicAnalysis() {
                   </div>
                   <div>
                     <h4 className={`text-sm font-medium normal-case tracking-normal ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                      On-Page Technical Crawler Diagnostics
+                      Interactive AI Fix Hub
                     </h4>
                     <p className="text-sm font-medium normal-case tracking-normal text-zinc-500 mt-0.5">
-                      Sitemap Discovered • Real-time HTML Structure Verification
+                      Real-time HTML Structure Verification & Code Generation
                     </p>
                   </div>
                 </div>
@@ -1147,108 +806,6 @@ export default function AiStrategicAnalysis() {
                 </div>
               </div>
 
-              {/* Top Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                {/* Health Score */}
-                <div className={`p-5 rounded-2xl border flex items-center justify-between ${
-                  isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950/40 border-white/5'
-                }`}>
-                  <div>
-                    <span className="text-sm font-medium normal-case tracking-normal text-zinc-500 block mb-1">
-                      Technical Health Score
-                    </span>
-                    <span className={`text-2xl font-medium font-mono tracking-tighter ${
-                      result.crawlDiagnostics.healthScore >= 90
-                        ? 'text-emerald-500'
-                        : result.crawlDiagnostics.healthScore >= 70
-                        ? 'text-amber-500'
-                        : 'text-rose-500'
-                    }`}>
-                      {result.crawlDiagnostics.healthScore}/100
-                    </span>
-                    <p className="text-sm text-zinc-500 font-medium normal-case tracking-normal mt-1">
-                      {result.crawlDiagnostics.healthScore >= 90
-                        ? 'Excellent Code Quality'
-                        : result.crawlDiagnostics.healthScore >= 70
-                        ? 'Needs Tactical Remediation'
-                        : 'Critical Structural Gaps'}
-                    </p>
-                  </div>
-                  {/* Visual Radial indicator simulation */}
-                  <div className="relative w-14 h-14 shrink-0">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                      <path
-                        className="text-zinc-800 opacity-20"
-                        strokeWidth="3.5"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <path
-                        className={
-                          result.crawlDiagnostics.healthScore >= 90
-                            ? 'text-emerald-500'
-                            : result.crawlDiagnostics.healthScore >= 70
-                            ? 'text-amber-500'
-                            : 'text-rose-500'
-                        }
-                        strokeDasharray={`${result.crawlDiagnostics.healthScore}, 100`}
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center font-mono font-medium text-sm text-zinc-400">
-                      {result.crawlDiagnostics.healthScore}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pages Scanned */}
-                <div className={`p-5 rounded-2xl border ${
-                  isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950/40 border-white/5'
-                }`}>
-                  <span className="text-sm font-medium normal-case tracking-normal text-zinc-500 block mb-1">
-                    Audited Pages Profile
-                  </span>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-2xl font-medium font-mono tracking-tighter ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                      {result.crawlDiagnostics.totalPages}
-                    </span>
-                    <span className="text-sm text-zinc-400 font-medium normal-case tracking-normal">
-                      URLs Scanned
-                    </span>
-                  </div>
-                  <p className="text-sm text-zinc-500 font-medium normal-case tracking-normal mt-1 leading-normal">
-                    Discovered automatically via site XML sitemap parser
-                  </p>
-                </div>
-
-                {/* Total Issues Found */}
-                <div className={`p-5 rounded-2xl border ${
-                  isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950/40 border-white/5'
-                }`}>
-                  <span className="text-sm font-medium normal-case tracking-normal text-zinc-500 block mb-1">
-                    Discovered Vulnerabilities
-                  </span>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-2xl font-medium font-mono tracking-tighter ${
-                      result.crawlDiagnostics.totalIssues === 0 ? 'text-emerald-500' : 'text-rose-400'
-                    }`}>
-                      {result.crawlDiagnostics.totalIssues}
-                    </span>
-                    <span className="text-sm text-zinc-400 font-medium normal-case tracking-normal">
-                      On-Page Errors
-                    </span>
-                  </div>
-                  <p className="text-sm text-zinc-500 font-medium normal-case tracking-normal mt-1 leading-normal">
-                    Missing tags, title limits, multiple H1s, missing image alts
-                  </p>
-                </div>
-              </div>
-
               {/* Scanned URL Registry Accordion */}
               {showCrawlDetails && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -1257,7 +814,7 @@ export default function AiStrategicAnalysis() {
                   </div>
 
                   <div className="space-y-3">
-                    {result.crawlDiagnostics.scannedPages.map((page: any, index: number) => {
+                    {(result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || [])?.map((page: any, index: number) => {
                       const hasIssues = page.issues && page.issues.length > 0;
                       const isError = !!page.error;
                       const isExpanded = !!expandedPages[page.url];
@@ -1529,117 +1086,75 @@ export default function AiStrategicAnalysis() {
                                         {/* TAB CONTENT: ISSUES */}
                                         {activeTab === 'issues' && (
                                           <div className="space-y-3 animate-in fade-in duration-200">
-                                            <div className="text-sm font-medium normal-case tracking-normal text-zinc-400 text-left mb-1">
-                                              Detailed Vulnerability & Resolution Log:
-                                            </div>
-                                            {page.issues.map((issue: string, iIdx: number) => {
-                                              let resolution = '';
-                                              if (issue.includes('Missing Page Title')) {
-                                                resolution = 'Add a highly relevant <title> tag within the <head> block, using standard keywords matching customer search queries.';
-                                              } else if (issue.includes('Over-optimized Title Tag') || issue.includes('Over-optimised Title Tag')) {
-                                                resolution = 'Shorten this title. Google search snippets will truncate title text beyond 60 characters, hurting CTR.';
-                                              } else if (issue.includes('Under-optimized Title Tag') || issue.includes('Under-optimised Title Tag')) {
-                                                resolution = 'Expand the page title. Ensure it contains at least 10 characters to fully convey the contextual relevance.';
-                                              } else if (issue.includes('Missing Meta Description')) {
-                                                resolution = 'Insert a <meta name="description"> tag. Summarise the page content concisely to encourage clicks from SERP.';
-                                              } else if (issue.includes('Meta Description Exceeds')) {
-                                                resolution = 'Shorten the description. Keep it below 160 characters to ensure it displays fully without trailing ellipses.';
-                                              } else if (issue.includes('Meta Description Too Short')) {
-                                                resolution = 'Lengthen the description. Expand the copy to at least 50 characters to provide sufficient context to search engines.';
-                                              } else if (issue.includes('Missing Primary Heading')) {
-                                                resolution = 'Include exactly one primary <h1> heading containing your primary page keyword at the top of the content.';
-                                              } else if (issue.includes('Multiple Primary Headings')) {
-                                                resolution = 'Demote extra <h1> headings. Modify the markup so only one primary topic heading is <h1>, and other subheadings are <h2> to <h6>.';
-                                              } else if (issue.includes('Images Lacking ALT tags')) {
-                                                resolution = 'Add descriptive alt="..." text attributes to the listed images to improve screen reader accessibility and image search rankings.';
-                                              } else {
-                                                resolution = 'Review this structural layout issue and adjust the HTML markup accordingly.';
-                                              }
-
-                                              return (
-                                                <div
-                                                  key={iIdx}
-                                                  className={`p-4 rounded-2xl border flex gap-3 text-sm text-left transition-all ${
-                                                    isWhite ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5 hover:border-white/10'
-                                                  }`}
-                                                >
-                                                  <div className="text-rose-400 font-medium shrink-0 mt-0.5">⚠️</div>
-                                                  <div>
-                                                    <div className="font-medium normal-case text-sm tracking-normal text-rose-500 dark:text-rose-400">
-                                                      Issue: <span className="lowercase font-medium font-mono tracking-normal">{issue}</span>
-                                                    </div>
-                                                    <div className="mt-1.5 text-sm leading-relaxed">
-                                                      <span className="font-medium normal-case tracking-normal text-sm text-zinc-400 dark:text-zinc-500">💡 Fix Guide:</span>{' '}
-                                                      <span className="font-medium text-zinc-600 dark:text-zinc-300 normal-case">{resolution}</span>
-                                                    </div>
-                                                  </div>
+                                            {page.issues.map((issue: string, iIdx: number) => (
+                                              <div key={iIdx} className={`p-3 rounded-lg border flex items-start gap-2.5 ${
+                                                isWhite ? 'bg-rose-50/50 border-rose-100 text-rose-700' : 'bg-rose-950/20 border-rose-500/10 text-rose-300'
+                                              }`}>
+                                                <div className="shrink-0 mt-0.5">
+                                                  <div className={`w-1.5 h-1.5 rounded-full ${isWhite ? 'bg-rose-400' : 'bg-rose-500'}`} />
                                                 </div>
-                                              );
-                                            })}
+                                                <span className="text-sm font-medium leading-relaxed">{issue}</span>
+                                              </div>
+                                            ))}
                                           </div>
                                         )}
 
-                                        {/* TAB CONTENT: CODE PATCH */}
+                                        {/* TAB CONTENT: CODE */}
                                         {activeTab === 'code' && (
-                                          <div className="space-y-3 animate-in fade-in duration-200">
-                                            <div className="text-sm font-medium normal-case tracking-normal text-zinc-400 flex items-center gap-1.5 mb-1">
-                                              <Code size={10} />
-                                              Actionable Developer Code Patch Suggestion:
-                                            </div>
-                                            <div className={`p-5 rounded-2xl font-mono text-sm border shadow-inner leading-relaxed overflow-x-auto text-left relative group/code ${
-                                              isWhite ? 'bg-zinc-900 text-zinc-200 border-zinc-800' : 'bg-black text-blue-400 border-white/5'
-                                            }`}>
-                                              <div className="text-zinc-500 mb-3 border-b border-zinc-800 pb-2 normal-case tracking-normal font-medium text-sm flex justify-between items-center">
-                                                <span>{`// Corrective HTML suggestion for ${page.title || 'Audited URL'}`}</span>
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const patchElement = document.getElementById(`code-patch-${page.url.replace(/[^a-zA-Z0-9]/g, '-')}`);
-                                                    const patchText = patchElement ? patchElement.textContent : '';
-                                                    if (patchText) {
-                                                      handleCopyToClipboard(patchText, "Code Patch", setSuccessMsg);
-                                                    }
-                                                  }}
-                                                  className="opacity-75 hover:opacity-100 text-sm font-medium normal-case tracking-normal bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2 py-0.5 rounded transition-all active:scale-95"
-                                                >
-                                                  Copy Code
-                                                </button>
-                                              </div>
-                                              <code id={`code-patch-${page.url.replace(/[^a-zA-Z0-9]/g, '-')}`} className="whitespace-pre">
-                                                {pageOptimizations[page.url]?.codePatch ? (
-                                                  pageOptimizations[page.url].codePatch
-                                                ) : (
-                                                  <>
-                                                    {`<!-- Copy and paste/modify this snippet inside your HTML layout -->\n`}
-                                                    {(() => {
-                                                      const aiSuggestions = page.aiSuggestions || result.pageFixSuggestions?.[page.url];
-                                                      return (
-                                                        <>
-                                                          {aiSuggestions?.title ? (
-                                                            `\n<title>${aiSuggestions.title}</title>`
-                                                          ) : page.issues.some((i: string) => i.includes('Title')) ? (
-                                                            `\n<title>${page.title ? (page.title.length > 50 ? page.title.substring(0, 50) + '...' : page.title) : 'Optimised Keyword Title Here'}</title>`
-                                                          ) : (
-                                                            `\n<!-- Page title is already optimised: <title>${page.title}</title> -->`
-                                                          )}
-                                                          {aiSuggestions?.metaDescription ? (
-                                                            `\n<meta name="description" content="${aiSuggestions.metaDescription}" />`
-                                                          ) : page.issues.some((i: string) => i.includes('Meta Description')) ? (
-                                                            `\n<meta name="description" content="Add a highly engaging, keyword-focused summary of this page containing 50-160 characters." />`
-                                                          ) : null}
-                                                        </>
-                                                      );
-                                                    })()}
-                                                    {page.issues.some((i: string) => i.includes('Heading')) ? (
-                                                      `\n\n<!-- Ensure exactly one primary <h1> heading exists on this page -->\n<h1>${page.title || 'Single Primary Page Heading'}</h1>`
-                                                    ) : null}
-                                                    {page.issues.some((i: string) => i.includes('Images Lacking')) ? (
-                                                      `\n\n<!-- Make sure every image has an descriptive alt attribute -->\n<img src="/assets/hero.png" alt="Descriptive SEO keyword alt description goes here" />`
-                                                    ) : null}
-                                                  </>
-                                                )}
-                                              </code>
-                                            </div>
+                                          <div className="animate-in fade-in duration-200">
+                                            {(() => {
+                                              const patch = pageOptimizations[page.url]?.codePatch;
+                                              if (!patch) {
+                                                return (
+                                                  <div className={`p-6 rounded-2xl border text-center ${
+                                                    isWhite ? 'bg-zinc-50 border-zinc-200 text-zinc-500' : 'bg-zinc-950/40 border-white/5 text-zinc-400'
+                                                  }`}>
+                                                    <span className="text-sm font-medium normal-case tracking-normal block mb-2">
+                                                      No code patch generated yet.
+                                                    </span>
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveTab('targets');
+                                                      }}
+                                                      className={`text-sm font-medium underline underline-offset-4 ${
+                                                        isWhite ? 'text-[#082a36] hover:text-blue-600' : 'text-white hover:text-blue-400'
+                                                      }`}
+                                                    >
+                                                      Go to AI Targets to Generate
+                                                    </button>
+                                                  </div>
+                                                );
+                                              }
+
+                                              return (
+                                                <div className={`rounded-xl border overflow-hidden ${
+                                                  isWhite ? 'border-zinc-200 bg-zinc-50' : 'border-white/10 bg-[#0a0a0a]'
+                                                }`}>
+                                                  <div className={`px-4 py-2 flex items-center justify-between border-b ${
+                                                    isWhite ? 'bg-zinc-100 border-zinc-200' : 'bg-white/5 border-white/10'
+                                                  }`}>
+                                                    <span className="text-[10px] font-mono font-medium tracking-widest uppercase text-zinc-500">
+                                                      HTML Header Patch
+                                                    </span>
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCopyToClipboard(patch, "Code Patch", setSuccessMsg);
+                                                      }}
+                                                      className="text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
+                                                    >
+                                                      Copy Patch
+                                                    </button>
+                                                  </div>
+                                                  <pre className={`p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap ${
+                                                    isWhite ? 'text-[#082a36]' : 'text-emerald-400'
+                                                  }`}>
+                                                    {patch}
+                                                  </pre>
+                                                </div>
+                                              );
+                                            })()}
                                           </div>
                                         )}
                                       </div>
@@ -1658,108 +1173,6 @@ export default function AiStrategicAnalysis() {
             </div>
           )}
 
-          {/* Row 3: Developer Implementation Guide */}
-          <div className={`printable-card p-6 sm:p-8 rounded-[24px] border shadow-2xl backdrop-blur-xl ${
-            isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
-          }`}>
-            <div className="flex items-center gap-2 mb-4">
-              <Sliders size={16} className="text-blue-400" />
-              <h4 className={`text-sm font-medium normal-case tracking-normal ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                Tactical Implementation playbook
-              </h4>
-            </div>
-
-            <div className={`playbook-container p-6 rounded-2xl font-mono text-sm border shadow-inner leading-relaxed whitespace-pre-line ${
-              isWhite ? 'bg-zinc-50 border-zinc-200 text-zinc-600' : 'bg-zinc-950 border-white/5 text-zinc-400'
-            }`}>
-              {result.implementationGuide}
-            </div>
-          </div>
-
-          {/* Executive Summary Card at the bottom */}
-          {result.executiveSummary && (
-            <div className={`printable-card p-6 sm:p-8 rounded-[24px] border shadow-2xl backdrop-blur-xl ${
-              isWhite ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900/50 border-white/5'
-            }`}>
-              <div className="flex items-center gap-2 mb-6">
-                <Sparkles size={18} className="text-blue-500 animate-pulse" />
-                <h4 className={`text-sm font-medium normal-case tracking-normal ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>
-                  Executive Strategic Summary
-                </h4>
-              </div>
-
-              <div className={`p-6 rounded-2xl border text-sm font-medium leading-relaxed tracking-normal space-y-6 ${
-                isWhite ? 'bg-zinc-50 border-zinc-200 text-zinc-700' : 'bg-zinc-950/40 border-white/5 text-zinc-300'
-              }`}>
-                
-                {/* Section Header Statement */}
-                <p className="font-medium normal-case text-sm tracking-normal text-blue-500 border-b border-white/5 pb-2">
-                  🔍 AUDIT SCOPE STATEMENT
-                </p>
-                <p className="italic font-medium leading-relaxed">
-                  "I have analysed the property URL <span className="font-mono text-blue-400 not-italic font-medium">{selectedClient?.gsc_site_url || 'https://example.com/'}</span> and all associated organic performance data datasets. Based on this in-depth analysis, I have mapped our core achievements, critical growth sectors, active corrective directives, and expected outcome projections below."
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                  {/* Good Things */}
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium normal-case tracking-normal text-emerald-500 flex items-center gap-1.5">
-                      <CheckCircle2 size={12} />
-                      These are the good things:
-                    </p>
-                    <ul className="list-disc list-inside space-y-2 text-sm font-medium text-zinc-400 pl-1 leading-relaxed">
-                      {result.executiveSummary.goodThings.map((item, idx) => (
-                        <li key={idx} className="marker:text-emerald-500 normal-case">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Things to Improve */}
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium normal-case tracking-normal text-rose-400 flex items-center gap-1.5">
-                      <AlertCircle size={12} />
-                      These are the things we have to improve:
-                    </p>
-                    <ul className="list-disc list-inside space-y-2 text-sm font-medium text-zinc-400 pl-1 leading-relaxed">
-                      {result.executiveSummary.thingsToImprove.map((item, idx) => (
-                        <li key={idx} className="marker:text-rose-400 normal-case">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Actions to Do */}
-                  <div className="space-y-3 pt-4 border-t border-white/5 md:col-span-2">
-                    <p className="text-sm font-medium normal-case tracking-normal text-blue-400 flex items-center gap-1.5">
-                      <Zap size={12} />
-                      These are the actions we need to do:
-                    </p>
-                    <ul className="list-disc list-inside space-y-2 text-sm font-medium text-zinc-400 pl-1 leading-relaxed">
-                      {result.executiveSummary.actionsToDo.map((item, idx) => (
-                        <li key={idx} className="marker:text-blue-400 normal-case">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Expect Results */}
-                  <div className="space-y-3 pt-4 border-t border-white/5 md:col-span-2">
-                    <p className="text-sm font-medium normal-case tracking-normal text-indigo-400 flex items-center gap-1.5">
-                      <TrendingUp size={12} />
-                      These are the results we expect by doing that:
-                    </p>
-                    <ul className="list-disc list-inside space-y-2 text-sm font-medium text-zinc-400 pl-1 leading-relaxed">
-                      {result.executiveSummary.expectedResults.map((item, idx) => (
-                        <li key={idx} className="marker:text-indigo-400 normal-case">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
     </div>
   );
 }
