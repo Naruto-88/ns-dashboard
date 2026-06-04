@@ -833,8 +833,8 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
     }
 
     // 3. Fetch Custom Lead API count
-    let leadsTotal = 0;
-    let leadsLegit = 0;
+    let leadsTotal: number | undefined = undefined;
+    let leadsLegit: number | undefined = undefined;
     if (client?.lead_api_url) {
       try {
         const leadApiUrl = client.lead_api_url;
@@ -3839,9 +3839,9 @@ app.get('/api/clients/:clientId/sync-ahrefs-data', async (req, res) => {
     const domain = getDomain(targetUrl);
     const isValidDomain = domain && domain.includes('.') && !domain.includes(' ');
 
-    let dr = 0;
-    let backlinks = 0;
-    let refDomains = 0;
+    let dr: number | undefined = undefined;
+    let backlinks: number | undefined = undefined;
+    let refDomains: number | undefined = undefined;
 
     if (ahrefsKey) {
       if (!isValidDomain) {
