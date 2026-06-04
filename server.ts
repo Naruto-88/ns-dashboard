@@ -65,7 +65,7 @@ app.get('/api/clients/:clientId/keyword-ranking-details', async (req, res) => {
           endDate: endDate as string,
           dimensions: ['query', 'page'],
           rowLimit: 1000
-        }
+        , dataState: 'all' }
       })
     );
 
@@ -607,7 +607,7 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
           client.gsc_site_url,
           (url) => searchconsole.searchanalytics.query({
             siteUrl: url,
-            requestBody: { startDate, endDate, dimensions: [] }
+            requestBody: { startDate, endDate, dimensions: [] , dataState: 'all' }
           })
         );
 
@@ -782,7 +782,7 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
                 startDate: startDate as string,
                 endDate: endDate as string,
                 dimensions: []
-              }
+              , dataState: 'all' }
             })
           );
 
@@ -807,7 +807,7 @@ app.get('/api/clients/:clientId/live-metrics', async (req, res) => {
                 endDate: endDate as string,
                 dimensions: ['query'],
                 rowLimit: 1000
-              }
+              , dataState: 'all' }
             })
           );
 
@@ -949,7 +949,7 @@ app.get('/api/clients/:clientId/insights', async (req, res) => {
             endDate: endDate as string,
             dimensions: ['query'],
             rowLimit: 500
-          }
+          , dataState: 'all' }
         })
       );
 
@@ -961,7 +961,7 @@ app.get('/api/clients/:clientId/insights', async (req, res) => {
           endDate: prevEndDate,
           dimensions: ['query'],
           rowLimit: 500
-        }
+        , dataState: 'all' }
       }).catch(() => ({ data: { rows: [] } }));
 
       // Fetch Top Pages
@@ -972,7 +972,7 @@ app.get('/api/clients/:clientId/insights', async (req, res) => {
           endDate: endDate as string,
           dimensions: ['page'],
           rowLimit: 20
-        }
+        , dataState: 'all' }
       });
 
       // Fetch Top Countries
@@ -983,7 +983,7 @@ app.get('/api/clients/:clientId/insights', async (req, res) => {
           endDate: endDate as string,
           dimensions: ['country'],
           rowLimit: 5
-        }
+        , dataState: 'all' }
       });
 
       const sources = [
@@ -1031,7 +1031,7 @@ app.get('/api/clients/:clientId/performance-trend', async (req, res) => {
             endDate: endDate as string,
             dimensions: ['date'],
             rowLimit: 100
-          }
+          , dataState: 'all' }
         })
       );
 
@@ -1172,7 +1172,7 @@ async function fetchPeriodMetrics(client: any, startDate: string, endDate: strin
             startDate,
             endDate,
             dimensions: []
-          }
+          , dataState: 'all' }
         })
       );
       const summaryRow = summaryRes.data.rows?.[0];
@@ -1195,7 +1195,7 @@ async function fetchPeriodMetrics(client: any, startDate: string, endDate: strin
             endDate,
             dimensions: ['query'],
             rowLimit: 100
-          }
+          , dataState: 'all' }
         })
       );
       const keywordRows = keywordsRes.data.rows || [];
@@ -3180,17 +3180,17 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     const periods = {};
     
     // 1. Rolling 7D (3-day delay to match GSC browser exactly)
-    let rCurEnd = subDays(today, 2); rCurEnd.setHours(23,59,59,999);
-    let rCurStart = subDays(today, 8); rCurStart.setHours(0,0,0,0);
+    let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
+    let rCurStart = subDays(today, 9); rCurStart.setHours(0,0,0,0);
     let rPrevStart = subDays(rCurStart, 7);
     let rPrevEnd = subDays(rCurEnd, 7);
     periods['rolling'] = { curStart: rCurStart, curEnd: rCurEnd, prevStart: rPrevStart, prevEnd: rPrevEnd };
 
     // 2. Last 28 Days (3-day delay to match GSC browser exactly)
-    let d28CurEnd = subDays(today, 2); d28CurEnd.setHours(23,59,59,999);
-    let d28CurStart = subDays(today, 29); d28CurStart.setHours(0,0,0,0);
-    let d28PrevEnd = subDays(today, 30); d28PrevEnd.setHours(23,59,59,999);
-    let d28PrevStart = subDays(today, 57); d28PrevStart.setHours(0,0,0,0);
+    let d28CurEnd = subDays(today, 3); d28CurEnd.setHours(23,59,59,999);
+    let d28CurStart = subDays(today, 30); d28CurStart.setHours(0,0,0,0);
+    let d28PrevEnd = subDays(today, 31); d28PrevEnd.setHours(23,59,59,999);
+    let d28PrevStart = subDays(today, 58); d28PrevStart.setHours(0,0,0,0);
     periods['28days'] = { curStart: d28CurStart, curEnd: d28CurEnd, prevStart: d28PrevStart, prevEnd: d28PrevEnd };
 
     // 3. MoM Monthly
@@ -3202,7 +3202,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
 
     // 4. New 3 Months (3M) - Matches GSC exactly (Exactly 3 months back + 1 day)
     const addDays = (d, days) => new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
-    let m3CurEnd = subDays(today, 2); m3CurEnd.setHours(23,59,59,999);
+    let m3CurEnd = subDays(today, 3); m3CurEnd.setHours(23,59,59,999);
     let m3CurStart = addDays(subMonths(m3CurEnd, 3), 1); m3CurStart.setHours(0,0,0,0);
     let m3PrevEnd = subDays(m3CurStart, 1); m3PrevEnd.setHours(23,59,59,999);
     let m3PrevStart = addDays(subMonths(m3PrevEnd, 3), 1); m3PrevStart.setHours(0,0,0,0);
@@ -3247,7 +3247,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
           client.gsc_site_url,
           async (url) => searchconsole.searchanalytics.query({
             siteUrl: url,
-            requestBody: { startDate, endDate, dimensions: [] }
+            requestBody: { startDate, endDate, dimensions: [] , dataState: 'all' }
           })
         );
 
@@ -3267,7 +3267,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
           client.gsc_site_url,
           async (url) => searchconsole.searchanalytics.query({
             siteUrl: url,
-            requestBody: { startDate, endDate, dimensions: ['query'], rowLimit: 1000 }
+            requestBody: { startDate, endDate, dimensions: ['query'], rowLimit: 1000 , dataState: 'all' }
           })
         );
         

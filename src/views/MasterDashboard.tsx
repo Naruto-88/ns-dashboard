@@ -178,22 +178,22 @@ export default function MasterDashboard() {
         prevEnd = new Date(currentEnd.getTime() - duration);
         prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === 'rolling') {
-        currentEnd = subDays(today, 2);
+        currentEnd = subDays(today, 3);
         currentEnd.setHours(23, 59, 59, 999);
-        currentStart = subDays(today, 8);
+        currentStart = subDays(today, 9);
         currentStart.setHours(0, 0, 0, 0);
         prevEnd = subDays(currentStart, 1);
         prevEnd.setHours(23, 59, 59, 999);
         prevStart = subDays(prevEnd, 6);
         prevStart.setHours(0, 0, 0, 0);
       } else if (viewMode === '28days') {
-        currentEnd = subDays(today, 2);
+        currentEnd = subDays(today, 3);
         currentEnd.setHours(23, 59, 59, 999);
-        currentStart = subDays(today, 29);
+        currentStart = subDays(today, 30);
         currentStart.setHours(0, 0, 0, 0);
-        prevEnd = subDays(today, 30);
+        prevEnd = subDays(today, 31);
         prevEnd.setHours(23, 59, 59, 999);
-        prevStart = subDays(today, 57);
+        prevStart = subDays(today, 58);
         prevStart.setHours(0, 0, 0, 0);
       } else if (viewMode === 'monthly') {
         currentStart = startOfMonth(subMonths(today, 1));
@@ -206,7 +206,7 @@ export default function MasterDashboard() {
         prevEnd.setHours(23, 59, 59, 999);
       } else if (viewMode === '3months') {
         // 3months - Matches GSC native 3 Months (Exactly 3 months back + 1 day)
-        currentEnd = subDays(today, 2);
+        currentEnd = subDays(today, 3);
         currentEnd.setHours(23, 59, 59, 999);
         let m3Start = subMonths(currentEnd, 3);
         currentStart = addDays(m3Start, 1);
