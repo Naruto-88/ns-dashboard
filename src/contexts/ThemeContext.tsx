@@ -10,12 +10,30 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeType>(() => {
-    return (localStorage.getItem('app-theme') as ThemeType) || 'midnight';
-  });
+  const [theme, setThemeState] = useState<ThemeType>('midnight');
 
   useEffect(() => {
-    localStorage.setItem('app-theme', theme);
+    // Fetch global theme on mount
+    fetch('/api/settings/theme')
+      .then(res => res.json())
+      .then(data => {
+        if (data.theme) {
+          setThemeState(data.theme);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const setTheme = (newTheme: ThemeType) => {
+    setThemeState(newTheme);
+    fetch('/api/settings/theme', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: newTheme })
+    }).catch(console.error);
+  };
+
+  useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('theme-midnight', 'theme-mission', 'theme-white');
     root.classList.add(`theme-${theme}`);

@@ -3417,6 +3417,29 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
 });
 
 // ==========================================
+// GLOBAL SETTINGS (THEME)
+// ==========================================
+app.get('/api/settings/theme', async (req, res) => {
+  try {
+    const { data } = await supabase.from('api_keys').select('key_value').eq('id', 'global_theme').single();
+    res.json({ theme: data?.key_value || 'midnight' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/settings/theme', async (req, res) => {
+  try {
+    const { theme } = req.body;
+    if (!theme) return res.status(400).json({ error: 'Theme required' });
+    await supabase.from('api_keys').upsert({ id: 'global_theme', key_value: theme });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // BACKGROUND CRON JOB: SYNC MONTHLY CACHE
 // ==========================================
 app.get('/api/cron/sync-monthly-cache', async (req, res) => {
