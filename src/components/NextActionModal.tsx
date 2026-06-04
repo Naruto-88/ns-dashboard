@@ -40,16 +40,21 @@ export default function NextActionModal({ client, onClose, onSuccess, editData }
           .eq('id', editData.id);
         error = res.error;
       } else {
-        // Insert new action
-        const res = await supabase
-          .from('client_actions')
-          .insert([{
-            client_id: client.id,
-            action_text: actionForm.text,
-            deadline: actionForm.deadline,
-            status: 'pending'
-          }]);
-        error = res.error;
+        // Insert new action(s) by splitting newlines
+        const lines = actionForm.text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        const actionsToInsert = lines.map(line => ({
+          client_id: client.id,
+          action_text: line,
+          deadline: actionForm.deadline,
+          status: 'pending'
+        }));
+        
+        if (actionsToInsert.length > 0) {
+          const res = await supabase
+            .from('client_actions')
+            .insert(actionsToInsert);
+          error = res.error;
+        }
       }
         
       if (error) throw error;

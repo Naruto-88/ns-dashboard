@@ -337,10 +337,11 @@ export default function MasterDashboard() {
           score += 2;
           reasons.push(`GSC Clicks up by ${gscTraffic.change.toFixed(1)}%`);
         }
-        if (ga4Traffic.change > 5) {
-          score += 2;
-          reasons.push(`GA4 Traffic up by ${ga4Traffic.change.toFixed(1)}%`);
-        }
+        // GA4 Traffic intentionally excluded from scoring logic as we only want organic traffic
+        // if (ga4Traffic.change > 5) {
+        //   score += 2;
+        //   reasons.push(`GA4 Traffic up by ${ga4Traffic.change.toFixed(1)}%`);
+        // }
         if (client.lead_target_monthly > 0 && leads.legit >= leadTargetWeekly) {
           score += 2;
           reasons.push(`Weekly Lead Target Hit`);
@@ -349,7 +350,7 @@ export default function MasterDashboard() {
         const currentPos = gscTraffic.position;
         const prevPos = gscTraffic.prevPosition;
         if (currentPos > 0 && prevPos > 0 && currentPos < prevPos) {
-          score += 1;
+          score += 0.5;
           reasons.push(`Avg Position improved to ${currentPos.toFixed(1)}`);
         }
         
@@ -364,17 +365,18 @@ export default function MasterDashboard() {
           score -= 2;
           reasons.push(`GSC Clicks dropped by ${Math.abs(gscTraffic.change).toFixed(1)}%`);
         }
-        if (ga4Traffic.change < -5) {
-          score -= 2;
-          reasons.push(`GA4 Traffic dropped by ${Math.abs(ga4Traffic.change).toFixed(1)}%`);
-        }
+        // GA4 Traffic intentionally excluded from scoring logic
+        // if (ga4Traffic.change < -5) {
+        //   score -= 2;
+        //   reasons.push(`GA4 Traffic dropped by ${Math.abs(ga4Traffic.change).toFixed(1)}%`);
+        // }
         if (client.lead_target_monthly > 0 && (leads.legit === 0 || leads.legit < (leadTargetWeekly / 2))) {
           score -= 2;
           reasons.push(`Missed Lead Targets`);
         }
         
         if (currentPos > 0 && prevPos > 0 && currentPos >= prevPos + 3) {
-          score -= 1;
+          score -= 0.5;
           reasons.push(`Avg Position dropped to ${currentPos.toFixed(1)}`);
         }
         
