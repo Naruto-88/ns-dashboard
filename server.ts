@@ -2113,6 +2113,84 @@ async function crawlSite(siteUrl: string, maxPages: number = 100) {
   };
 }
 
+// POST AI TRAFFIC DROP ANALYSE
+app.post('/api/ai/traffic-drop-analyse', async (req, res) => {
+  const { clientId, model, startDate, endDate, gscData } = req.body;
+  if (!clientId || !gscData) return res.status(400).json({ error: 'Missing parameters' });
+
+  try {
+    const { data: client } = await supabase.from('clients').select('name').eq('id', clientId).single();
+    
+    const prompt = `You are an expert SEO data analyst.
+Analyze the following Google Search Console traffic drop data for client "${client?.name || 'Unknown'}".
+Date Range: ${startDate} to ${endDate}
+
+Current Period vs Previous Period:
+Clicks: ${gscData.clicks} vs ${gscData.prevClicks}
+Impressions: ${gscData.impressions} vs ${gscData.prevImpressions}
+CTR: ${gscData.ctr} vs ${gscData.prevCtr}
+Avg Position: ${gscData.position} vs ${gscData.prevPosition}
+
+Top Impacted Queries:
+${JSON.stringify(gscData.topQueries, null, 2)}
+
+Provide a concise, 2-paragraph analysis explaining the most likely causes of this drop, followed by exactly 3 bullet points of actionable recommendations to recover the traffic.
+Return the result strictly as a JSON object with two string fields: "analysis" and "action". Do not use markdown blocks.
+Example:
+{
+  "analysis": "The traffic drop is primarily driven by...",
+  "action": "- Action 1\\n- Action 2\\n- Action 3"
+}
+`;
+
+    const { data: keysData } = await supabase.from('api_keys').select('*');
+    const keysMap: Record<string, string> = {};
+    if (keysData) keysData.forEach(k => keysMap[k.id] = k.key_value);
+    
+    const geminiKeysPool = [
+      keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
+      keysMap['gemini_2'] || '',
+      keysMap['gemini_3'] || '',
+      keysMap['gemini_4'] || ''
+    ].filter(k => k.trim() !== '');
+    
+    let resultJson = null;
+
+    if (model === 'gemini' || model === 'gemini-1.5-pro' || model === 'gemini-2.5-flash') {
+      if (geminiKeysPool.length === 0) return res.status(400).json({ error: 'Missing Gemini API Key' });
+      for (const key of geminiKeysPool) {
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: "application/json" }
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              resultJson = JSON.parse(text);
+              break;
+            }
+          }
+        } catch(e) { console.warn(e); }
+      }
+    } else {
+       resultJson = { analysis: "Analysis failed. Unsupported model.", action: "- Check API keys" };
+    }
+
+    if (!resultJson) throw new Error("Failed to get AI response");
+    res.json(resultJson);
+
+  } catch (error: any) {
+    console.error('Traffic drop analyse error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST AI
 app.post('/api/ai/analyze', async (req, res) => {
   const { clientId, model, analysisType, startDate, endDate, simulate, runTechnicalCrawl, generateAiFixes, maxPages } = req.body;

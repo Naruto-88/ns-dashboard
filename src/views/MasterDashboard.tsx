@@ -247,6 +247,20 @@ export default function MasterDashboard() {
            currentWeekData = weeklyData.find(d => d.week_start_date === currentWeekStartStr) || latestData;
            previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
         }
+        
+        // Sum manual metrics from weekly_data because dashboard_cache might zero them out
+        const sumWeeklyMetric = (dataArray: any[], start: Date, end: Date, metric: string) => {
+            return dataArray.filter(d => {
+                const wDate = new Date(d.week_start_date);
+                return wDate >= start && wDate <= end;
+            }).reduce((sum, d) => sum + (Number(d[metric]) || 0), 0);
+        };
+        const resolvedCurrentLeadsTotal = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_total');
+        const resolvedCurrentLeadsLegit = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_legit');
+        const resolvedPrevLeadsTotal = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_total');
+        
+        const resolvedCurrentPhoneCalls = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'phone_calls') || currentWeekData?.phone_calls || 0;
+        const resolvedPreviousPhoneCalls = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'phone_calls') || previousWeekData?.phone_calls || 0;
 
         const resolvedCurrentClicks = currentWeekData?.gsc_clicks || 0;
         const resolvedPreviousClicks = previousWeekData?.gsc_clicks || 0;
@@ -279,13 +293,10 @@ export default function MasterDashboard() {
         };
 
         const leads = {
-          current: currentWeekData?.leads_total || 0,
-          legit: currentWeekData?.leads_legit || 0,
-          change: calculateChange(currentWeekData?.leads_total || 0, previousWeekData?.leads_total || 0)
+          current: resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0,
+          legit: resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0,
+          change: calculateChange(resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0, resolvedPrevLeadsTotal || previousWeekData?.leads_total || 0)
         };
-
-        const resolvedCurrentPhoneCalls = currentWeekData?.phone_calls ?? 0;
-        const resolvedPreviousPhoneCalls = previousWeekData?.phone_calls ?? 0;
 
         const phoneCalls = {
           current: resolvedCurrentPhoneCalls,
