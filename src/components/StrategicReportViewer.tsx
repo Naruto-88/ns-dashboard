@@ -75,15 +75,59 @@ export default function StrategicReportViewer({ result, clientName, propertyUrl,
   const C = 326.7; // circumference for r=52
   const dash = `${(score / 100) * C} ${C}`;
 
+  const exportToHTML = () => {
+    const headHtml = document.head.innerHTML;
+    const reportElement = document.getElementById('strategic-report-wrapper');
+    if (!reportElement) return;
+
+    const clone = reportElement.cloneNode(true) as HTMLElement;
+    const noPrintElements = clone.querySelectorAll('.sds-no-print');
+    noPrintElements.forEach(el => el.remove());
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Strategic SEO Analysis - ${clientName || 'Report'}</title>
+        ${headHtml}
+        <style>
+          body { background-color: #e5e5e5; margin: 0; padding: 40px; display: flex; justify-content: center; }
+          #strategic-report-wrapper { max-width: 1200px; width: 100%; margin: 0 auto; }
+        </style>
+      </head>
+      <body>
+        ${clone.outerHTML}
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = (clientName || 'Report').replace(/\s+/g, '_');
+    a.download = `Strategic_SEO_Analysis_${safeName}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="sds-report bg-[#f6f2ea] rounded-[24px] overflow-hidden shadow-2xl">
+    <div id="strategic-report-wrapper" className="sds-report bg-[#f6f2ea] rounded-[24px] overflow-hidden shadow-2xl">
       <PrintStyles />
 
-      {/* Export button — hidden in the PDF */}
-      <div className="sds-no-print sticky top-0 z-50 flex justify-end px-6 py-3 bg-[#12201f]/95 backdrop-blur">
+      {/* Export buttons — hidden in the PDF/HTML */}
+      <div className="sds-no-print sticky top-0 z-50 flex justify-end gap-3 px-6 py-3 bg-[#12201f]/95 backdrop-blur">
+        <button onClick={exportToHTML}
+          className="font-semibold text-[13px] text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-4.5 py-2 px-5 transition-colors">
+          ⤓ Export HTML
+        </button>
         <button onClick={() => window.print()}
           className="font-semibold text-[13px] text-white bg-[#0088a2] hover:bg-[#06a3c2] rounded-lg px-4.5 py-2 px-5 transition-colors">
-          ⤓ Export to PDF
+          ⤓ Export PDF
         </button>
       </div>
 
