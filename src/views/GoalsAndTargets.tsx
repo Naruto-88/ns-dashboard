@@ -97,27 +97,44 @@ export default function GoalsAndTargets() {
         }
       }
       
-      // Fetch monthly cache records and pending actions in parallel
-      const [monthlyRecords, actionsData] = await Promise.all([
+      const endOfMonthStr = `${selYear}-${String(selMonth).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+      
+      // Fetch monthly cache records, pending actions, AND live weekly data in parallel
+      const [monthlyRecords, actionsData, weeklyDataRes] = await Promise.all([
         getMonthlyCache(startOfMonth),
         supabase
           .from('client_actions')
           .select('*')
           .eq('status', 'pending')
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('weekly_data')
+          .select('client_id, blogs_published, leads_total, leads_legit, ahrefs_dr, week_start_date')
+          .gte('week_start_date', startOfMonth)
+          .lte('week_start_date', endOfMonthStr)
       ]);
 
       const pendingActionsData = actionsData?.data || [];
+      const weeklyRecords = weeklyDataRes?.data || [];
 
       // Map monthly cache metrics directly
       const enrichedClients = clientList.map((client) => {
         const cacheRecord = monthlyRecords.find(r => r.client_id === client.id);
+        const clientWeekly = weeklyRecords.filter(w => w.client_id === client.id);
 
         const actualClicks = cacheRecord?.gsc_clicks || 0;
         const actualSessions = cacheRecord?.ga4_traffic || 0;
-        const actualBlogs = cacheRecord?.blogs_published || 0;
-        const actualLeads = cacheRecord?.leads_legit || cacheRecord?.leads_total || 0;
-        const actualDR = cacheRecord?.ahrefs_dr || 0;
+        
+        // Use live weekly data for internal metrics to bypass cache delays
+        const actualBlogs = clientWeekly.reduce((sum, w) => sum + (w.blogs_published || 0), 0);
+        
+        // For leads, if they have an API integration, trust the cache. Otherwise use live manual data.
+        const actualLeads = client.lead_api_url 
+          ? (cacheRecord?.leads_legit || cacheRecord?.leads_total || 0)
+          : clientWeekly.reduce((sum, w) => sum + (w.leads_legit || w.leads_total || 0), 0);
+          
+        const sortedWeekly = [...clientWeekly].sort((a,b) => b.week_start_date.localeCompare(a.week_start_date));
+        const actualDR = sortedWeekly.find(r => (r.ahrefs_dr || 0) > 0)?.ahrefs_dr || cacheRecord?.ahrefs_dr || 0;
         
         const pendingActions = pendingActionsData.filter(a => a.client_id === client.id);
 
