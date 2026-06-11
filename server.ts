@@ -1659,6 +1659,9 @@ app.post('/api/admin/sync-sheets', async (req, res) => {
     if (!sheetNames.includes('Goals and Targets')) {
       addSheetRequests.push({ addSheet: { properties: { title: 'Goals and Targets' } } });
     }
+    if (!sheetNames.includes('Weekly Activities')) {
+      addSheetRequests.push({ addSheet: { properties: { title: 'Weekly Activities' } } });
+    }
 
     if (addSheetRequests.length > 0) {
       await sheets.spreadsheets.batchUpdate({
@@ -1825,6 +1828,87 @@ app.post('/api/admin/sync-sheets', async (req, res) => {
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: goalsRows }
     });
+
+    // 6. Refresh 'Weekly Activities' Tab
+    const activitiesRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: "'Weekly Activities'!A1:Z2000"
+    });
+    const activityRows = activitiesRes.data.values || [];
+
+    const activityHeaders = [
+      "Client Name", "Week Start", "Week End", 
+      "Work Detail Notes", "Next SEO Action Plan", 
+      "Backlinks Created", "Blogs Published", "Leads Total", "Legit Leads", "Phone Calls"
+    ];
+
+    if (activityRows.length === 0) {
+      activityRows.push(activityHeaders);
+    } else {
+      activityRows[0] = activityHeaders;
+    }
+
+    // Fetch raw weekly_data for the selected week to get the notes
+    const { data: rawWeeklyData } = await supabase
+      .from('weekly_data')
+      .select('*')
+      .eq('week_start_date', weekStart);
+
+    if (rawWeeklyData && rawWeeklyData.length > 0) {
+      for (const w of rawWeeklyData) {
+        // Find client name from dbClientsMap or rows
+        let clientName = '';
+        for (const [name, c] of dbClientsMap.entries()) {
+          if (c.id === w.client_id) {
+            clientName = name;
+            break;
+          }
+        }
+        if (!clientName) continue; // Skip if client not found
+
+        // Calculate week end date (start date + 6 days)
+        let weekEndDateStr = '';
+        if (w.week_start_date) {
+          const startDateObj = new Date(w.week_start_date);
+          startDateObj.setDate(startDateObj.getDate() + 6);
+          weekEndDateStr = startDateObj.toISOString().split('T')[0];
+        }
+
+        const newRowValues = [
+          clientName,
+          w.week_start_date,
+          weekEndDateStr,
+          w.weekly_activity_summary || w.notes || '',
+          w.next_seo_action || '',
+          w.backlinks_built || 0,
+          w.blogs_published || 0,
+          w.leads_total || 0,
+          w.leads_legit || 0,
+          w.phone_calls || 0
+        ];
+
+        let foundIndex = -1;
+        for (let i = 1; i < activityRows.length; i++) {
+          if (activityRows[i][0] === clientName && activityRows[i][1] === w.week_start_date) {
+            foundIndex = i;
+            break;
+          }
+        }
+
+        if (foundIndex !== -1) {
+          activityRows[foundIndex] = newRowValues;
+        } else {
+          activityRows.push(newRowValues);
+        }
+      }
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: "'Weekly Activities'!A1",
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: activityRows }
+      });
+    }
 
     res.json({ success: true, sheetId });
   } catch (error: any) {
