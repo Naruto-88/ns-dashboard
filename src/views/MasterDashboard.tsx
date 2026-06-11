@@ -1218,6 +1218,22 @@ export default function MasterDashboard() {
           </div>
         </div>
       )}
+
+      {/* Floating Error Notification Toast */}
+      {errorMsg && (
+        <div className={`print:hidden fixed top-6 right-6 z-50 p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
+          theme === 'white' ? 'bg-white/95 border-rose-200 text-rose-950' : 'bg-zinc-950/95 border-red-500/20 text-red-400'
+        }`}>
+          <AlertCircle className="shrink-0 mt-0.5 text-rose-500 animate-pulse" size={16} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Sync Failed</h5>
+              <button onClick={() => setErrorMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
+            </div>
+            <p className="text-sm font-medium mt-1 leading-normal break-words">{errorMsg}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1759,14 +1775,14 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
                     </td>
                     <td className="py-4 text-center">
                       <span className={`px-2 py-0.5 rounded-lg text-sm font-medium ${
-                        kw.position <= 3 ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-emerald-500/10 text-emerald-500') : (theme === 'white' ? 'bg-[#163f4d]/10 text-[#163f4d]' : 'bg-blue-500/10 text-blue-500')
+                        (kw.position || 999) <= 3 ? (theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-emerald-500/10 text-emerald-500') : (theme === 'white' ? 'bg-[#163f4d]/10 text-[#163f4d]' : 'bg-blue-500/10 text-blue-500')
                       }`}>
-                        #{kw.position.toFixed(1)}
+                        #{typeof kw.position === 'number' ? kw.position.toFixed(1) : (kw.position || 0)}
                       </span>
                     </td>
-                    <td className="py-4 text-center font-medium text-sm text-[#082a36]">{kw.clicks}</td>
+                    <td className="py-4 text-center font-medium text-sm text-[#082a36]">{kw.clicks || 0}</td>
                     <td className="py-4 text-center font-medium text-sm text-[#082a36]">
-                      {kw.impressions >= 1000 ? (kw.impressions / 1000).toFixed(1) + 'K' : kw.impressions}
+                      {(kw.impressions || 0) >= 1000 ? ((kw.impressions || 0) / 1000).toFixed(1) + 'K' : (kw.impressions || 0)}
                     </td>
                     <td className="py-4 text-right">
                       <a 
@@ -1785,38 +1801,6 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
           )}
         </div>
       </div>
-
-      {/* Floating Success Notification Toast */}
-      {successMsg && (
-        <div className={`print:hidden fixed top-6 right-6 z-[200] p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
-          theme === 'white' ? 'bg-white/95 border-[#76c9be]/40 text-[#082a36]' : 'bg-zinc-950/95 border-emerald-500/20 text-emerald-400'
-        }`}>
-          <CheckCircle2 className="shrink-0 mt-0.5 text-emerald-500 animate-bounce" size={16} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Sync Successful</h5>
-              <button onClick={() => setSuccessMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
-            </div>
-            <p className="text-sm font-medium mt-1 leading-normal break-words">{successMsg}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Error Notification Toast */}
-      {errorMsg && (
-        <div className={`print:hidden fixed top-6 right-6 z-[200] p-5 rounded-[20px] border flex items-start gap-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 fade-in duration-300 max-w-sm ${
-          theme === 'white' ? 'bg-white/95 border-rose-200 text-rose-950' : 'bg-zinc-950/95 border-red-500/20 text-red-400'
-        }`}>
-          <AlertCircle className="shrink-0 mt-0.5 text-rose-500 animate-pulse" size={16} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <h5 className="text-xs font-semibold tracking-wider uppercase text-zinc-500">Sync Failed</h5>
-              <button onClick={() => setErrorMsg(null)} className="text-zinc-400 hover:text-zinc-200 text-sm font-medium leading-none ml-2 transition-all">🞨</button>
-            </div>
-            <p className="text-sm font-medium mt-1 leading-normal break-words">{errorMsg}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
