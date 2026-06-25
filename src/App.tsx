@@ -30,6 +30,7 @@ import ClientManagement from './views/ClientManagement';
 import GlobalSettings from './views/GlobalSettings';
 import GoalsAndTargets from './views/GoalsAndTargets';
 import AiStrategicAnalysis from './views/AiStrategicAnalysis';
+import LeadGenPlaybook from './views/LeadGenPlaybook';
 import ActionCenter from './views/ActionCenter';
 import Tooltip from './components/Tooltip';
 import { useState, useEffect } from 'react';
@@ -47,6 +48,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Client Scoreboard', icon: Users, path: '/scoreboard' },
     { name: 'Goals & Targets', icon: Target, path: '/goals-targets' },
     { name: 'AI Analysis', icon: BrainCircuit, path: '/strategic-analysis' },
+    { name: 'Lead Playbook', icon: FileText, path: '/lead-playbook' },
     { name: 'Action Center', icon: Target, path: '/action-center' },
     { name: 'Keyword Tracking', icon: Key, path: '/keywords' },
     { name: 'Weekly Data', icon: Calendar, path: '/weekly' },
@@ -338,6 +340,7 @@ export default function App() {
           <Route path="/scoreboard" element={<ClientScoreboard />} />
           <Route path="/goals-targets" element={<GoalsAndTargets />} />
           <Route path="/strategic-analysis" element={<AiStrategicAnalysis />} />
+          <Route path="/lead-playbook" element={<LeadGenPlaybook />} />
           <Route path="/action-center" element={<ActionCenter />} />
           <Route path="/keywords" element={<KeywordDashboard />} />
           <Route path="/weekly" element={<WeeklyData />} />

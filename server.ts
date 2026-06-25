@@ -1243,6 +1243,13 @@ function cleanJsonString(str: string): string {
   }
   cleaned = cleaned.trim();
 
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch (e) {
+    // Proceed with custom repair state machine if JSON is invalid or truncated
+  }
+
   let repaired = '';
   let inString = false;
   let stack: ('{' | '[')[] = [];
@@ -2926,6 +2933,540 @@ ${promptSuffix}`;
   } catch (error: any) {
     console.error('AI Strategic Analysis error:', error);
     res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+function generateSimulatedLeadPlaybook(
+  clientName: string,
+  traffic: number,
+  formFills: number,
+  leads: number,
+  leadTarget: number,
+  previousLeads: number,
+  topQueries: any[]
+) {
+  const ratio = formFills > 0 ? leads / formFills : 0.45;
+  const isFlagged = ratio < 0.40;
+  const topQuery = topQueries[0]?.query || "services";
+
+  return {
+    quickWinSummary: `For ${clientName}, the top three lead-generation recommendations are to: 1) add a sticky click-to-call CTA above the fold on mobile, 2) target the high-intent query '${topQuery}' with a dedicated landing page, and 3) optimize the form fields on the contact page. Combined, these actions are projected to generate an additional 5 to 8 confirmed leads per month by capturing buyer intent and reducing friction.`,
+    
+    leadQualityFlag: {
+      flagged: isFlagged,
+      formFillToLeadRatio: parseFloat(ratio.toFixed(3)),
+      recommendation: isFlagged 
+        ? "Surfaced lead quality issue. Add qualifying dropdown fields (e.g., budget range, intent level) to filtering forms on core landing pages to weed out unqualified spam submissions."
+        : "Lead quality is within an acceptable range."
+    },
+    
+    leadFunnelAnalysis: `The site current generates ${leads} confirmed leads from ${formFills} form fills. The conversion data suggests traffic volume is decent, but user path friction is high. \n\nThe top bottlenecks are mobile CTAs being pushed below the fold and a lack of local trust signals (FAQ/Review schemas) on service pages, suppressing click-through rates in organic SERPs.`,
+    
+    expectedLeadIncrease: `Implementing the priority fixes is projected to generate an additional 4 to 8 confirmed leads per month, based on current monthly organic sessions of ${traffic || 250} and a realistic uplift in form completion rate.`,
+    
+    croDirectives: [
+      {
+        title: "Add click-to-call button above the fold on /contact",
+        priority: "High",
+        targetUrl: "/contact",
+        actionDescription: "Embed a prominent, sticky click-to-call phone number and CTA button at the very top of the mobile layout on the contact page. Ensure it remains visible in the top 60% of the screen.",
+        expectedOutcome: "Increases direct mobile phone inquiries by an estimated 15-20% (+2 to 3 leads/month)."
+      },
+      {
+        title: "Reduce contact form fields from 7 to 4",
+        priority: "High",
+        targetUrl: "/contact",
+        actionDescription: "Simplify the primary lead form. Remove non-essential fields (like 'Company Name' or 'Subject') and keep only: Name, Email, Phone, and Project Type dropdown.",
+        expectedOutcome: "Improves form completion rate, leading to an estimated +3 additional form fills per month."
+      },
+      {
+        title: "Position trust badges immediately below CTAs",
+        priority: "Medium",
+        targetUrl: "/",
+        actionDescription: "Place certification logos, Google rating stars, and security badges directly beneath the primary submit buttons on the homepage hero section.",
+        expectedOutcome: "Builds instant credibility, reducing bounce rates and form abandonment."
+      }
+    ],
+    
+    commercialKeywordOpportunities: [
+      {
+        keyword: topQuery,
+        currentPosition: parseFloat((topQueries[0]?.position || 6.2).toFixed(1)),
+        currentCtr: parseFloat((topQueries[0]?.ctr || 2.0).toFixed(2)),
+        tier: "Quick-win (pos 4–10)",
+        recommendation: "Optimise title tags to include the exact query and add an FAQ section at the bottom of the page answering price and pricing structures to capture this intent."
+      },
+      {
+        keyword: topQueries[1]?.query || "best specialist near me",
+        currentPosition: parseFloat((topQueries[1]?.position || 14.5).toFixed(1)),
+        currentCtr: parseFloat((topQueries[1]?.ctr || 0.5).toFixed(2)),
+        tier: "Growth opportunity (pos 11–20)",
+        recommendation: "Incorporate client reviews, local business schema, and update the meta description to include a clear CTA encouraging localized consultation."
+      }
+    ],
+    
+    contentGapOpportunities: [
+      {
+        keyword: "affordable services quote",
+        monthlyImpressions: 280,
+        issue: "No dedicated landing page exists for this query.",
+        recommendation: "Create a dedicated '/pricing-plans' location page targeting regional clients, and embed a quick lead calculator form as the primary call-to-action."
+      }
+    ],
+    
+    trustSignalsPlaybook: {
+      reviews: "Display a Google Review widget (minimum 4.5+ rating shown) on the sidebar of all service pages and in the middle of the homepage body.",
+      accreditations: "Display standard industry association badges and secure SSL lock icons in the global site footer.",
+      socialProof: "Showcase 3 client case studies displaying actual outcome metrics (e.g. 'Saved $12k', '10x traffic') on the homepage and core service landing pages."
+    },
+    
+    implementationRoadmap: [
+      {
+        week: 1,
+        focus: "Quick technical fixes and highest-priority CRO directives",
+        tasks: [
+          "Simplify form fields on /contact from 7 to 4 to reduce user friction",
+          "Implement click-to-call button in the sticky header for mobile users"
+        ]
+      },
+      {
+        week: 2,
+        focus: "On-page copy and CTA optimisations",
+        tasks: [
+          "Optimize H1 and CTAs on service pages to include commercial search intent",
+          "Update title tags for quick-win keywords in positions 4-10"
+        ]
+      },
+      {
+        week: 3,
+        focus: "Schema, structured data, and trust signal implementation",
+        tasks: [
+          "Add LocalBusiness and FAQ schema markups to core service pages",
+          "Display Google reviews and trust badges beneath primary CTA buttons"
+        ]
+      },
+      {
+        week: 4,
+        focus: "Content gap pages and keyword quick-wins",
+        tasks: [
+          "Create a dedicated pricing/plans landing page to capture high-impression queries",
+          "Acquire niche contextual backlink placements targeting core commercial landing pages"
+        ]
+      }
+    ]
+  };
+}
+
+app.post('/api/ai/lead-playbook', async (req, res) => {
+  const { clientId, model, startDate, endDate, simulate, runTechnicalCrawl, maxPages } = req.body;
+
+  if (!clientId || !model || !startDate || !endDate) {
+    return res.status(400).json({ error: 'clientId, model, startDate, and endDate are required' });
+  }
+
+  try {
+    const { data: client, error: clientErr } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', clientId)
+      .single();
+
+    if (clientErr || !client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    try {
+      const { data: cachedRows, error: cacheQueryError } = await supabase
+        .from('ai_lead_playbooks')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('model', model)
+        .eq('start_date', startDate)
+        .eq('end_date', endDate)
+        .order('created_at', { ascending: false });
+
+      if (!cacheQueryError && cachedRows && cachedRows.length > 0) {
+        const cachedRow = cachedRows[0];
+        const cachedResult = typeof cachedRow.playbook_data === 'string'
+          ? JSON.parse(cachedRow.playbook_data)
+          : cachedRow.playbook_data;
+
+        const responsePayload = {
+          ...cachedResult,
+          usage: {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            cost_usd: 0.0000,
+            model_used: 'CACHED_HIT'
+          }
+        };
+        return res.json(responsePayload);
+      }
+    } catch (cacheErr) {
+      console.warn('[CACHE CHECK ERROR] Failed to query or parse cached lead playbook:', cacheErr);
+    }
+
+    const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
+    const analytics = google.analyticsdata({ version: 'v1beta', auth });
+    const searchconsole = google.searchconsole({ version: 'v1', auth });
+
+    const parseUTC = (dStr: string) => {
+      const parts = dStr.split('-').map(Number);
+      return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    };
+    const start = parseUTC(startDate);
+    const end = parseUTC(endDate);
+    const duration = end.getTime() - start.getTime() + (24 * 60 * 60 * 1000);
+    const prevStartDate = new Date(start.getTime() - duration).toISOString().split('T')[0];
+    const prevEndDate = new Date(end.getTime() - duration).toISOString().split('T')[0];
+
+    const [currentMetrics, previousMetrics] = await Promise.all([
+      fetchPeriodMetrics(client, startDate, endDate, auth, analytics, searchconsole, clientId),
+      fetchPeriodMetrics(client, prevStartDate, prevEndDate, auth, analytics, searchconsole, clientId)
+    ]);
+
+    // Fetch weekly data from Supabase for leads calculation
+    const { data: currentWeeklyRows } = await supabase
+      .from('weekly_data')
+      .select('leads_total, leads_legit, phone_calls')
+      .eq('client_id', clientId)
+      .gte('week_start_date', startDate)
+      .lte('week_start_date', endDate);
+
+    let currentPhoneCalls = 0;
+    let currentFormFills = 0;
+    let currentLeads = 0;
+
+    if (currentWeeklyRows) {
+      currentWeeklyRows.forEach(r => {
+        currentPhoneCalls += r.phone_calls || 0;
+        currentFormFills += r.leads_total || 0;
+        currentLeads += r.leads_legit || 0;
+      });
+    }
+
+    const { data: previousWeeklyRows } = await supabase
+      .from('weekly_data')
+      .select('leads_total, leads_legit, phone_calls')
+      .eq('client_id', clientId)
+      .gte('week_start_date', prevStartDate)
+      .lte('week_start_date', prevEndDate);
+
+    let previousPhoneCalls = 0;
+    let previousFormFills = 0;
+    let previousLeads = 0;
+
+    if (previousWeeklyRows) {
+      previousWeeklyRows.forEach(r => {
+        previousPhoneCalls += r.phone_calls || 0;
+        previousFormFills += r.leads_total || 0;
+        previousLeads += r.leads_legit || 0;
+      });
+    }
+
+    const leadTarget = client.lead_target_monthly || 0;
+
+    let crawlDiagnostics: any = null;
+    const runCrawl = runTechnicalCrawl !== false;
+    if (runCrawl && client.gsc_site_url) {
+      const parsedMaxPages = maxPages ? parseInt(maxPages) : 50;
+      crawlDiagnostics = await crawlSite(client.gsc_site_url, parsedMaxPages);
+    }
+
+    const { data: keysData } = await supabase.from('api_keys').select('*');
+    const keysMap: Record<string, string> = {};
+    if (keysData) {
+      keysData.forEach(k => {
+        keysMap[k.id] = k.key_value;
+      });
+    }
+
+    const geminiKeysPool = [
+      keysMap['gemini'] || process.env.GEMINI_API_KEY || '',
+      keysMap['gemini_2'] || '',
+      keysMap['gemini_3'] || '',
+      keysMap['gemini_4'] || ''
+    ].map(k => k?.trim()).filter(Boolean);
+
+    if (simulate === true || geminiKeysPool.length === 0) {
+      console.log(`[AI LEAD PLAYBOOK] Running in SIMULATION mode.`);
+      const simulatedResult = generateSimulatedLeadPlaybook(
+        client.name,
+        currentMetrics.ga4.traffic,
+        currentFormFills,
+        currentLeads,
+        leadTarget,
+        previousLeads,
+        currentMetrics.gsc.topQueries
+      );
+      return res.json(simulatedResult);
+    }
+
+    const prompt = `LANGUAGE: Write ALL output exclusively in British/Australian English throughout. Use: optimise, prioritise, colour, behaviour, centre, licence (noun), analyse, recognise, enquire, specialise.
+
+You are a world-class Conversion Rate Optimisation (CRO) and Digital Lead Generation Consultant. Your client is "${client.name}".
+
+CORE OBJECTIVE: Your ONLY task is to identify actions that will directly increase confirmed leads and conversions from organic search. Every recommendation must be tied to a specific, measurable conversion outcome. Do not produce general SEO commentary or ranking observations that are not directly connected to lead generation.
+
+You have been provided with three data sources:
+1. GA4 Conversion Metrics — phone calls, form fills, confirmed (legit) leads, monthly lead targets.
+2. Google Search Console (GSC) — keywords with impressions, clicks, position, and CTR.
+3. On-page Technical Crawl Diagnostics — errors, missing meta tags, missing alt text, page word counts, and any available load speed or Core Web Vitals data.
+
+GA4 CURRENT METRICS:
+- Phone Calls: ${currentPhoneCalls}
+- Form Fills: ${currentFormFills}
+- Confirmed (Legit) Leads: ${currentLeads}
+- Monthly Lead Target: ${leadTarget}
+
+GA4 PREVIOUS METRICS:
+- Phone Calls: ${previousPhoneCalls}
+- Form Fills: ${previousFormFills}
+- Confirmed (Legit) Leads: ${previousLeads}
+
+GSC METRICS:
+- Clicks: ${currentMetrics.gsc.clicks}
+- Impressions: ${currentMetrics.gsc.impressions}
+- Average CTR: ${currentMetrics.gsc.ctr.toFixed(2)}%
+- Average Position: ${currentMetrics.gsc.position.toFixed(2)}
+
+TOP KEYWORDS RECORDED IN CURRENT PERIOD:
+${JSON.stringify(currentMetrics.gsc.topQueries, null, 2)}
+
+CRAWL DIAGNOSTICS:
+${crawlDiagnostics ? JSON.stringify(crawlDiagnostics, null, 2) : 'No crawl diagnostics available.'}
+
+AUDIT CRITERIA — APPLY IN THIS ORDER:
+
+1. LEAD QUALITY DIAGNOSIS:
+   - Compare total form fills against confirmed (legit) leads in the GA4 data.
+   - If the ratio of confirmed leads to form fills is below 40%, flag this as a lead quality issue. This means the site is attracting unqualified traffic or the form has insufficient friction to filter out non-leads.
+   - Recommend specific fixes: stronger qualifying copy on the landing page, additional form fields that filter intent (e.g. budget range, project type), or traffic source review.
+
+2. COMMERCIAL KEYWORD QUICK-WINS (Positions 4–10):
+   - Identify keywords ranking positions 4–10 with commercial intent signals: "pricing", "rates", "broker", "hire", "service", "consultant", "quote", "cost", "near me", "book".
+   - Flag those with impressions > 100/month AND CTR below 3% as PRIORITY click-through optimisations.
+   - Classify positions 11–20 separately as "growth opportunities" — do not mix with quick-wins.
+   - Also identify any queries with high impressions (>200/month) and near-zero clicks — these likely indicate a missing dedicated landing page for that query.
+
+3. CONVERSION BLOCKERS ON CORE PAGES:
+   - Core pages = contact, about, homepage, and any page with the word "service", "quote", or "pricing" in the URL slug.
+   - Flag any core page missing: (a) a unique title tag, (b) a meta description, (c) a primary H1.
+   - Flag any core page missing Review schema, FAQ schema, or LocalBusiness schema — absence of these suppresses SERP CTR via missing rich snippets and star ratings.
+   - If crawl data includes page load time > 3 seconds or CLS > 0.1 on a core page, flag as a conversion blocker.
+   - Flag any core page where the primary CTA or phone number is not positioned in the top 60% of the visible page — this is a mobile conversion killer.
+
+4. CRO DIRECTIVES — CONVERSION-FOCUSED ONLY:
+   - Provide developer-ready or marketer-ready instructions: specify the exact element to change, its location on the page, and the expected KPI impact.
+   - Focus on: CTA placement and wording, contact form field reduction or qualification, click-to-call visibility on mobile, social proof positioning, and above-the-fold content hierarchy.
+   - Return 3 to 6 directives only. Prioritise by expected lead volume impact.
+
+5. PROJECTIONS — ABSOLUTE NUMBERS ONLY:
+   - Express all expected outcomes as absolute monthly figures, not percentages.
+   - Correct format: "Estimated +3 to 5 additional form submissions per month."
+   - Incorrect format: "Could increase leads by 300%."
+   - Base projections strictly on the provided traffic volumes and realistic CTR and conversion uplifts.
+
+STRICT OUTPUT RULES:
+- Return ONLY a valid JSON object. No markdown fences, no preamble, no conversational text outside the JSON.
+- Use exact URLs from the crawl data for all targetUrl fields. If no URL is available, use the page slug (e.g. "/contact"). Never invent a URL.
+- All string values must be written in British/Australian English.
+- Return 3 to 6 items in croDirectives and 3 to 5 items in commercialKeywordOpportunities and contentGapOpportunities.
+
+OUTPUT SCHEMA (return all fields — all are REQUIRED):
+{
+  "quickWinSummary": "3 to 4 sentences in plain, non-technical English summarising the top 3 actions and their combined expected lead impact. Written for a client or account manager to read and share without technical context.",
+
+  "leadQualityFlag": {
+    "flagged": true,
+    "formFillToLeadRatio": 0.0,
+    "recommendation": "If flagged, provide specific steps to improve lead quality: qualifying copy changes, form field additions, or traffic source recommendations. If not flagged, write 'Lead quality is within an acceptable range.'"
+  },
+
+  "leadFunnelAnalysis": "Two paragraphs. Paragraph 1: current lead performance and organic traffic quality based on the GA4 data. Paragraph 2: the two or three highest-impact conversion bottlenecks identified from the combined data sources.",
+
+  "expectedLeadIncrease": "A conservative absolute monthly lead growth estimate. Example format: 'Implementing the priority fixes is projected to generate an additional 4 to 7 confirmed leads per month, based on current monthly organic sessions and a realistic uplift in form completion rate.'",
+
+  "croDirectives": [
+    {
+      "title": "Short, action-verb title (e.g. 'Add click-to-call above the fold on /contact')",
+      "priority": "High | Medium | Low",
+      "targetUrl": "Exact URL or slug from crawl data. Use '/unknown' only if no URL is present in the data.",
+      "actionDescription": "Step-by-step developer-ready or marketer-ready instructions. Specify the exact element, its location on the page, the change required, and any copy or design guidance.",
+      "expectedOutcome": "The specific KPI this improves and the estimated absolute monthly uplift."
+    }
+  ],
+
+  "commercialKeywordOpportunities": [
+    {
+      "keyword": "The exact search query from GSC",
+      "currentPosition": 0.0,
+      "currentCtr": 0.0,
+      "tier": "Quick-win (pos 4–10) | Growth opportunity (pos 11–20)",
+      "recommendation": "Specific on-page action to capture more traffic for this buyer-intent keyword (e.g. update title tag to include the query, add a FAQ section answering this query, restructure H2s to match search intent)."
+    }
+  ],
+
+  "contentGapOpportunities": [
+    {
+      "keyword": "The high-impression, near-zero-click query from GSC",
+      "monthlyImpressions": 0,
+      "issue": "No dedicated landing page exists for this query.",
+      "recommendation": "Recommended page type to create (e.g. service page, location page, pricing page) and the primary CTA it should contain to convert this traffic into leads."
+    }
+  ],
+
+  "trustSignalsPlaybook": {
+    "reviews": "Where and how to display client reviews or star ratings to reduce lead form abandonment. Specify page, placement, and format.",
+    "accreditations": "Which industry credentials, certifications, or partner logos to display and on which specific pages.",
+    "socialProof": "Specific placement of case studies, client logos, or outcome statistics on commercial intent pages to reinforce conversion."
+  },
+
+  "implementationRoadmap": [
+    {
+      "week": 1,
+      "focus": "Quick technical fixes and highest-priority CRO directives",
+      "tasks": ["Task pulled from croDirectives or trust signals — be specific, not generic"]
+    },
+    {
+      "week": 2,
+      "focus": "On-page copy and CTA optimisations",
+      "tasks": ["Task pulled from croDirectives or keyword opportunities"]
+    },
+    {
+      "week": 3,
+      "focus": "Schema, structured data, and trust signal implementation",
+      "tasks": ["Task pulled from trustSignalsPlaybook or conversion blockers"]
+    },
+    {
+      "week": 4,
+      "focus": "Content gap pages and keyword quick-wins",
+      "tasks": ["Task pulled from contentGapOpportunities or commercialKeywordOpportunities"]
+    }
+  ]
+}`;
+
+    let jsonResponse: any = null;
+    let lastError: any = null;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let rateInput = 0.30;
+    let rateOutput = 2.50;
+    let modelUsedUsed = 'gemini-2.5-flash';
+
+    const isGpt = model === 'gpt' || model.startsWith('gpt-');
+
+    if (isGpt) {
+      const gptKey = (keysMap['gpt'] || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+      if (!gptKey) {
+        return res.status(400).json({ error: 'Missing OPENAI_API_KEY — cannot run GPT analysis' });
+      }
+      const activeGptModel = model.startsWith('gpt-') ? model : 'gpt-4o';
+      console.log(`[AI LEAD PLAYBOOK] ROUTING TO OPENAI GPT API: model="${activeGptModel}", client="${client.name}"`);
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${gptKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: activeGptModel,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: 'You are a conversion rate optimisation specialist. Always respond with valid JSON.' },
+              { role: 'user', content: prompt }
+            ]
+          })
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`GPT API error: ${response.status} - ${errorText}`);
+        }
+        const data: any = await response.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (!text) throw new Error('Empty response from GPT API');
+        jsonResponse = JSON.parse(cleanJsonString(text));
+
+        promptTokens = data.usage?.prompt_tokens || 0;
+        completionTokens = data.usage?.completion_tokens || 0;
+        rateInput = 2.50;
+        rateOutput = 10.00;
+        modelUsedUsed = activeGptModel;
+      } catch (err: any) {
+        console.error('[AI LEAD PLAYBOOK] GPT Exception:', err.message || err);
+        lastError = err;
+      }
+    } else {
+      for (let i = 0; i < geminiKeysPool.length; i++) {
+        const currentKey = geminiKeysPool[i];
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: 'application/json' }
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            lastError = new Error(`Gemini API error: ${response.status} - ${errorText}`);
+            continue;
+          }
+
+          const data: any = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!text) throw new Error('Empty response from Gemini API');
+          jsonResponse = JSON.parse(cleanJsonString(text));
+
+          promptTokens = data.usageMetadata?.promptTokenCount || 0;
+          completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
+          lastError = null;
+          break;
+        } catch (err: any) {
+          console.error(`[AI LEAD PLAYBOOK] Exception with key index ${i + 1}:`, err.message || err);
+          lastError = err;
+        }
+      }
+    }
+
+    if (lastError || !jsonResponse) {
+      throw lastError || new Error('Failed to generate playbook');
+    }
+
+    const costUsd = ((promptTokens / 1000000) * rateInput) + ((completionTokens / 1000000) * rateOutput);
+
+    const finalResult = {
+      ...jsonResponse,
+      currentMetrics,
+      previousMetrics,
+      crawlDiagnostics
+    };
+
+    try {
+      await supabase.from('ai_lead_playbooks').insert([{
+        client_id: clientId,
+        model: model,
+        start_date: startDate,
+        end_date: endDate,
+        playbook_data: finalResult,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        cost_usd: parseFloat(costUsd.toFixed(6)),
+        rate_input_usd_per_million: rateInput,
+        rate_output_usd_per_million: rateOutput,
+        model_used: modelUsedUsed
+      }]);
+    } catch (saveErr) {
+      console.error('[DATABASE SAVE ERROR] Failed to save lead playbook:', saveErr);
+    }
+
+    res.json(finalResult);
+  } catch (err: any) {
+    console.error('Lead playbook generation error:', err);
+    res.status(500).json({ error: err.message || String(err) });
   }
 });
 
