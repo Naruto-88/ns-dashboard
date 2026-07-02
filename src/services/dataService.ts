@@ -795,3 +795,81 @@ export const getDashboardCache = async (viewMode: string) => {
     return {};
   }
 };
+
+export interface WeeklyAdsGrowth {
+  id?: string;
+  client_id: string;
+  week_start_date: string;
+  google_ads_spend: number;
+  google_ads_roas: number;
+  google_ads_ctr: number;
+  google_ads_quality_score: number;
+  meta_spend: number;
+  meta_reach: number;
+  meta_leads: number;
+  meta_roas: number;
+  meta_ctr: number;
+  meta_frequency: number;
+  website_sessions: number;
+  bounce_rate: number;
+  avg_time_on_site: string;
+  top_converting_page: string;
+  active_ab_tests: number;
+  landing_pages_live: number;
+  followers_total: number;
+  social_impressions: number;
+  engagement_rate: number;
+  social_posts_published: number;
+  organic_social_reach: number;
+  top_platform: string;
+  blogs_written: number;
+  avg_blog_quality: number;
+  backlinks_created: number;
+  social_posts_content_total: number;
+  creatives_produced: number;
+  emails_automation: number;
+  seo_organic_leads: number;
+}
+
+export const getAdsGrowthData = async (clientId: string): Promise<WeeklyAdsGrowth[]> => {
+  try {
+    const res = await fetch(`/api/clients/${clientId}/ads-growth`);
+    if (!res.ok) throw new Error('Failed to fetch ads growth data');
+    return await res.json();
+  } catch (error) {
+    console.error('Error in getAdsGrowthData:', error);
+    return [];
+  }
+};
+
+export const updateAdsGrowthData = async (clientId: string, payload: Partial<WeeklyAdsGrowth>): Promise<WeeklyAdsGrowth | null> => {
+  try {
+    const res = await fetch(`/api/clients/${clientId}/ads-growth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Failed to save ads growth data');
+    const result = await res.json();
+    return result.data;
+  } catch (error) {
+    console.error('Error in updateAdsGrowthData:', error);
+    return null;
+  }
+};
+
+export const syncAdsGrowthData = async (clientId: string, weekStart: string): Promise<WeeklyAdsGrowth | null> => {
+  try {
+    const res = await fetch(`/api/clients/${clientId}/sync-ads-growth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekStart })
+    });
+    if (!res.ok) throw new Error('Failed to sync ads growth data');
+    const result = await res.json();
+    return result.data;
+  } catch (error) {
+    console.error('Error in syncAdsGrowthData:', error);
+    return null;
+  }
+};

@@ -4860,6 +4860,161 @@ app.get('/api/clients/:clientId/sync-ahrefs-data', async (req, res) => {
 
 
 
+// GET Ads & Growth data for client
+app.get('/api/clients/:clientId/ads-growth', async (req, res) => {
+  const { clientId } = req.params;
+  try {
+    const { data, error } = await supabase
+      .from('weekly_ads_growth')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('week_start_date', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (error: any) {
+    console.error('[ADS_GROWTH] Error fetching ads data:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+// POST Ads & Growth data for client (Upsert)
+app.post('/api/clients/:clientId/ads-growth', async (req, res) => {
+  const { clientId } = req.params;
+  const payload = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('weekly_ads_growth')
+      .upsert({
+        ...payload,
+        client_id: clientId,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'client_id,week_start_date' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error: any) {
+    console.error('[ADS_GROWTH] Error saving ads data:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+// POST Sync Ads Data (Simulate or Fetch from live API)
+app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
+  const { clientId } = req.params;
+  const { weekStart } = req.body;
+  if (!weekStart) return res.status(400).json({ error: 'weekStart is required' });
+
+  try {
+    const { data: client, error: clientErr } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', clientId)
+      .single();
+
+    if (clientErr || !client) return res.status(404).json({ error: 'Client not found' });
+
+    // Generate deterministic simulated data based on client short_code / name
+    const seed = client.short_code || client.name || 'default';
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const baseVal = Math.abs(hash % 100);
+
+    // Simulated Google Ads
+    const gSpend = Math.round(500 + baseVal * 15);
+    const gClicks = Math.round(200 + baseVal * 4);
+    const gLeads = Math.round(15 + (baseVal % 10));
+    const gCtr = parseFloat((2.5 + (baseVal % 3) * 0.4).toFixed(2));
+    const gRoas = parseFloat((1.8 + (baseVal % 5) * 0.3).toFixed(1));
+    const gScore = Math.round(7 + (baseVal % 3));
+
+    // Simulated Meta Ads
+    const mSpend = Math.round(400 + baseVal * 12);
+    const mReach = Math.round(5000 + baseVal * 150);
+    const mLeads = Math.round(18 + (baseVal % 8));
+    const mCtr = parseFloat((1.5 + (baseVal % 4) * 0.3).toFixed(2));
+    const mRoas = parseFloat((2.0 + (baseVal % 4) * 0.4).toFixed(1));
+    const mFreq = parseFloat((1.2 + (baseVal % 15) * 0.15).toFixed(2));
+
+    // Simulated GA4 Analytics
+    const webSessions = Math.round(1200 + baseVal * 25);
+    const bounceRate = parseFloat((35 + (baseVal % 20)).toFixed(1));
+    const timeOnSite = `${Math.floor(1 + (baseVal % 3))}m ${Math.floor(10 + (baseVal % 45))}s`;
+    const topPage = `/services/${client.short_code || 'solutions'}`;
+    const abTests = Math.abs(hash % 2) + 1;
+    const lpLive = Math.abs(hash % 3) + 2;
+
+    // Simulated Social Media
+    const followers = Math.round(1500 + baseVal * 200);
+    const socialImps = Math.round(12000 + baseVal * 800);
+    const socialEng = parseFloat((2.8 + (baseVal % 5) * 0.5).toFixed(1));
+    const socialPosts = Math.round(4 + (baseVal % 5));
+    const socialReach = Math.round(4500 + baseVal * 300);
+    const topPlatform = baseVal % 2 === 0 ? 'Instagram' : 'Facebook';
+
+    // Simulated Agency deliverables
+    const blogs = Math.round(1 + (baseVal % 2));
+    const blogQual = parseFloat((4.0 + (baseVal % 10) * 0.1).toFixed(1));
+    const backlinks = Math.round(3 + (baseVal % 4));
+    const socTotal = Math.round(8 + (baseVal % 6));
+    const creatives = Math.round(5 + (baseVal % 4));
+    const emails = Math.round(1 + (baseVal % 2));
+    const seoLeads = Math.round(12 + (baseVal % 10));
+
+    const upsertRow = {
+      client_id: clientId,
+      week_start_date: weekStart,
+      google_ads_spend: gSpend,
+      google_ads_roas: gRoas,
+      google_ads_ctr: gCtr,
+      google_ads_quality_score: gScore,
+      meta_spend: mSpend,
+      meta_reach: mReach,
+      meta_leads: mLeads,
+      meta_roas: mRoas,
+      meta_ctr: mCtr,
+      meta_frequency: mFreq,
+      website_sessions: webSessions,
+      bounce_rate: bounceRate,
+      avg_time_on_site: timeOnSite,
+      top_converting_page: topPage,
+      active_ab_tests: abTests,
+      landing_pages_live: lpLive,
+      followers_total: followers,
+      social_impressions: socialImps,
+      engagement_rate: socialEng,
+      social_posts_published: socialPosts,
+      organic_social_reach: socialReach,
+      top_platform: topPlatform,
+      blogs_written: blogs,
+      avg_blog_quality: blogQual,
+      backlinks_created: backlinks,
+      social_posts_content_total: socTotal,
+      creatives_produced: creatives,
+      emails_automation: emails,
+      seo_organic_leads: seoLeads
+    };
+
+    const { data, error } = await supabase
+      .from('weekly_ads_growth')
+      .upsert(upsertRow, { onConflict: 'client_id,week_start_date' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+
+  } catch (error: any) {
+    console.error('[ADS_GROWTH] Sync simulation error:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
 // Vite Middleware
 if (process.env.NODE_ENV !== 'production' && !process.env.PASSENGER_APP_ENV) {
   const vite = await createViteServer({

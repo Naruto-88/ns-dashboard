@@ -19,7 +19,8 @@ import {
   AlertCircle,
   Lock,
   BrainCircuit,
-  Target
+  Target,
+  Megaphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Dashboard from './views/Dashboard';
@@ -33,6 +34,7 @@ import AiStrategicAnalysis from './views/AiStrategicAnalysis';
 import LeadGenPlaybook from './views/LeadGenPlaybook';
 import ActionCenter from './views/ActionCenter';
 import Tooltip from './components/Tooltip';
+import AdsDashboard from './views/AdsDashboard';
 import { useState, useEffect } from 'react';
 import React from 'react';
 import { auth, supabase } from './lib/supabase';
@@ -51,6 +53,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Lead Playbook', icon: FileText, path: '/lead-playbook' },
     { name: 'Action Center', icon: Target, path: '/action-center' },
     { name: 'Keyword Tracking', icon: Key, path: '/keywords' },
+    { name: 'Ads & Growth', icon: Megaphone, path: '/ads-growth' },
     { name: 'Weekly Data', icon: Calendar, path: '/weekly' },
   ];
 
@@ -349,6 +352,7 @@ export default function App() {
           <Route path="/action-center" element={<ActionCenter />} />
           <Route path="/keywords" element={<KeywordDashboard />} />
           <Route path="/weekly" element={<WeeklyData />} />
+          <Route path="/ads-growth" element={<AdsDashboard />} />
           {isAdmin && (
             <>
               <Route path="/clients" element={<ClientManagement />} />
