@@ -307,59 +307,59 @@ export default function AdsMasterDashboard() {
           theme === 'white' ? 'bg-white border-zinc-200/80 shadow-md' : 'bg-zinc-950/40 border-zinc-900/60'
         }`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className={`border-b uppercase tracking-wider font-semibold ${
-                  theme === 'white' ? 'bg-zinc-50 border-zinc-200/80 text-zinc-650' : 'bg-zinc-900/50 border-zinc-900/80 text-zinc-500'
+                <tr className={`border-b ${
+                  theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl text-[#607a80]'
                 }`}>
-                  <th className="px-5 py-4">Client</th>
+                  <th className="px-5 py-3 text-sm font-medium">Client</th>
                   
                   {activeTab === 'paid' && (
                     <>
-                      <th className="px-4 py-4 text-center">Google Spend</th>
-                      <th className="px-4 py-4 text-center">Google CPL</th>
-                      <th className="px-4 py-4 text-center">Google CTR</th>
-                      <th className="px-4 py-4 text-center">Google ROAS</th>
-                      <th className="px-4 py-4 text-center">Quality Score</th>
-                      <th className="px-4 py-4 text-center">Meta Spend</th>
-                      <th className="px-4 py-4 text-center">Meta Leads</th>
-                      <th className="px-4 py-4 text-center">Meta CPL</th>
-                      <th className="px-4 py-4 text-center">Meta CTR</th>
-                      <th className="px-4 py-4 text-center">Meta ROAS</th>
-                      <th className="px-4 py-4 text-center">Frequency</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google Spend</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google CPL</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google CTR</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google ROAS</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Quality Score</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Spend</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Leads</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta CPL</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta CTR</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta ROAS</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Frequency</th>
                     </>
                   )}
 
                   {activeTab === 'analytics' && (
                     <>
-                      <th className="px-4 py-4 text-center">Sessions</th>
-                      <th className="px-4 py-4 text-center">Bounce Rate</th>
-                      <th className="px-4 py-4 text-center">Avg Time</th>
-                      <th className="px-4 py-4 text-center">Conv. Rate</th>
-                      <th className="px-4 py-4 text-center">Top Converting Page</th>
-                      <th className="px-4 py-4 text-center">A/B Tests</th>
-                      <th className="px-4 py-4 text-center">LP Live</th>
-                      <th className="px-4 py-4 text-center">Followers</th>
-                      <th className="px-4 py-4 text-center">Social Reach</th>
-                      <th className="px-4 py-4 text-center">Social Imps</th>
-                      <th className="px-4 py-4 text-center">Engagement</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Sessions</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Bounce Rate</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Avg Time</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Conv. Rate</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Top Converting Page</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">A/B Tests</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">LP Live</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Followers</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Reach</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Imps</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Engagement</th>
                     </>
                   )}
 
                   {activeTab === 'deliverables' && (
                     <>
-                      <th className="px-4 py-4 text-center">Blogs Written</th>
-                      <th className="px-4 py-4 text-center">Blog Quality</th>
-                      <th className="px-4 py-4 text-center">Backlinks Built</th>
-                      <th className="px-4 py-4 text-center">Social Published</th>
-                      <th className="px-4 py-4 text-center">Social Total</th>
-                      <th className="px-4 py-4 text-center">Creatives Produced</th>
-                      <th className="px-4 py-4 text-center">Emails Sent</th>
-                      <th className="px-4 py-4 text-center">SEO Leads</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Blogs Written</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Blog Quality</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Backlinks Built</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Published</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Total</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Creatives Produced</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Emails Sent</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">SEO Leads</th>
                     </>
                   )}
 
-                  <th className="px-5 py-4 text-center">Action</th>
+                  <th className="px-5 py-3 text-sm font-medium text-center">Action</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-zinc-900/60'}`}>

@@ -4941,8 +4941,16 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
     const mRoas = parseFloat((2.0 + (baseVal % 4) * 0.4).toFixed(1));
     const mFreq = parseFloat((1.2 + (baseVal % 15) * 0.15).toFixed(2));
 
-    // Simulated GA4 Analytics
-    const webSessions = Math.round(1200 + baseVal * 25);
+    // Fetch real weekly_data values if available (GA4 sessions, bounce rate estimate, organic traffic, organic leads)
+    const { data: weeklyData } = await supabase
+      .from('weekly_data')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('week_start_date', weekStart)
+      .maybeSingle();
+
+    // Simulated / Integrated GA4 Analytics
+    const webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : Math.round(1200 + baseVal * 25);
     const bounceRate = parseFloat((35 + (baseVal % 20)).toFixed(1));
     const timeOnSite = `${Math.floor(1 + (baseVal % 3))}m ${Math.floor(10 + (baseVal % 45))}s`;
     const topPage = `/services/${client.short_code || 'solutions'}`;
@@ -4964,7 +4972,7 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
     const socTotal = Math.round(8 + (baseVal % 6));
     const creatives = Math.round(5 + (baseVal % 4));
     const emails = Math.round(1 + (baseVal % 2));
-    const seoLeads = Math.round(12 + (baseVal % 10));
+    const seoLeads = weeklyData?.leads_legit ? Number(weeklyData.leads_legit) : Math.round(12 + (baseVal % 10));
 
     const upsertRow = {
       client_id: clientId,

@@ -36,6 +36,7 @@ import ActionCenter from './views/ActionCenter';
 import Tooltip from './components/Tooltip';
 import AdsDashboard from './views/AdsDashboard';
 import AdsMasterDashboard from './views/AdsMasterDashboard';
+import AdsWeeklyInputs from './views/AdsWeeklyInputs';
 import { useState, useEffect } from 'react';
 import React from 'react';
 import { auth, supabase } from './lib/supabase';
@@ -57,6 +58,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Action Center', icon: Target, path: '/action-center' },
     { name: 'Keyword Tracking', icon: Key, path: '/keywords' },
     { name: 'Weekly Data', icon: Calendar, path: '/weekly' },
+    { name: 'Weekly Ads Entry', icon: Calendar, path: '/ads-inputs' },
   ];
 
   const adminNavItems = [
@@ -356,6 +358,7 @@ export default function App() {
           <Route path="/weekly" element={<WeeklyData />} />
           <Route path="/ads-master" element={<AdsMasterDashboard />} />
           <Route path="/ads-growth" element={<AdsDashboard />} />
+          <Route path="/ads-inputs" element={<AdsWeeklyInputs />} />
           {isAdmin && (
             <>
               <Route path="/clients" element={<ClientManagement />} />
