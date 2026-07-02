@@ -4917,31 +4917,7 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
 
     if (clientErr || !client) return res.status(404).json({ error: 'Client not found' });
 
-    // Generate deterministic simulated data based on client short_code / name
-    const seed = client.short_code || client.name || 'default';
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const baseVal = Math.abs(hash % 100);
-
-    // Simulated Google Ads
-    const gSpend = Math.round(500 + baseVal * 15);
-    const gClicks = Math.round(200 + baseVal * 4);
-    const gLeads = Math.round(15 + (baseVal % 10));
-    const gCtr = parseFloat((2.5 + (baseVal % 3) * 0.4).toFixed(2));
-    const gRoas = parseFloat((1.8 + (baseVal % 5) * 0.3).toFixed(1));
-    const gScore = Math.round(7 + (baseVal % 3));
-
-    // Simulated Meta Ads
-    const mSpend = Math.round(400 + baseVal * 12);
-    const mReach = Math.round(5000 + baseVal * 150);
-    const mLeads = Math.round(18 + (baseVal % 8));
-    const mCtr = parseFloat((1.5 + (baseVal % 4) * 0.3).toFixed(2));
-    const mRoas = parseFloat((2.0 + (baseVal % 4) * 0.4).toFixed(1));
-    const mFreq = parseFloat((1.2 + (baseVal % 15) * 0.15).toFixed(2));
-
-    // Fetch real weekly_data values if available (GA4 sessions, bounce rate estimate, organic traffic, organic leads)
+    // Fetch real weekly_data values if available (GA4 sessions, organic traffic, organic leads)
     const { data: weeklyData } = await supabase
       .from('weekly_data')
       .select('*')
@@ -4949,30 +4925,45 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
       .eq('week_start_date', weekStart)
       .maybeSingle();
 
-    // Simulated / Integrated GA4 Analytics
-    const webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : Math.round(1200 + baseVal * 25);
-    const bounceRate = parseFloat((35 + (baseVal % 20)).toFixed(1));
-    const timeOnSite = `${Math.floor(1 + (baseVal % 3))}m ${Math.floor(10 + (baseVal % 45))}s`;
-    const topPage = `/services/${client.short_code || 'solutions'}`;
-    const abTests = Math.abs(hash % 2) + 1;
-    const lpLive = Math.abs(hash % 3) + 2;
+    // Default to 0 or empty for paid ads (no mock data allowed)
+    const gSpend = 0;
+    const gClicks = 0;
+    const gLeads = 0;
+    const gCtr = 0;
+    const gRoas = 0;
+    const gScore = 0;
 
-    // Simulated Social Media
-    const followers = Math.round(1500 + baseVal * 200);
-    const socialImps = Math.round(12000 + baseVal * 800);
-    const socialEng = parseFloat((2.8 + (baseVal % 5) * 0.5).toFixed(1));
-    const socialPosts = Math.round(4 + (baseVal % 5));
-    const socialReach = Math.round(4500 + baseVal * 300);
-    const topPlatform = baseVal % 2 === 0 ? 'Instagram' : 'Facebook';
+    const mSpend = 0;
+    const mReach = 0;
+    const mLeads = 0;
+    const mCtr = 0;
+    const mRoas = 0;
+    const mFreq = 0;
 
-    // Simulated Agency deliverables
-    const blogs = Math.round(1 + (baseVal % 2));
-    const blogQual = parseFloat((4.0 + (baseVal % 10) * 0.1).toFixed(1));
-    const backlinks = Math.round(3 + (baseVal % 4));
-    const socTotal = Math.round(8 + (baseVal % 6));
-    const creatives = Math.round(5 + (baseVal % 4));
-    const emails = Math.round(1 + (baseVal % 2));
-    const seoLeads = weeklyData?.leads_legit ? Number(weeklyData.leads_legit) : Math.round(12 + (baseVal % 10));
+    // Integrated GA4 Analytics (from weekly_data)
+    const webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : 0;
+    const bounceRate = 0;
+    const timeOnSite = '';
+    const topPage = '';
+    const abTests = 0;
+    const lpLive = 0;
+
+    // Social Media
+    const followers = 0;
+    const socialImps = 0;
+    const socialEng = 0;
+    const socialPosts = 0;
+    const socialReach = 0;
+    const topPlatform = '';
+
+    // Agency deliverables
+    const blogs = 0;
+    const blogQual = 0;
+    const backlinks = 0;
+    const socTotal = 0;
+    const creatives = 0;
+    const emails = 0;
+    const seoLeads = weeklyData?.leads_legit ? Number(weeklyData.leads_legit) : 0;
 
     const upsertRow = {
       client_id: clientId,
