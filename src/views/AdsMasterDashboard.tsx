@@ -7,9 +7,6 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
-  TrendingUp,
-  ArrowUpRight,
-  TrendingDown,
   ChevronRight,
   Globe,
   Share2,
@@ -18,7 +15,7 @@ import {
   Sparkles,
   Users
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { getClients, Client, WeeklyAdsGrowth, getAdsGrowthData, syncAdsGrowthData, updateAdsGrowthData } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
@@ -30,26 +27,17 @@ interface ClientAdsRow {
   googleCpl: string;
   metaCpl: string;
   webConvRate: string;
-  ragStatus: 'At Risk' | 'Watch' | 'On Target';
-  healthScore: number;
-  rulesFired: number;
-  qualRate: string;
-  totalLeads: number;
-  qualLeads: number;
-  totalCpl: number;
-  baselineCpl: number;
-  targetLeads: number;
 }
 
 export default function AdsMasterDashboard() {
   const { theme } = useTheme();
-  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedWeek, setSelectedWeek] = useState<string>('');
   const [allAdsData, setAllAdsData] = useState<Record<string, WeeklyAdsGrowth[]>>({});
   const [loading, setLoading] = useState(true);
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncingClient, setSyncingClient] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{ clientId: string; field: keyof WeeklyAdsGrowth; value: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'paid' | 'analytics' | 'deliverables'>('paid');
@@ -110,8 +98,8 @@ export default function AdsMasterDashboard() {
       const record = list.find(r => r.week_start_date === selectedWeek) || null;
       
       const gSpend = record?.google_ads_spend || 0;
-      const mockGoogleLeads = Math.round(gSpend / 35) || 0;
-      const gCpl = gSpend > 0 ? (gSpend / (mockGoogleLeads || 1)).toFixed(2) : '0.00';
+      const mockGoogleLeads = Math.round(gSpend / 35) || 1;
+      const gCpl = gSpend > 0 ? (gSpend / mockGoogleLeads).toFixed(2) : '0.00';
 
       const mSpend = record?.meta_spend || 0;
       const mLeads = record?.meta_leads || 0;
@@ -121,49 +109,13 @@ export default function AdsMasterDashboard() {
       const totalLeads = (record?.meta_leads || 0) + (record?.seo_organic_leads || 0);
       const webConv = sessions > 0 ? ((totalLeads / sessions) * 100).toFixed(2) : '0.00';
 
-      // Advanced metrics mimicking the screenshot logic
-      const targetLeads = client.lead_target_monthly ? Math.round(client.lead_target_monthly / 4) : 8;
-      const qualLeads = (record?.meta_leads || 0) + (record?.seo_organic_leads || 0);
-      const overallLeads = record?.website_sessions ? Math.round(record.website_sessions * 0.02) : qualLeads;
-      const qualRate = overallLeads > 0 ? ((qualLeads / overallLeads) * 100).toFixed(0) : '100';
-
-      const totalSpend = gSpend + mSpend;
-      const totalCpl = qualLeads > 0 ? totalSpend / qualLeads : 0;
-      const baselineCpl = 100; // Standard portfolio baseline
-
-      // RAG Calculations
-      let ragStatus: 'At Risk' | 'Watch' | 'On Target' = 'On Target';
-      if (qualLeads < targetLeads * 0.5 || (totalCpl > baselineCpl * 1.5)) {
-        ragStatus = 'At Risk';
-      } else if (qualLeads < targetLeads || (totalCpl > baselineCpl)) {
-        ragStatus = 'Watch';
-      }
-
-      // Health Score Calculation (out of 100)
-      let healthScore = 100;
-      let rulesFired = 0;
-      if (qualLeads < targetLeads) { healthScore -= 20; rulesFired++; }
-      if (totalCpl > baselineCpl) { healthScore -= 20; rulesFired++; }
-      if (record?.meta_frequency && record.meta_frequency > 3) { healthScore -= 10; rulesFired++; }
-      if (record?.google_ads_quality_score && record.google_ads_quality_score < 7) { healthScore -= 10; rulesFired++; }
-      healthScore = Math.max(10, healthScore);
-
       return {
         client,
         adsRecord: record,
         loading: false,
         googleCpl: gCpl,
         metaCpl: mCpl,
-        webConvRate: webConv,
-        ragStatus,
-        healthScore,
-        rulesFired,
-        qualRate,
-        totalLeads: overallLeads,
-        qualLeads,
-        totalCpl,
-        baselineCpl,
-        targetLeads
+        webConvRate: webConv
       };
     });
   }, [clients, allAdsData, selectedWeek]);
@@ -206,6 +158,37 @@ export default function AdsMasterDashboard() {
       setError('Failed to sync all client data.');
     } finally {
       setSyncingAll(false);
+    }
+  };
+
+  const handleCellUpdateSubmit = async () => {
+    if (!editingCell) return;
+    const { clientId, field, value } = editingCell;
+    const clientList = allAdsData[clientId] || [];
+    const existing = clientList.find(r => r.week_start_date === selectedWeek);
+
+    const parsedVal = field === 'avg_time_on_site' || field === 'top_converting_page' || field === 'top_platform'
+      ? value
+      : parseFloat(value) || 0;
+
+    const payload = {
+      ...(existing || {}),
+      week_start_date: selectedWeek,
+      [field]: parsedVal
+    };
+
+    try {
+      const updated = await updateAdsGrowthData(clientId, payload);
+      if (updated) {
+        const newList = await getAdsGrowthData(clientId);
+        setAllAdsData(prev => ({
+          ...prev,
+          [clientId]: newList
+        }));
+        setEditingCell(null);
+      }
+    } catch (err) {
+      setError('Failed to update metric.');
     }
   };
 
@@ -327,169 +310,138 @@ export default function AdsMasterDashboard() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className={`border-b ${
-                  theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-[#081f27] border-white/5 text-[#607a80]'
+                  theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl text-[#607a80]'
                 }`}>
-                  <th className="px-5 py-4 text-sm font-medium">Client</th>
+                  <th className="px-5 py-3 text-sm font-medium">Client</th>
                   
                   {activeTab === 'paid' && (
                     <>
-                      <th className="px-4 py-4 text-sm font-medium text-center">RAG</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Freshness</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Quality</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Leads</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Qual Leads</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">CPL</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Vs Baseline</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">ROAS</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Rules Fired</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Health</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google Spend</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google CPL</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google CTR</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google ROAS</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Quality Score</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Spend</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Leads</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta CPL</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta CTR</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta ROAS</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Frequency</th>
                     </>
                   )}
 
                   {activeTab === 'analytics' && (
                     <>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Sessions</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Bounce Rate</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Avg Time</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Conv. Rate</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Top Converting Page</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">A/B Tests</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">LP Live</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Followers</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Social Reach</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Social Imps</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Engagement</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Sessions</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Bounce Rate</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Avg Time</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Conv. Rate</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Top Converting Page</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">A/B Tests</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">LP Live</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Followers</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Reach</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Imps</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Engagement</th>
                     </>
                   )}
 
                   {activeTab === 'deliverables' && (
                     <>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Blogs Written</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Blog Quality</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Backlinks Built</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Social Published</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Social Total</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Creatives Produced</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">Emails Sent</th>
-                      <th className="px-4 py-4 text-sm font-medium text-center">SEO Leads</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Blogs Written</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Blog Quality</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Backlinks Built</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Published</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Social Total</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Creatives Produced</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Emails Sent</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">SEO Leads</th>
                     </>
                   )}
 
-                  <th className="px-5 py-4 text-sm font-medium text-center">Action</th>
+                  <th className="px-5 py-3 text-sm font-medium text-center">Action</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-zinc-900/60'}`}>
-                {rows.map((row) => {
-                  const { client, adsRecord, googleCpl, metaCpl, webConvRate, ragStatus, healthScore, rulesFired, qualRate, totalLeads, qualLeads, totalCpl, baselineCpl, targetLeads } = row;
-                  const leadPercentage = targetLeads > 0 ? Math.round((qualLeads / targetLeads) * 100) : 0;
-                  
+                {rows.map(({ client, adsRecord, googleCpl, metaCpl, webConvRate }) => {
                   return (
-                    <tr key={client.id} className="hover:bg-zinc-500/5 transition-colors text-xs">
+                    <tr key={client.id} className="hover:bg-zinc-500/5 transition-colors">
                       {/* Client */}
                       <td className="px-5 py-4 font-medium">
-                        <div className="flex flex-col">
-                          <span className={`text-sm font-semibold ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>
-                            {client.name}
-                          </span>
-                          <span className="text-[10px] opacity-40 font-mono">-- 1-5m</span>
-                        </div>
+                        <Link to={`/ads-growth?clientId=${client.id}`} className="flex items-center gap-1.5 group hover:underline text-sm">
+                          {client.short_code && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold font-mono ${
+                              theme === 'white' ? 'bg-zinc-150 text-zinc-700' : 'bg-blue-600/20 text-blue-400'
+                            }`}>
+                              {client.short_code}
+                            </span>
+                          )}
+                          <span className={`font-semibold ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{client.name}</span>
+                          <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </Link>
                       </td>
 
                       {/* Render Tab Specific Cells */}
                       {activeTab === 'paid' && (
                         <>
-                          {/* RAG Status pill */}
-                          <td className="px-4 py-4 text-center">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center justify-center gap-1.5 w-24 mx-auto ${
-                              ragStatus === 'At Risk' 
-                                ? 'bg-red-500/10 text-red-500' 
-                                : ragStatus === 'Watch' 
-                                  ? 'bg-amber-500/10 text-amber-500' 
-                                  : 'bg-emerald-500/10 text-emerald-500'
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                ragStatus === 'At Risk' ? 'bg-red-500' : ragStatus === 'Watch' ? 'bg-amber-500' : 'bg-emerald-500'
-                              }`}></span>
-                              {ragStatus}
-                            </span>
-                          </td>
-
-                          {/* Freshness */}
-                          <td className="px-4 py-4 text-center font-semibold text-zinc-350">
-                            95/100
-                          </td>
-
-                          {/* Quality */}
-                          <td className="px-4 py-4 text-center font-semibold text-zinc-350">
-                            90/100
-                          </td>
-
-                          {/* Leads */}
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className={`font-bold ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{qualLeads}</span>
-                              <span className={`text-[10px] font-bold ${leadPercentage < 100 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                {leadPercentage}% of {targetLeads}
+                          {/* Google Spend */}
+                          <td className="px-4 py-4 text-center font-mono">
+                            {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_spend' ? (
+                              <input
+                                autoFocus
+                                type="number"
+                                value={editingCell.value}
+                                onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleCellUpdateSubmit();
+                                  if (e.key === 'Escape') setEditingCell(null);
+                                }}
+                                onBlur={handleCellUpdateSubmit}
+                                className="w-16 px-1 py-0.5 border text-center text-xs rounded outline-none bg-zinc-900 text-white"
+                              />
+                            ) : (
+                              <span 
+                                onDoubleClick={() => setEditingCell({ clientId: client.id, field: 'google_ads_spend', value: String(adsRecord?.google_ads_spend || 0) })}
+                                className="cursor-pointer hover:bg-white/10 px-1 py-0.5 rounded"
+                              >
+                                ${Number(adsRecord?.google_ads_spend || 0).toLocaleString()}
                               </span>
-                            </div>
+                            )}
                           </td>
-
-                          {/* Qualified Leads */}
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className={`font-bold ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{qualLeads}</span>
-                              <span className="text-[10px] opacity-50 font-semibold">{qualRate}% qual rate</span>
-                            </div>
-                          </td>
-
-                          {/* CPL */}
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-red-550/10 text-red-400 font-semibold mb-0.5">
-                                {totalCpl > 0 ? totalCpl.toFixed(0) : '0'}
+                          <td className="px-4 py-4 text-center font-mono text-blue-400">${googleCpl}</td>
+                          <td className="px-4 py-4 text-center font-mono">
+                            {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_ctr' ? (
+                              <input
+                                autoFocus
+                                type="number" step="any"
+                                value={editingCell.value}
+                                onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleCellUpdateSubmit();
+                                  if (e.key === 'Escape') setEditingCell(null);
+                                }}
+                                onBlur={handleCellUpdateSubmit}
+                                className="w-14 px-1 py-0.5 border text-center text-xs rounded outline-none bg-zinc-900 text-white"
+                              />
+                            ) : (
+                              <span 
+                                onDoubleClick={() => setEditingCell({ clientId: client.id, field: 'google_ads_ctr', value: String(adsRecord?.google_ads_ctr || 0) })}
+                                className="cursor-pointer hover:bg-white/10 px-1 py-0.5 rounded"
+                              >
+                                {adsRecord?.google_ads_ctr || '0.00'}%
                               </span>
-                              <span className="font-semibold text-zinc-300">${totalCpl.toFixed(2)}</span>
-                            </div>
+                            )}
                           </td>
-
-                          {/* Vs Baseline */}
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className={`text-[10px] font-bold ${totalCpl > baselineCpl ? 'text-red-400' : 'text-emerald-400'}`}>
-                                {totalCpl > baselineCpl ? 'At Risk' : 'On Target'}
-                              </span>
-                              <span className="text-[10px] opacity-50">${totalCpl.toFixed(2)} vs Base: ${baselineCpl}</span>
-                            </div>
-                          </td>
-
-                          {/* ROAS */}
-                          <td className="px-4 py-4 text-center font-semibold text-zinc-300">
-                            {adsRecord?.google_ads_roas || adsRecord?.meta_roas ? (
-                              `${(((adsRecord?.google_ads_roas || 0) + (adsRecord?.meta_roas || 0)) / 2).toFixed(1)}x`
-                            ) : '--'}
-                          </td>
-
-                          {/* Rules Fired */}
-                          <td className="px-4 py-4 text-center">
-                            <span className="px-2 py-0.5 rounded bg-[#fe4d55]/10 text-[#fe4d55] font-bold">
-                              {rulesFired} rules
-                            </span>
-                          </td>
-
-                          {/* Health Bar */}
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex items-center justify-center gap-3">
-                              <div className="w-16 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full ${
-                                    healthScore > 75 ? 'bg-emerald-500' : healthScore > 50 ? 'bg-amber-500' : 'bg-red-500'
-                                  }`}
-                                  style={{ width: `${healthScore}%` }}
-                                ></div>
-                              </div>
-                              <span className="font-bold text-zinc-300 w-6">{healthScore}</span>
-                            </div>
-                          </td>
+                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_roas || '0.0'}x</td>
+                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_quality_score || '0'}</td>
+                          <td className="px-4 py-4 text-center font-mono">${Number(adsRecord?.meta_spend || 0).toLocaleString()}</td>
+                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_leads || 0}</td>
+                          <td className="px-4 py-4 text-center font-mono text-purple-400">${metaCpl}</td>
+                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_ctr || '0.00'}%</td>
+                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_roas || '0.0'}x</td>
+                          <td className={`px-4 py-4 text-center font-mono font-bold ${
+                            (adsRecord?.meta_frequency || 0) > 3 ? 'text-red-400' : ''
+                          }`}>{adsRecord?.meta_frequency || '0.00'}x</td>
                         </>
                       )}
 
@@ -524,13 +476,18 @@ export default function AdsMasterDashboard() {
                         </>
                       )}
 
-                      {/* Action Detail -> Button */}
+                      {/* Action */}
                       <td className="px-5 py-4 text-center">
                         <button
-                          onClick={() => navigate(`/ads-growth?clientId=${client.id}`)}
-                          className="px-3 py-1 rounded bg-[#e87a43] hover:bg-[#d66932] text-white text-xs font-bold transition-all shadow flex items-center gap-1 mx-auto"
+                          onClick={() => handleSyncClient(client.id)}
+                          disabled={syncingClient === client.id}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold border transition ${
+                            theme === 'white'
+                              ? 'bg-white border-zinc-200 hover:bg-zinc-55 text-zinc-700'
+                              : 'bg-zinc-900 border-zinc-800 text-emerald-400 hover:bg-zinc-800'
+                          }`}
                         >
-                          Detail →
+                          {syncingClient === client.id ? 'Syncing...' : 'Sync'}
                         </button>
                       </td>
                     </tr>
