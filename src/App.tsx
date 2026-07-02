@@ -41,10 +41,20 @@ import { useTheme } from './contexts/ThemeContext';
 function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onToggle: () => void; user: any }) {
   const location = useLocation();
   const { theme } = useTheme();
+  const [logoUrl, setLogoUrl] = useState<string>('');
+
+  useEffect(() => {
+    fetch('/api/public/logo')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.logo_url) setLogoUrl(data.logo_url);
+      })
+      .catch(err => console.error('Failed to load logo:', err));
+  }, [user]);
   
   const navItems = [
     { name: 'Master Dashboard', icon: LayoutDashboard, path: '/' },
-    { name: 'Agency Dashboard', icon: BarChart3, path: '/agency' },
+    { name: 'Client Dashboard', icon: BarChart3, path: '/agency' },
     { name: 'Client Scoreboard', icon: Users, path: '/scoreboard' },
     { name: 'Goals & Targets', icon: Target, path: '/goals-targets' },
     { name: 'AI Analysis', icon: BrainCircuit, path: '/strategic-analysis' },
@@ -69,15 +79,26 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     } border-r h-screen sticky top-0 flex flex-col transition-all duration-300 ease-in-out z-30`}>
       <div className="p-6 overflow-hidden">
         <h1 className={`text-xl font-medium flex items-center gap-2 whitespace-nowrap ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
-          <TrendingUp className={
-            theme === 'mission' ? "text-emerald-500 shrink-0" : 
-            theme === 'white' ? "text-[#082a36] shrink-0" :
-            "text-blue-500 shrink-0"
-          } />
-          {!isCollapsed && (
-            <span className="tracking-tight uppercase text-sm font-black italic">
-              NS Dashboard
-            </span>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className={`${isCollapsed ? 'h-8 w-8' : 'h-8'} object-contain shrink-0`} />
+          ) : (
+            <>
+              <TrendingUp className={
+                theme === 'mission' ? "text-emerald-500 shrink-0" : 
+                theme === 'white' ? "text-[#082a36] shrink-0" :
+                "text-blue-500 shrink-0"
+              } />
+              {!isCollapsed && (
+                <span className="tracking-tight text-lg font-bold">
+                  <span className={theme === 'white' ? 'text-[#082a36]' : 'text-white'}>net</span>
+                  <span className={
+                    theme === 'mission' ? 'text-emerald-500' : 
+                    theme === 'white' ? 'text-[#76c9be]' : 
+                    'text-blue-500'
+                  }>Stripes</span>
+                </span>
+              )}
+            </>
           )}
         </h1>
       </div>

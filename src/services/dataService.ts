@@ -62,6 +62,59 @@ export interface WeeklyData {
   imported_at?: string;
 }
 
+export interface CitationData {
+  id?: string;
+  client_id: string;
+  week_start_date: string;
+  referrer_url: string;
+  domain_rating: number;
+  anchor_text: string;
+  target_url: string;
+  created_at?: string;
+}
+
+export const getCitations = async (clientId: string, date: string): Promise<CitationData[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('ahrefs_citations')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('week_start_date', date);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching citation data:', error);
+    return [];
+  }
+};
+
+export interface AiCitationData {
+  id?: string;
+  client_id: string;
+  week_start_date: string;
+  platform: string;
+  responses: number;
+  pages: number;
+  created_at?: string;
+}
+
+export const getAiCitations = async (clientId: string, date: string): Promise<AiCitationData[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('ahrefs_ai_citations')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('week_start_date', date);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching AI citation data:', error);
+    return [];
+  }
+};
+
 export const getClients = async (): Promise<Client[]> => {
   try {
     const { data, error } = await supabase

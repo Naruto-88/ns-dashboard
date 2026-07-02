@@ -289,7 +289,7 @@ export default function Dashboard() {
               <BarChart3 className="text-white" size={24} />
             </div>
             <div>
-              <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Agency Dashboard</h2>
+              <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Client Dashboard</h2>
               <p className={`text-sm font-medium   ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                 {metrics?.lastSyncedAt ? `Last DB Sync: ${format(parseISO(metrics.lastSyncedAt), 'MMM d, h:mm a')}` : 'Performance Intelligence Hub'}
               </p>
@@ -388,7 +388,7 @@ export default function Dashboard() {
           <BarChart3 className={`mx-auto ${theme === 'white' ? 'text-zinc-300' : 'text-zinc-800'}`} size={64} />
           <div className="space-y-1">
             <p className={`font-medium  tracking-tighter text-xl italic ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>Click Live Sync</p>
-            <p className="text-sm text-zinc-500 font-medium  ">Connect to live metrics to populate your agency dashboard</p>
+            <p className="text-sm text-zinc-500 font-medium  ">Connect to live metrics to populate your client dashboard</p>
           </div>
         </div>
       ) : (

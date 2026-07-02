@@ -186,7 +186,7 @@ export default function WeeklyData() {
     setSyncingAhrefs(true);
     setMessage(null);
     try {
-      const res = await fetch(`/api/clients/${selectedClient}/sync-ahrefs-data?date=${selectedWeek}`);
+      const res = await fetch(`/api/clients/${selectedClient}/sync-ahrefs-data?date=${selectedWeek}&force=true`);
       const dataRes = await res.json();
       if (!res.ok) throw new Error(dataRes.error || 'Ahrefs sync failed');
       
@@ -237,7 +237,7 @@ export default function WeeklyData() {
         });
 
         try {
-          const res = await fetch(`/api/clients/${client.id}/sync-ahrefs-data?date=${selectedWeek}`);
+          const res = await fetch(`/api/clients/${client.id}/sync-ahrefs-data?date=${selectedWeek}&force=true`);
           const dataRes = await res.json();
           
           if (!res.ok) {

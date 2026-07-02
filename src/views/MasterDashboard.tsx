@@ -21,9 +21,10 @@ import {
   RefreshCcw,
   TrendingUp,
   TrendingDown,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Link
 } from 'lucide-react';
-import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData } from '../services/dataService';
+import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData, getCitations, CitationData, getAiCitations, AiCitationData } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays, addDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
@@ -88,6 +89,7 @@ export default function MasterDashboard() {
     latestData: WeeklyData | null;
     gsc: any;
     ga4: any;
+    ahrefs?: any;
   } | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'client', direction: 'asc' });
   const [keywordModal, setKeywordModal] = useState<{
@@ -320,15 +322,16 @@ export default function MasterDashboard() {
           }
         }
 
+        const isSameAsCurrent = historicalPrev?.week_start_date === (currentWeekData?.week_start_date || latestData?.week_start_date);
         const ahrefs = {
-          dr: latestData?.ahrefs_dr || currentWeekData?.ahrefs_dr || 0,
-          backlinks: latestData?.ahrefs_backlinks || currentWeekData?.ahrefs_backlinks || 0,
-          refDomains: latestData?.ahrefs_ref_domains || currentWeekData?.ahrefs_ref_domains || 0,
+          dr: currentWeekData?.ahrefs_dr || latestData?.ahrefs_dr || 0,
+          backlinks: currentWeekData?.ahrefs_backlinks || latestData?.ahrefs_backlinks || 0,
+          refDomains: currentWeekData?.ahrefs_ref_domains || latestData?.ahrefs_ref_domains || 0,
           targetDr: client.target_dr || 0,
-          prevDr: historicalPrev?.ahrefs_dr || 0,
-          prevBacklinks: historicalPrev?.ahrefs_backlinks || 0,
-          prevRefDomains: historicalPrev?.ahrefs_ref_domains || 0,
-          hasPrev: !!historicalPrev
+          prevDr: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_dr || 0),
+          prevBacklinks: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_backlinks || 0),
+          prevRefDomains: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_ref_domains || 0),
+          hasPrev: true
         };
 
         let score = 0;
@@ -1159,7 +1162,8 @@ export default function MasterDashboard() {
                         currentData: row.currentData,
                         latestData: row.latestData,
                         gsc: row.gscTraffic,
-                        ga4: row.ga4Traffic
+                        ga4: row.ga4Traffic,
+                        ahrefs: row.ahrefs
                       })}
                       className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] hover:bg-[#f47b20] hover:text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-blue-600 hover:text-white'
                         } shadow-lg`}
@@ -1299,12 +1303,100 @@ function calculatePosChange(curr: number | undefined, prev: number | undefined) 
   return curr - prev; 
 }
 
-function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, currentData: WeeklyData | null, latestData: WeeklyData | null, gsc: any, ga4: any }, theme: string, onClose: () => void }) {
+function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, currentData: WeeklyData | null, latestData: WeeklyData | null, gsc: any, ga4: any, ahrefs?: any }, theme: string, onClose: () => void }) {
   const [autoReport, setAutoReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isAnalysingTraffic, setIsAnalysingTraffic] = useState(false);
   const [trafficDropAnalysis, setTrafficDropAnalysis] = useState<{ analysis: string; action: string } | null>(null);
   const [trafficDropModel, setTrafficDropModel] = useState<'gemini' | 'claude' | 'gpt'>('gemini');
+
+  const [citationsList, setCitationsList] = useState<CitationData[]>([]);
+  const [prevCitationsList, setPrevCitationsList] = useState<CitationData[]>([]);
+  const [aiCitationsList, setAiCitationsList] = useState<AiCitationData[]>([]);
+  const [prevAiCitationsList, setPrevAiCitationsList] = useState<AiCitationData[]>([]);
+  const [loadingCitations, setLoadingCitations] = useState(false);
+  const [syncingAhrefs, setSyncingAhrefs] = useState(false);
+  const [citationMetrics, setCitationMetrics] = useState({
+    currentDR: 0,
+    currentCount: 0,
+    currentAvgDR: 0,
+    drChange: 0,
+    countChange: 0,
+    avgDRChange: 0
+  });
+
+  const alignToMonday = (dStr: string) => {
+    const d = new Date(dStr);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    return format(monday, 'yyyy-MM-dd');
+  };
+
+  const fetchCitationsData = async () => {
+    setLoadingCitations(true);
+    try {
+      const viewingPeriodStart = format(data.gsc.current_start || subWeeks(new Date(), 1), 'yyyy-MM-dd');
+      const currentMonday = alignToMonday(viewingPeriodStart);
+      const prevMonday = format(subWeeks(new Date(currentMonday), 1), 'yyyy-MM-dd');
+
+      const currentCitations = await getCitations(data.client.id, currentMonday);
+      const prevCitations = await getCitations(data.client.id, prevMonday);
+      const currentAiCitations = await getAiCitations(data.client.id, currentMonday);
+      const prevAiCitations = await getAiCitations(data.client.id, prevMonday);
+
+      setCitationsList(currentCitations);
+      setPrevCitationsList(prevCitations);
+      setAiCitationsList(currentAiCitations);
+      setPrevAiCitationsList(prevAiCitations);
+
+      // Current values
+      const currentDR = data.ahrefs?.dr || data.latestData?.ahrefs_dr || data.currentData?.ahrefs_dr || 0;
+      const prevDR = data.ahrefs?.prevDr !== undefined ? data.ahrefs.prevDr : (data.currentData?.ahrefs_dr || 0);
+
+      const currentCount = currentCitations.length;
+      const prevCount = prevCitations.length;
+
+      const currentAvgDR = currentCitations.length > 0 
+        ? currentCitations.reduce((acc, c) => acc + c.domain_rating, 0) / currentCitations.length 
+        : 0;
+      const prevAvgDR = prevCitations.length > 0 
+        ? prevCitations.reduce((acc, c) => acc + c.domain_rating, 0) / prevCitations.length 
+        : 0;
+
+      setCitationMetrics({
+        currentDR,
+        currentCount,
+        currentAvgDR,
+        drChange: currentDR - prevDR,
+        countChange: currentCount - prevCount,
+        avgDRChange: currentAvgDR - prevAvgDR
+      });
+    } catch (err) {
+      console.error('Failed to load citations data:', err);
+    } finally {
+      setLoadingCitations(false);
+    }
+  };
+
+  const syncAhrefsCitations = async () => {
+    setSyncingAhrefs(true);
+    try {
+      const viewingPeriodStart = format(data.gsc.current_start || subWeeks(new Date(), 1), 'yyyy-MM-dd');
+      const currentMonday = alignToMonday(viewingPeriodStart);
+      
+      const res = await fetch(`/api/clients/${data.client.id}/sync-ahrefs-data?date=${currentMonday}&force=true`);
+      if (!res.ok) {
+        throw new Error('Failed to sync citation data');
+      }
+      // Re-fetch local cache
+      await fetchCitationsData();
+    } catch (err: any) {
+      alert(err.message || 'Error syncing Ahrefs citations');
+    } finally {
+      setSyncingAhrefs(false);
+    }
+  };
 
   const handleTrafficDropAnalyse = async () => {
     if (!data.gsc || !data.client) return;
@@ -1349,6 +1441,7 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
 
   useEffect(() => {
     fetchAutoReport();
+    fetchCitationsData();
   }, [data]);
 
   const fetchAutoReport = async () => {
@@ -1649,6 +1742,312 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Link Authority & Citations Section */}
+            <div className="xl:col-span-12 mt-4">
+              <div className={`p-8 rounded-[32px] border ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900 border-white/5'}`}>
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-3">
+                    <Link size={20} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
+                    <span className="text-sm font-medium text-[#607a80]">Link Authority & Citations (Ahrefs)</span>
+                  </div>
+                  <button 
+                    onClick={syncAhrefsCitations}
+                    disabled={syncingAhrefs}
+                    className={`px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium transition-all ${
+                      theme === 'white' 
+                        ? 'bg-[#76c9be]/10 text-[#082a36] hover:bg-[#76c9be]/20' 
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+                    }`}
+                  >
+                    <RefreshCcw size={14} className={syncingAhrefs ? 'animate-spin' : ''} />
+                    Sync Ahrefs Citations
+                  </button>
+                </div>
+
+                {loadingCitations ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-4">
+                    <Activity size={24} className="animate-spin text-blue-500" />
+                    <p className="text-sm text-zinc-500">Loading authority & citation records...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {/* Metrics row */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
+                        <div className="text-sm text-zinc-400 font-medium mb-1">Domain Rating (DR)</div>
+                        <div className="flex items-baseline gap-3">
+                          <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                            {citationMetrics.currentDR}
+                          </span>
+                          {citationMetrics.drChange !== 0 && (
+                            <span className={`text-sm font-medium ${citationMetrics.drChange > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {citationMetrics.drChange > 0 ? '▲' : '▼'} {Math.abs(citationMetrics.drChange).toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-zinc-500 mt-2">Overall search engine trust score</div>
+                      </div>
+
+                      <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
+                        <div className="text-sm text-zinc-400 font-medium mb-1">Referring Citations Count</div>
+                        <div className="flex items-baseline gap-3">
+                          <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                            {citationMetrics.currentCount}
+                          </span>
+                          {citationMetrics.countChange !== 0 && (
+                            <span className={`text-sm font-medium ${citationMetrics.countChange > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {citationMetrics.countChange > 0 ? '▲' : '▼'} {Math.abs(citationMetrics.countChange)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-zinc-500 mt-2">Active top high-DR backlinks stored</div>
+                      </div>
+
+                      <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
+                        <div className="text-sm text-zinc-400 font-medium mb-1">Average Citation DR</div>
+                        <div className="flex items-baseline gap-3">
+                          <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                            {citationMetrics.currentAvgDR.toFixed(1)}
+                          </span>
+                          {citationMetrics.avgDRChange !== 0 && (
+                            <span className={`text-sm font-medium ${citationMetrics.avgDRChange > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {citationMetrics.avgDRChange > 0 ? '▲' : '▼'} {Math.abs(citationMetrics.avgDRChange).toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-zinc-500 mt-2">Quality indicator of top backlink profiles</div>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className={`border-b text-xs font-semibold tracking-wider text-zinc-400 ${theme === 'white' ? 'border-zinc-100' : 'border-white/5'}`}>
+                            <th className="pb-4 w-8">#</th>
+                            <th className="pb-4 pl-4">Referrer URL / Domain</th>
+                            <th className="pb-4 text-center w-24">Domain Rating</th>
+                            <th className="pb-4 pl-4">Anchor Text</th>
+                            <th className="pb-4 pl-4">Target URL</th>
+                            <th className="pb-4 text-right w-20">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/10">
+                          {citationsList.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="text-center py-8 text-sm text-zinc-500">
+                                No citations synced for this period yet. Click "Sync Ahrefs Citations" to fetch them.
+                              </td>
+                            </tr>
+                          ) : (
+                            citationsList.map((cit, idx) => {
+                              const isNew = !prevCitationsList.some(pc => pc.referrer_url === cit.referrer_url);
+                              return (
+                                <tr key={cit.id || idx} className={`text-sm group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
+                                  <td className="py-4 font-heading text-zinc-500 font-medium">{idx + 1}</td>
+                                  <td className="py-4 pl-4">
+                                    <div className="font-medium text-blue-500 hover:underline truncate max-w-md">
+                                      <a href={cit.referrer_url} target="_blank" rel="noopener noreferrer">
+                                        {cit.referrer_url}
+                                      </a>
+                                    </div>
+                                  </td>
+                                  <td className="py-4 text-center">
+                                    <span className={`inline-block px-2.5 py-1 rounded-full font-heading text-xs font-bold ${
+                                      cit.domain_rating >= 80 
+                                        ? 'bg-purple-500/10 text-purple-400' 
+                                        : cit.domain_rating >= 50 
+                                        ? 'bg-blue-500/10 text-blue-400' 
+                                        : 'bg-zinc-500/10 text-zinc-400'
+                                    }`}>
+                                      DR {cit.domain_rating}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 pl-4 max-w-xs truncate text-zinc-400 font-medium">
+                                    {cit.anchor_text || <span className="text-zinc-600 italic">No anchor text</span>}
+                                  </td>
+                                  <td className="py-4 pl-4 max-w-xs truncate text-zinc-500 font-mono text-xs">
+                                    {cit.target_url}
+                                  </td>
+                                  <td className="py-4 text-right">
+                                    {isNew ? (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400">
+                                        New
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-zinc-600">Stable</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* AI Responses / Citations Section */}
+            <div className="xl:col-span-12 mt-8">
+              <div className={`p-8 rounded-[32px] border ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900 border-white/5'}`}>
+                <div className="flex items-center gap-3 mb-8">
+                  <Activity size={20} className={theme === 'white' ? 'text-[#76c9be]' : 'text-blue-500'} />
+                  <h4 className={`text-xl font-medium font-heading tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                    AI Responses & Visibility Citation Tracking
+                  </h4>
+                </div>
+
+                {loadingCitations ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-4">
+                    <Activity size={24} className="animate-spin text-blue-500" />
+                    <p className="text-sm text-zinc-500">Loading AI citations data...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {/* Top cards matching AI Overviews and ChatGPT */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* AI Overviews Card */}
+                      {(() => {
+                        const currentAIO = aiCitationsList.find(c => c.platform === 'AI Overviews');
+                        const prevAIO = prevAiCitationsList.find(c => c.platform === 'AI Overviews');
+                        const respDiff = (currentAIO?.responses || 0) - (prevAIO?.responses || 0);
+                        const pagesDiff = (currentAIO?.pages || 0) - (prevAIO?.pages || 0);
+                        return (
+                          <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className={`text-base font-semibold ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-300'}`}>AI Overviews</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">New Index</span>
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div>
+                                <div className="text-xs text-zinc-500">Responses</div>
+                                <div className="flex items-baseline gap-2">
+                                  <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                    {currentAIO?.responses || 0}
+                                  </span>
+                                  {respDiff !== 0 && (
+                                    <span className={`text-sm font-semibold ${respDiff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {respDiff > 0 ? `+${respDiff}` : respDiff}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-zinc-500">Pages</div>
+                                <div className="flex items-baseline gap-2">
+                                  <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                    {currentAIO?.pages || 0}
+                                  </span>
+                                  {pagesDiff !== 0 && (
+                                    <span className={`text-sm font-semibold ${pagesDiff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {pagesDiff > 0 ? `+${pagesDiff}` : pagesDiff}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* ChatGPT Card */}
+                      {(() => {
+                        const currentGPT = aiCitationsList.find(c => c.platform === 'ChatGPT');
+                        const prevGPT = prevAiCitationsList.find(c => c.platform === 'ChatGPT');
+                        const respDiff = (currentGPT?.responses || 0) - (prevGPT?.responses || 0);
+                        const pagesDiff = (currentGPT?.pages || 0) - (prevGPT?.pages || 0);
+                        return (
+                          <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/10' : 'bg-black/20 border-white/5'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className={`text-base font-semibold ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-300'}`}>ChatGPT</span>
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div>
+                                <div className="text-xs text-zinc-500">Responses</div>
+                                <div className="flex items-baseline gap-2">
+                                  <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                    {currentGPT?.responses || 0}
+                                  </span>
+                                  {respDiff !== 0 && (
+                                    <span className={`text-sm font-semibold ${respDiff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {respDiff > 0 ? `+${respDiff}` : respDiff}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-zinc-500">Pages</div>
+                                <div className="flex items-baseline gap-2">
+                                  <span className={`text-3xl font-heading font-bold ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                                    {currentGPT?.pages || 0}
+                                  </span>
+                                  {pagesDiff !== 0 && (
+                                    <span className={`text-sm font-semibold ${pagesDiff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {pagesDiff > 0 ? `+${pagesDiff}` : pagesDiff}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Table matching the rest of platforms */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className={`border-b text-xs font-semibold tracking-wider text-[#607a80] ${theme === 'white' ? 'border-zinc-100' : 'border-white/5'}`}>
+                            <th className="pb-4">Platform</th>
+                            <th className="pb-4 text-center">Responses</th>
+                            <th className="pb-4 text-center">Pages</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/10">
+                          {aiCitationsList.filter(c => c.platform !== 'AI Overviews' && c.platform !== 'ChatGPT').map((cit, idx) => {
+                            const prev = prevAiCitationsList.find(pc => pc.platform === cit.platform);
+                            const respDiff = cit.responses - (prev?.responses || 0);
+                            const pagesDiff = cit.pages - (prev?.pages || 0);
+                            return (
+                              <tr key={cit.id || idx} className={`text-sm group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
+                                <td className={`py-4 font-semibold ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                  {cit.platform}
+                                </td>
+                                <td className="py-4 text-center font-semibold text-blue-500">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span>{cit.responses}</span>
+                                    {respDiff !== 0 && (
+                                      <span className={`text-xs font-medium ${respDiff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                        {respDiff > 0 ? `+${respDiff}` : respDiff}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-4 text-center font-semibold text-zinc-400">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span>{cit.pages}</span>
+                                    {pagesDiff !== 0 && (
+                                      <span className={`text-xs font-medium ${pagesDiff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                        {pagesDiff > 0 ? `+${pagesDiff}` : pagesDiff}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
