@@ -48,7 +48,7 @@ interface DashboardRow {
     top10: number;
   };
   ga4Traffic: { current: number; previous: number; change: number; organic: number; prevOrganic: number };
-  leads: { current: number; change: number; legit: number };
+  leads: { current: number; change: number; legit: number; prevLegit: number };
   phoneCalls: { current: number; previous: number; change: number };
   ahrefs: { 
     dr: number; 
@@ -301,6 +301,7 @@ export default function MasterDashboard() {
         const leads = {
           current: resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0,
           legit: resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0,
+          prevLegit: resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0,
           change: calculateChange(resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0, resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0)
         };
 
@@ -819,7 +820,7 @@ export default function MasterDashboard() {
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td className="px-4 py-2 text-center relative hover:z-[50]">
                     {editingLeads?.clientId === row.client.id ? (
                       <div className="flex items-center justify-center gap-2">
                         <input
@@ -836,15 +837,23 @@ export default function MasterDashboard() {
                         />
                       </div>
                     ) : (
-                      <div
-                        className="space-y-1 cursor-pointer select-none"
-                        onDoubleClick={() => setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() })}
-                      >
-                        <div className="flex flex-col items-center">
-                          <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.leads.legit}</span>
-                          <TrendIndicator value={row.leads.change} theme={theme} />
+                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
+                        <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
+                          {row.leads.legit === 0 && row.leads.prevLegit === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
+                          <div className="flex justify-between gap-4"><span>CURRENT LEGIT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.leads.legit})</span></div>
+                          <div className="flex justify-between gap-4"><span>PREVIOUS LEGIT:</span> <span className="opacity-80">{row.prevRangeStr} ({row.leads.prevLegit})</span></div>
                         </div>
-                      </div>
+                      }>
+                        <div
+                          className="space-y-1 cursor-pointer select-none"
+                          onDoubleClick={() => setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() })}
+                        >
+                          <div className="flex flex-col items-center">
+                            <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.leads.legit}</span>
+                            <TrendIndicator value={row.leads.change} theme={theme} />
+                          </div>
+                        </div>
+                      </Tooltip>
                     )}
                   </td>
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
