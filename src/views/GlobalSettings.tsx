@@ -66,7 +66,6 @@ export default function GlobalSettings() {
   const [gptKey, setGptKey] = useState('');
   const [ahrefsKey, setAhrefsKey] = useState('');
   const [googleSheetId, setGoogleSheetId] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
 
   const fetchKeys = async () => {
     try {
@@ -90,7 +89,6 @@ export default function GlobalSettings() {
         const gpt = data.keys.find((k: any) => k.id === 'gpt');
         const ahrefs = data.keys.find((k: any) => k.id === 'ahrefs');
         const sheet = data.keys.find((k: any) => k.id === 'google_sheet_id');
-        const logo = data.keys.find((k: any) => k.id === 'logo_url');
         
         if (gemini) setGeminiKey(gemini.key_value);
         if (gemini2) setGeminiKey2(gemini2.key_value);
@@ -100,7 +98,6 @@ export default function GlobalSettings() {
         if (gpt) setGptKey(gpt.key_value);
         if (ahrefs) setAhrefsKey(ahrefs.key_value);
         if (sheet) setGoogleSheetId(sheet.key_value);
-        if (logo) setLogoUrl(logo.key_value);
       }
     } catch (e) {
       console.error('Error fetching API keys:', e);
@@ -502,48 +499,6 @@ export default function GlobalSettings() {
             </div>
           </section>
 
-          {/* NETSTRIPES LOGO CONFIGURATION */}
-          <section className={`rounded-[40px] border shadow-2xl p-10 backdrop-blur-xl relative overflow-hidden group transition-all duration-300 ${
-            theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-900/50 border-white/5'
-          }`}>
-            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-8">
-                <div className={`p-3 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20' : 'bg-blue-600/10 text-blue-500 border-blue-500/20'}`}>
-                  <Monitor size={24} />
-                </div>
-                <div>
-                  <h3 className={`text-xl font-medium font-heading  italic tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Netstripes Brand Assets</h3>
-                  <p className={`text-sm   font-medium ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Set custom logo image URL for the sidebar</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
-                  <label className="text-sm font-medium   text-zinc-500">Logo Image URL</label>
-                  <div className="flex gap-3 w-full mt-2">
-                    <input 
-                      type="text" 
-                      placeholder="e.g. https://example.com/logo.png"
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      className={`flex-1 border rounded-2xl px-4 py-2.5 text-sm font-mono focus:outline-none transition-colors ${
-                        theme === 'white' ? 'bg-white border-zinc-200 text-zinc-600 focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-zinc-400 focus:border-blue-500'
-                      }`}
-                    />
-                    <button 
-                      onClick={() => handleSaveKey('logo_url', logoUrl)}
-                      disabled={savingKeyId === 'logo_url'}
-                      className={`px-5 rounded-2xl text-sm font-medium transition-all border   active:scale-95 flex items-center justify-center gap-1 ${
-                        theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
-                      }`}
-                    >
-                      {savingKeyId === 'logo_url' ? <RefreshCw size={10} className="animate-spin" /> : 'Save'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
 
           <section className={`rounded-[24px] border shadow-2xl backdrop-blur-xl transition-all duration-300 overflow-hidden group ${
             theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/50 border-white/5'
