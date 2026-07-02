@@ -262,7 +262,9 @@ export default function AdsMasterDashboard() {
           { label: 'PAID CPL', val: `$${portfolioAggregates.avgPaidCpl.toFixed(2)}`, sub: 'Google + Meta' },
           { label: 'TOTAL CPL', val: `$${portfolioAggregates.avgTotalCpl.toFixed(2)}`, sub: 'incl. SEO (free)' }
         ].map((card, i) => (
-          <div key={i} className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900/60 flex flex-col justify-between h-24 shadow-sm">
+          <div key={i} className={`p-4 rounded-[20px] border backdrop-blur-xl shadow-lg flex flex-col justify-between h-24 ${
+            theme === 'white' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-zinc-900/50 border-white/5 text-white'
+          }`}>
             <span className="text-[10px] opacity-50 font-bold block">{card.label}</span>
             <div className="text-2xl font-bold font-heading">{card.val}</div>
             <span className="text-[10px] opacity-40 font-mono block">{card.sub}</span>
@@ -271,11 +273,15 @@ export default function AdsMasterDashboard() {
       </div>
 
       {/* RAG Master Table */}
-      <div className="overflow-hidden rounded-2xl border border-zinc-900/60 bg-zinc-950/40">
+      <div className={`rounded-[20px] border backdrop-blur-xl shadow-2xl overflow-hidden ${
+        theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
+      }`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-zinc-900 bg-zinc-900/40 text-[#607a80]">
+              <tr className={`border-b ${
+                theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/90 border-white/5 text-[#607a80]'
+              }`}>
                 <th className="px-5 py-4 font-semibold">Client</th>
                 <th className="px-4 py-4 text-center font-semibold">RAG</th>
                 <th className="px-4 py-4 text-center font-semibold">Freshness</th>
@@ -408,7 +414,9 @@ export default function AdsMasterDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Cross-Client Signals */}
-        <div className="p-6 rounded-2xl bg-zinc-950/40 border border-zinc-900/60 space-y-4">
+        <div className={`p-6 rounded-[20px] border backdrop-blur-xl shadow-2xl space-y-4 ${
+          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-zinc-900/50 border-white/5 text-white'
+        }`}>
           <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Cross-Client Signals</h3>
           <div className="space-y-3">
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-xs">
@@ -428,9 +436,11 @@ export default function AdsMasterDashboard() {
             </div>
           </div>
         </div>
-
+ 
         {/* CEO Actions - This Week */}
-        <div className="p-6 rounded-2xl bg-zinc-950/40 border border-zinc-900/60 space-y-4">
+        <div className={`p-6 rounded-[20px] border backdrop-blur-xl shadow-2xl space-y-4 ${
+          theme === 'white' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-zinc-900/50 border-white/5 text-white'
+        }`}>
           <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">CEO Actions - This Week</h3>
           <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
             {[
