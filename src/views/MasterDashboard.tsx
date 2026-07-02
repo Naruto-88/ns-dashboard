@@ -263,6 +263,7 @@ export default function MasterDashboard() {
         const resolvedCurrentLeadsTotal = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_total');
         const resolvedCurrentLeadsLegit = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_legit');
         const resolvedPrevLeadsTotal = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_total');
+        const resolvedPrevLeadsLegit = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_legit');
         
         const resolvedCurrentPhoneCalls = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'phone_calls') || currentWeekData?.phone_calls || 0;
         const resolvedPreviousPhoneCalls = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'phone_calls') || previousWeekData?.phone_calls || 0;
@@ -300,7 +301,7 @@ export default function MasterDashboard() {
         const leads = {
           current: resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0,
           legit: resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0,
-          change: calculateChange(resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0, resolvedPrevLeadsTotal || previousWeekData?.leads_total || 0)
+          change: calculateChange(resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0, resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0)
         };
 
         const phoneCalls = {
