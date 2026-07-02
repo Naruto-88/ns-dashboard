@@ -4940,13 +4940,77 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
     const mRoas = 0;
     const mFreq = 0;
 
-    // Integrated GA4 Analytics (from weekly_data)
-    const webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : 0;
-    const bounceRate = 0;
-    const timeOnSite = '';
-    const topPage = '';
+    // Fetch real weekly_data values if available (GA4 sessions, organic traffic, organic leads)
+    let webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : 0;
+    let bounceRate = 0;
+    let timeOnSite = '';
+    let topPage = '';
     const abTests = 0;
     const lpLive = 0;
+
+    if (client.ga4_property_id) {
+      try {
+        let currentAuth: any = null;
+        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', clientId).maybeSingle();
+        if (creds && creds.tokens) {
+          const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
+          oAuth2Client.setCredentials(creds.tokens);
+          currentAuth = oAuth2Client;
+        } else {
+          currentAuth = await getAuthenticatedClient(req).catch(() => null);
+        }
+
+        if (currentAuth) {
+          const analytics = google.analyticsdata({ version: 'v1beta', auth: currentAuth });
+          
+          const startDate = weekStart;
+          const start = new Date(weekStart);
+          const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+          const endDate = end.toISOString().split('T')[0];
+
+          const report = (await analytics.properties.runReport({
+            property: `properties/${client.ga4_property_id}`,
+            requestBody: {
+              dateRanges: [{ startDate, endDate }],
+              metrics: [
+                { name: 'sessions' },
+                { name: 'bounceRate' },
+                { name: 'averageSessionDuration' }
+              ]
+            }
+          })) as any;
+
+          const metricValues = report.data.rows?.[0]?.metricValues;
+          if (metricValues) {
+            webSessions = parseInt(metricValues[0]?.value || '0') || webSessions;
+            bounceRate = parseFloat((parseFloat(metricValues[1]?.value || '0') * 100).toFixed(1)) || 0;
+            const durationSec = parseFloat(metricValues[2]?.value || '0') || 0;
+            if (durationSec > 0) {
+              const mins = Math.floor(durationSec / 60);
+              const secs = Math.floor(durationSec % 60);
+              timeOnSite = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+            }
+          }
+
+          const pagesReport = (await analytics.properties.runReport({
+            property: `properties/${client.ga4_property_id}`,
+            requestBody: {
+              dateRanges: [{ startDate, endDate }],
+              dimensions: [{ name: 'pagePath' }],
+              metrics: [{ name: 'conversions' }],
+              orderBys: [{ metric: { metricName: 'conversions' }, desc: true }],
+              limit: '1'
+            }
+          })) as any;
+          const topRow = pagesReport.data.rows?.[0];
+          if (topRow) {
+            topPage = topRow.dimensionValues?.[0]?.value || '';
+          }
+        }
+      } catch (e: any) {
+        console.error('[ADS_GROWTH] Error fetching GA4 live stats:', e.message);
+      }
+    }
 
     // Social Media
     const followers = 0;
