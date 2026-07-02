@@ -312,7 +312,7 @@ export default function MasterDashboard() {
         };
 
         // Calculate historical previous data for Ahrefs comparison
-        let historicalPrev = previousWeekData;
+        let historicalPrev = sortedWeekly.find(d => d.week_start_date === format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
         if (!historicalPrev && sortedWeekly.length > 1) {
           if (currentWeekData?.id === sortedWeekly[0].id) {
             historicalPrev = sortedWeekly[1];

@@ -4657,9 +4657,9 @@ app.get('/api/clients/:clientId/sync-ahrefs-data', async (req, res) => {
         throw new Error(`Ahrefs API Error (${statsRes.status}): ${errorText}`);
       } else {
         const statsData = await statsRes.json();
-        const metrics = statsData.metrics?.[0] || {};
-        backlinks = Math.round(Number(metrics.live_backlinks ?? metrics.backlinks ?? metrics.live_backlinks_count ?? 0));
-        refDomains = Math.round(Number(metrics.live_refdomains ?? metrics.ref_domains ?? metrics.refdomains ?? metrics.live_refdomains_count ?? 0));
+        const metrics = statsData.metrics || {};
+        backlinks = Math.round(Number(metrics.live ?? metrics.all_time ?? metrics.live_backlinks ?? 0));
+        refDomains = Math.round(Number(metrics.live_refdomains ?? metrics.all_time_refdomains ?? metrics.live_refdomains_count ?? 0));
       }
 
       // 3. Fetch Citations (backlinks list) with Retry
