@@ -10,6 +10,7 @@ export interface Client {
   lead_event_names: string;
   keyword_tracking_enabled: boolean;
   api_import_enabled: boolean;
+  has_paid_ads?: boolean;
   notes: string;
   timezone: string;
   lead_target_monthly: number;

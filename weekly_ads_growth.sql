@@ -1,4 +1,4 @@
-﻿-- Create weekly_ads_growth table
+-- Create weekly_ads_growth table
 CREATE TABLE IF NOT EXISTS public.weekly_ads_growth (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
@@ -52,3 +52,6 @@ ALTER TABLE public.weekly_ads_growth ENABLE ROW LEVEL SECURITY;
 -- Create policy to allow all operations (matching existing internal dashboard patterns)
 DROP POLICY IF EXISTS "Allow all access to weekly_ads_growth" ON public.weekly_ads_growth;
 CREATE POLICY "Allow all access to weekly_ads_growth" ON public.weekly_ads_growth FOR ALL USING (true) WITH CHECK (true);
+
+-- Alter clients table to support Paid Ads active toggle
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS has_paid_ads BOOLEAN DEFAULT false;

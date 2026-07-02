@@ -35,6 +35,7 @@ import LeadGenPlaybook from './views/LeadGenPlaybook';
 import ActionCenter from './views/ActionCenter';
 import Tooltip from './components/Tooltip';
 import AdsDashboard from './views/AdsDashboard';
+import AdsMasterDashboard from './views/AdsMasterDashboard';
 import { useState, useEffect } from 'react';
 import React from 'react';
 import { auth, supabase } from './lib/supabase';
@@ -48,12 +49,13 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Master Dashboard', icon: LayoutDashboard, path: '/' },
     { name: 'Client Dashboard', icon: BarChart3, path: '/agency' },
     { name: 'Client Scoreboard', icon: Users, path: '/scoreboard' },
+    { name: 'Ads Master', icon: Megaphone, path: '/ads-master' },
+    { name: 'Client Ads Details', icon: Megaphone, path: '/ads-growth' },
     { name: 'Goals & Targets', icon: Target, path: '/goals-targets' },
     { name: 'AI Analysis', icon: BrainCircuit, path: '/strategic-analysis' },
     { name: 'Lead Playbook', icon: FileText, path: '/lead-playbook' },
     { name: 'Action Center', icon: Target, path: '/action-center' },
     { name: 'Keyword Tracking', icon: Key, path: '/keywords' },
-    { name: 'Ads & Growth', icon: Megaphone, path: '/ads-growth' },
     { name: 'Weekly Data', icon: Calendar, path: '/weekly' },
   ];
 
@@ -352,6 +354,7 @@ export default function App() {
           <Route path="/action-center" element={<ActionCenter />} />
           <Route path="/keywords" element={<KeywordDashboard />} />
           <Route path="/weekly" element={<WeeklyData />} />
+          <Route path="/ads-master" element={<AdsMasterDashboard />} />
           <Route path="/ads-growth" element={<AdsDashboard />} />
           {isAdmin && (
             <>

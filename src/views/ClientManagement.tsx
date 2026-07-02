@@ -46,6 +46,7 @@ export default function ClientManagement() {
     lead_event_names: 'generate_lead, form_submission',
     keyword_tracking_enabled: true,
     api_import_enabled: true,
+    has_paid_ads: false,
     notes: '',
     timezone: 'Australia/Sydney',
     initial_keywords: '',
@@ -632,6 +633,7 @@ NOTIFY pgrst, 'reload schema';
       lead_event_names: client.lead_event_names || '',
       keyword_tracking_enabled: client.keyword_tracking_enabled ?? true,
       api_import_enabled: client.api_import_enabled ?? true,
+      has_paid_ads: client.has_paid_ads ?? false,
       notes: client.notes || '',
       timezone: client.timezone || 'Australia/Sydney',
       lead_target_monthly: client.lead_target_monthly || 0,
@@ -1331,6 +1333,19 @@ NOTIFY pgrst, 'reload schema';
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`}
                 />
+              </div>
+
+              <div className="flex items-center gap-3 py-2 ml-1">
+                <input
+                  type="checkbox"
+                  id="has_paid_ads"
+                  checked={formData.has_paid_ads || false}
+                  onChange={(e) => setFormData({...formData, has_paid_ads: e.target.checked})}
+                  className="w-4 h-4 text-blue-650 border-zinc-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="has_paid_ads" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                  Paid Ads Active (Show in Ads & Growth Dashboard)
+                </label>
               </div>
             </form>
             <div className={`p-10 flex justify-end gap-4 border-t ${
