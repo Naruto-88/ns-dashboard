@@ -160,6 +160,8 @@ export default function AiStrategicAnalysis() {
   const [generateAiFixes, setGenerateAiFixes] = useState(false);
   const [pageOptimizations, setPageOptimizations] = useState<Record<string, { title: string; metaDescription: string; codePatch: string; loading?: boolean }>>({});
   const [activeDrawerTabs, setActiveDrawerTabs] = useState<Record<string, 'targets' | 'issues' | 'code'>>({});
+  const [selectedPages, setSelectedPages] = useState<string[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Default dates: GSC has a ~2 day data-lag. Set end date to 2 days ago, start date to 8 days ago.
   const today = new Date();
@@ -344,6 +346,27 @@ export default function AiStrategicAnalysis() {
         delete copy[pageUrl];
         return copy;
       });
+    }
+  };
+
+  const handleBulkOptimise = async () => {
+    if (selectedPages.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const pagesList = result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || [];
+      for (const url of selectedPages) {
+        const page = pagesList.find((p: any) => p.url === url);
+        if (page) {
+          // Await sequentially to avoid overloading local token limits
+          await handleOptimisePage(page.url, page.title, page.description || '', page.issues);
+        }
+      }
+      setSelectedPages([]);
+      setSuccessMsg(`Successfully optimised ${selectedPages.length} selected pages!`);
+    } catch (e: any) {
+      setError(`Bulk optimisation failed: ${e.message}`);
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -880,8 +903,39 @@ export default function AiStrategicAnalysis() {
               {/* Scanned URL Registry Accordion */}
               {showCrawlDetails && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                  <div className="text-sm font-medium normal-case tracking-normal text-zinc-500 mb-2">
-                    Select a page below to view crawl data & step-by-step developer code fixes:
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-white/5 pb-3">
+                    <div className="text-sm font-medium normal-case tracking-normal text-zinc-500">
+                      Select pages to optimize in bulk:
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          const allUrls = (result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || []).map((p: any) => p.url);
+                          setSelectedPages(allUrls);
+                        }}
+                        className="text-xs font-semibold text-blue-400 hover:underline"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-zinc-600">•</span>
+                      <button
+                        onClick={() => setSelectedPages([])}
+                        className="text-xs font-semibold text-zinc-400 hover:underline"
+                      >
+                        Clear Selection
+                      </button>
+                      {selectedPages.length > 0 && (
+                        <button
+                          onClick={handleBulkOptimise}
+                          disabled={bulkLoading}
+                          className={`ml-2 px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1.5 ${
+                            isWhite ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-blue-600 hover:bg-blue-500 text-white shadow shadow-blue-500/20'
+                          }`}
+                        >
+                          {bulkLoading ? 'Optimising...' : `Optimise Selected (${selectedPages.length})`}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -913,6 +967,20 @@ export default function AiStrategicAnalysis() {
                           >
                             <div className="space-y-1 min-w-0 flex-1">
                               <div className="flex items-center gap-2">
+                                <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPages.includes(page.url)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedPages(prev => [...prev, page.url]);
+                                      } else {
+                                        setSelectedPages(prev => prev.filter(url => url !== page.url));
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-800 text-blue-650 focus:ring-blue-500 mr-1.5 cursor-pointer"
+                                  />
+                                </div>
                                 <Globe size={12} className="text-zinc-500 shrink-0" />
                                 <span className={`text-sm font-medium tracking-tight leading-relaxed block truncate normal-case italic ${
                                   isWhite ? 'text-[#082a36]' : 'text-white'
