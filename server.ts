@@ -3558,9 +3558,32 @@ app.post('/api/ai/optimise-page', async (req, res) => {
       // Quick 300ms network simulation delay for authentic UX feel
       await new Promise(resolve => setTimeout(resolve, 300));
 
+      let finalTitle = (simulatedTitle || '').replace(/&amp;/g, '&').trim();
+      let finalMeta = (simulatedMeta || '').replace(/&amp;/g, '&').trim();
+
+      // Clean generic suffixes added by models
+      finalTitle = finalTitle.replace(/\s*\|\s*Custom SEO Target Australia$/gi, '');
+      finalTitle = finalTitle.replace(/\s*\|\s*SEO Target Australia$/gi, '');
+
+      // Programmatic constraint enforcement to fit character guidelines:
+      if (finalTitle.length > 60) {
+        finalTitle = finalTitle.substring(0, 60);
+        const lastSpace = finalTitle.lastIndexOf(' ');
+        if (lastSpace > 45) {
+          finalTitle = finalTitle.substring(0, lastSpace).trim();
+        }
+      }
+      if (finalMeta.length > 160) {
+        finalMeta = finalMeta.substring(0, 160);
+        const lastSpace = finalMeta.lastIndexOf(' ');
+        if (lastSpace > 130) {
+          finalMeta = finalMeta.substring(0, lastSpace).trim();
+        }
+      }
+
       return res.json({
-        title: simulatedTitle,
-        metaDescription: simulatedMeta,
+        title: finalTitle,
+        metaDescription: finalMeta,
         codePatch: simulatedCodePatch
       });
     }
