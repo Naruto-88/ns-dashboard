@@ -3599,15 +3599,18 @@ ${JSON.stringify(issues || [], null, 2)}
 
 Provide your response as a valid, parsable JSON object strictly conforming to the following structure. Do not include any markdown format blocks or introductory/concluding text:
 {
-  "title": "SEO-Optimised Page Title (keep between 50-60 characters, with high CTR and commercial intent)",
-  "metaDescription": "SEO-Optimised Meta Description (keep between 120-160 characters, high-click compelling CTA)",
+  "title": "SEO-Optimised Page Title (MUST be strictly between 50 and 60 characters. Count the characters to make sure it is exactly between 50 and 60 chars. CTR and commercial intent)",
+  "metaDescription": "SEO-Optimised Meta Description (MUST be strictly between 120 and 160 characters. Count the characters to make sure it is exactly between 120 and 160 chars. Compelling CTA)",
   "codePatch": "Write a clean HTML developer code snippet showing exactly what tags the developer should insert inside their page to resolve the specific issues listed. (For alt images, write exact <img src='...' alt='custom descriptive alt'> tags; for headings, show demoted H1s; for title/meta errors, show the correct tags. Use single quotes for any HTML attributes in the code to ensure JSON string validity!)"
 }
 
 CRITICAL SEO RULES & JUDGMENT:
-- The optimised title MUST be 50-60 characters (count them) and MUST be SHORTER than the original title if the issue is "title too long" or "over-optimised title". Do NOT just append text to the original title.
+- Your generated "title" MUST be strictly between 50 and 60 characters in total length. If it is shorter than 50 or longer than 60, it violates constraints.
+- Your generated "metaDescription" MUST be strictly between 120 and 160 characters in total length. If it is shorter than 120 or longer than 160, it violates constraints.
+- Count the characters of your generated title and description values before outputting to ensure absolute compliance!
+- The optimised title MUST be SHORTER than the original title if the issue is "title too long" or "over-optimised title". Do NOT just append text to the original title.
 - Decode HTML entities: NEVER output "&amp;" inside your title or meta description — always use a real "&" or rephrase the wording to avoid it completely.
-- The meta description MUST be highly specific to THIS page's actual topic (deduce this logically from the URL path and current title), keep it strictly between 120-160 characters, and NEVER use a generic corporate or agency blurb.
+- The meta description MUST be highly specific to THIS page's actual topic (deduce this logically from the URL path and current title) and NEVER use a generic corporate or agency blurb.
 - The codePatch MUST contain the actual CORRECTED tags containing the new short title or the new meta description, not a copy of the original broken tag.
 
 CRITICAL INTEGRITY & SPELLING RULES:
