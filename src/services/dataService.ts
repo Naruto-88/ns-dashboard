@@ -24,6 +24,8 @@ export interface Client {
   target_monthly_blogs?: number;
   lead_api_url?: string;
   target_dr?: number;
+  wordpress_url?: string;
+  seo_webhook_secret?: string;
 }
 
 export interface WeeklyData {

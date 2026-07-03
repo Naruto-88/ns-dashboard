@@ -47,6 +47,8 @@ export default function ClientManagement() {
     keyword_tracking_enabled: true,
     api_import_enabled: true,
     has_paid_ads: false,
+    wordpress_url: '',
+    seo_webhook_secret: '',
     notes: '',
     timezone: 'Australia/Sydney',
     initial_keywords: '',
@@ -634,6 +636,8 @@ NOTIFY pgrst, 'reload schema';
       keyword_tracking_enabled: client.keyword_tracking_enabled ?? true,
       api_import_enabled: client.api_import_enabled ?? true,
       has_paid_ads: client.has_paid_ads ?? false,
+      wordpress_url: client.wordpress_url || '',
+      seo_webhook_secret: client.seo_webhook_secret || '',
       notes: client.notes || '',
       timezone: client.timezone || 'Australia/Sydney',
       lead_target_monthly: client.lead_target_monthly || 0,
@@ -1333,6 +1337,33 @@ NOTIFY pgrst, 'reload schema';
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`}
                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-500 ml-1">WordPress Website URL</label>
+                  <input
+                    type="url"
+                    value={formData.wordpress_url || ''}
+                    onChange={(e) => setFormData({...formData, wordpress_url: e.target.value})}
+                    placeholder="https://client-site.com"
+                    className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 ${
+                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                    }`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-500 ml-1">SEO Webhook Secret Key</label>
+                  <input
+                    type="text"
+                    value={formData.seo_webhook_secret || ''}
+                    onChange={(e) => setFormData({...formData, seo_webhook_secret: e.target.value})}
+                    placeholder="Enter webhook secret token"
+                    className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 ${
+                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                    }`}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-3 py-2 ml-1">
