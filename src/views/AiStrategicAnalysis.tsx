@@ -1119,21 +1119,37 @@ export default function AiStrategicAnalysis() {
                                                         />
                                                       </div>
 
-                                                      {/* Google Search Snippet Preview */}
-                                                      <div className={`p-4 rounded-xl border space-y-1 ${
-                                                        isWhite ? 'bg-zinc-50 border-zinc-150' : 'bg-zinc-900/30 border-white/5'
-                                                      }`}>
-                                                        <div className="text-[10px] opacity-40 uppercase tracking-wider font-semibold">SERP Snippet Preview</div>
-                                                        <div className="text-[#1a0dab] dark:text-[#8ab4f8] text-[17px] leading-tight hover:underline cursor-pointer truncate font-normal">
-                                                          {suggestions.title || 'Untitled Page'}
-                                                        </div>
-                                                        <div className="text-[#006621] dark:text-[#34a853] text-xs truncate">
-                                                          {selectedClient?.wordpress_url || 'https://example.com'}/{page.url.replace(/^\//, '')}
-                                                        </div>
-                                                        <div className="text-[#545454] dark:text-[#bdc1c6] text-xs line-clamp-2 leading-relaxed">
-                                                          {suggestions.metaDescription || 'No description provided.'}
-                                                        </div>
-                                                      </div>
+                                                       {/* Google Search Snippet Preview */}
+                                                       {(() => {
+                                                         const previewTitle = (suggestions.title || 'Untitled Page').length > 60 
+                                                           ? (suggestions.title || '').substring(0, 57) + '...' 
+                                                           : (suggestions.title || 'Untitled Page');
+
+                                                         const previewDesc = (suggestions.metaDescription || 'No description provided.').length > 160 
+                                                           ? (suggestions.metaDescription || '').substring(0, 157) + '...' 
+                                                           : (suggestions.metaDescription || 'No description provided.');
+
+                                                         const displayUrl = page.url.startsWith('http') 
+                                                           ? page.url 
+                                                           : `${(selectedClient?.wordpress_url || 'https://example.com').replace(/\/$/, '')}/${page.url.replace(/^\//, '')}`;
+
+                                                         return (
+                                                           <div className={`p-4 rounded-xl border space-y-1 ${
+                                                             isWhite ? 'bg-zinc-50 border-zinc-150' : 'bg-zinc-900/30 border-white/5'
+                                                           }`}>
+                                                             <div className="text-[10px] opacity-40 uppercase tracking-wider font-semibold">SERP Snippet Preview</div>
+                                                             <div className="text-[#1a0dab] dark:text-[#8ab4f8] text-[17px] leading-tight hover:underline cursor-pointer truncate font-normal">
+                                                               {previewTitle}
+                                                             </div>
+                                                             <div className="text-[#006621] dark:text-[#34a853] text-xs truncate">
+                                                               {displayUrl}
+                                                             </div>
+                                                             <div className="text-[#545454] dark:text-[#bdc1c6] text-xs line-clamp-2 leading-relaxed">
+                                                               {previewDesc}
+                                                             </div>
+                                                           </div>
+                                                         );
+                                                       })()}
 
                                                       {/* Apply Actions */}
                                                       <div className="flex flex-wrap gap-3 pt-2">

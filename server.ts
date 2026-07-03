@@ -3785,9 +3785,32 @@ CRITICAL INTEGRITY & SPELLING RULES:
       jsonResponse = JSON.parse(cleanJsonString(text));
     }
 
+    let finalTitle = (jsonResponse.title || '').replace(/&amp;/g, '&').trim();
+    let finalMeta = (jsonResponse.metaDescription || '').replace(/&amp;/g, '&').trim();
+
+    // Clean generic suffixes added by models
+    finalTitle = finalTitle.replace(/\s*\|\s*Custom SEO Target Australia$/gi, '');
+    finalTitle = finalTitle.replace(/\s*\|\s*SEO Target Australia$/gi, '');
+
+    // Programmatic constraint enforcement to fit character guidelines:
+    if (finalTitle.length > 60) {
+      finalTitle = finalTitle.substring(0, 60);
+      const lastSpace = finalTitle.lastIndexOf(' ');
+      if (lastSpace > 45) {
+        finalTitle = finalTitle.substring(0, lastSpace).trim();
+      }
+    }
+    if (finalMeta.length > 160) {
+      finalMeta = finalMeta.substring(0, 160);
+      const lastSpace = finalMeta.lastIndexOf(' ');
+      if (lastSpace > 130) {
+        finalMeta = finalMeta.substring(0, lastSpace).trim();
+      }
+    }
+
     res.json({
-      title: jsonResponse.title,
-      metaDescription: jsonResponse.metaDescription,
+      title: finalTitle,
+      metaDescription: finalMeta,
       codePatch: jsonResponse.codePatch
     });
 
