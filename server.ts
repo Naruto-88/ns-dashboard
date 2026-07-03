@@ -5078,6 +5078,164 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
   }
 });
 
+// Helper to fetch live site metadata (title and description)
+async function getLiveSiteMetadata(url: string): Promise<{ title: string; description: string }> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    const html = await res.text();
+    
+    const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+    
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i) ||
+                      html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i);
+    const description = descMatch ? descMatch[1].trim() : '';
+    
+    return { title, description };
+  } catch (e) {
+    return { title: '', description: '' };
+  }
+}
+
+// 1. Fetch SEO update history for a page
+app.get('/api/ai/metadata-history', async (req, res) => {
+  const { clientId, url } = req.query;
+  if (!clientId || !url) {
+    return res.status(400).json({ error: 'clientId and url are required' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('seo_metadata_history')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('page_url', url)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 2. Apply optimized SEO metadata to live WordPress site
+app.post('/api/ai/apply-metadata', async (req, res) => {
+  const { clientId, url, title, description, appliedBy } = req.body;
+  if (!clientId || !url || !title || !description) {
+    return res.status(400).json({ error: 'clientId, url, title, and description are required' });
+  }
+
+  try {
+    // Fetch client config
+    const { data: client, error: clientErr } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', clientId)
+      .single();
+
+    if (clientErr || !client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (!client.wordpress_url || !client.seo_webhook_secret) {
+      return res.status(400).json({ error: 'WordPress connection details not configured for this client.' });
+    }
+
+    // Scrape current live metadata for version history rollback
+    const fullUrl = url.startsWith('http') ? url : `${client.wordpress_url.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+    const currentMeta = await getLiveSiteMetadata(fullUrl);
+
+    // Call client website webhook
+    const wpEndpoint = `${client.wordpress_url.replace(/\/$/, '')}/wp-json/mission-control/v1/update-metadata`;
+    const wpRes = await fetch(wpEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: client.seo_webhook_secret,
+        url: url,
+        title: title,
+        description: description
+      })
+    });
+
+    if (!wpRes.ok) {
+      const errorMsg = await wpRes.text();
+      return res.status(wpRes.status).json({ error: `Client site update failed: ${errorMsg}` });
+    }
+
+    // Log update history
+    const { error: logErr } = await supabase
+      .from('seo_metadata_history')
+      .insert({
+        client_id: clientId,
+        page_url: url,
+        previous_title: currentMeta.title || title,
+        previous_description: currentMeta.description || description,
+        applied_title: title,
+        applied_description: description,
+        applied_by: appliedBy || 'Admin'
+      });
+
+    if (logErr) throw logErr;
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[SEO_APPLY_ERROR]', e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// 3. Revert metadata to a historical version
+app.post('/api/ai/revert-metadata', async (req, res) => {
+  const { clientId, historyId } = req.body;
+  if (!clientId || !historyId) {
+    return res.status(400).json({ error: 'clientId and historyId are required' });
+  }
+
+  try {
+    const { data: client } = await supabase.from('clients').select('*').eq('id', clientId).single();
+    const { data: history } = await supabase.from('seo_metadata_history').select('*').eq('id', historyId).single();
+
+    if (!client || !history) {
+      return res.status(404).json({ error: 'Client or History record not found' });
+    }
+
+    const wpEndpoint = `${client.wordpress_url.replace(/\/$/, '')}/wp-json/mission-control/v1/update-metadata`;
+    const wpRes = await fetch(wpEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: client.seo_webhook_secret,
+        url: history.page_url,
+        title: history.previous_title,
+        description: history.previous_description
+      })
+    });
+
+    if (!wpRes.ok) {
+      const errorMsg = await wpRes.text();
+      return res.status(wpRes.status).json({ error: `Revert failed: ${errorMsg}` });
+    }
+
+    // Insert new history record reflecting the revert operation
+    await supabase.from('seo_metadata_history').insert({
+      client_id: clientId,
+      page_url: history.page_url,
+      previous_title: history.applied_title,
+      previous_description: history.applied_description,
+      applied_title: history.previous_title,
+      applied_description: history.previous_description,
+      applied_by: 'Admin (Reverted)'
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Vite Middleware
 if (process.env.NODE_ENV !== 'production' && !process.env.PASSENGER_APP_ENV) {
   const vite = await createViteServer({

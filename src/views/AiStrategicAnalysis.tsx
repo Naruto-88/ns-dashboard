@@ -25,7 +25,7 @@ import {
   ChevronUp,
   Trash2
 } from 'lucide-react';
-import { getClients, runAiAnalysis, runAiSinglePageOptimise, updateClient, Client } from '../services/dataService';
+import { getClients, runAiAnalysis, runAiSinglePageOptimise, updateClient, Client, getSeoMetadataHistory, applySeoMetadata, revertSeoMetadata } from '../services/dataService';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
@@ -346,12 +346,82 @@ export default function AiStrategicAnalysis() {
     }
   };
 
+  const [metadataHistories, setMetadataHistories] = useState<Record<string, any[]>>({});
+  const [loadingMetadataHistory, setLoadingMetadataHistory] = useState<Record<string, boolean>>({});
+  const [applyingMetadata, setApplyingMetadata] = useState<Record<string, boolean>>({});
+
+  const handleUpdateOptimizationField = (pageUrl: string, field: 'title' | 'metaDescription', value: string) => {
+    setPageOptimizations(prev => {
+      const existing = prev[pageUrl];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        [pageUrl]: {
+          ...existing,
+          [field]: value
+        }
+      };
+    });
+  };
+
+  const handleFetchMetadataHistory = async (pageUrl: string) => {
+    setLoadingMetadataHistory(prev => ({ ...prev, [pageUrl]: true }));
+    try {
+      const data = await getSeoMetadataHistory(selectedClientId, pageUrl);
+      setMetadataHistories(prev => ({ ...prev, [pageUrl]: data }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMetadataHistory(prev => ({ ...prev, [pageUrl]: false }));
+    }
+  };
+
+  const handleApplyMetadata = async (pageUrl: string, title: string, description: string) => {
+    setApplyingMetadata(prev => ({ ...prev, [pageUrl]: true }));
+    try {
+      const res = await applySeoMetadata({
+        clientId: selectedClientId,
+        url: pageUrl,
+        title,
+        description,
+        appliedBy: 'Admin'
+      });
+      if (res.success) {
+        setSuccessMsg(`Successfully applied metadata to live website for page: ${pageUrl}`);
+        handleFetchMetadataHistory(pageUrl);
+      } else {
+        setError(`Failed to apply metadata: ${res.error}`);
+      }
+    } catch (e: any) {
+      setError(`Apply failed: ${e.message}`);
+    } finally {
+      setApplyingMetadata(prev => ({ ...prev, [pageUrl]: false }));
+    }
+  };
+
+  const handleRevertMetadata = async (pageUrl: string, historyId: string) => {
+    try {
+      const res = await revertSeoMetadata(selectedClientId, historyId);
+      if (res.success) {
+        setSuccessMsg('Successfully rolled back metadata to selected version.');
+        // Refresh history by inspecting the URL we rolled back
+        const histItem = historiesForClient.find(h => h.id === historyId);
+        if (histItem) {
+          handleFetchMetadataHistory(histItem.page_url);
+        }
+      } else {
+        setError(`Revert failed: ${res.error}`);
+      }
+    } catch (e: any) {
+      setError(`Revert failed: ${e.message}`);
+    }
+  };
+
   const selectedClient = clients.find(c => c.id === selectedClientId);
+  const historiesForClient = metadataHistories[selectedClient?.id || ''] || [];
 
   return (
     <div className="space-y-8 pb-16">
-
-      {/* Top Header */}
       <div className="print:hidden">
         <div className="flex items-center gap-2">
           <BrainCircuit size={28} className={isWhite ? 'text-[#082a36]' : 'text-blue-400'} />
@@ -986,66 +1056,167 @@ export default function AiStrategicAnalysis() {
                                                     </span>
                                                   </div>
                                                 );
-                                              }
+                                                                   if (isLoaded) {
+                                                const history = (metadataHistories[page.url] || []);
+                                                const hasWpConfig = !!(selectedClient?.wordpress_url && selectedClient?.seo_webhook_secret);
 
-                                              if (isLoaded) {
                                                 return (
-                                                  <div className={`p-6 rounded-2xl border space-y-4 ${
+                                                  <div className={`p-6 rounded-2xl border space-y-5 text-left ${
                                                     isWhite ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-950 border-white/5'
                                                   }`}>
-                                                    <div className="text-sm font-medium normal-case tracking-normal text-[#76c9be] flex items-center gap-1.5">
-                                                      <Sparkles size={11} className="animate-pulse" />
-                                                      AI CUSTOM OPTIMISED FIX TARGETS (CREDIT SAVED: SINGLE URL ONLY)
+                                                    <div className="text-sm font-medium normal-case tracking-normal text-[#76c9be] flex items-center gap-1.5 justify-between">
+                                                      <span className="flex items-center gap-1.5">
+                                                        <Sparkles size={11} className="animate-pulse" />
+                                                        AI CUSTOM OPTIMISED FIX TARGETS
+                                                      </span>
+                                                      {hasWpConfig && (
+                                                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-mono">
+                                                          WordPress Connected
+                                                        </span>
+                                                      )}
                                                     </div>
                                                     
-                                                    <div className="space-y-3.5">
-                                                      {suggestions.title && (
-                                                        <div className="flex items-center justify-between gap-4 border-b border-zinc-100 dark:border-white/5 pb-3">
-                                                          <div className="min-w-0 flex-1">
-                                                            <span className="text-sm font-medium text-zinc-500 normal-case tracking-normal block mb-0.5">Optimised Title Target</span>
-                                                            <p className={`text-sm font-mono font-medium break-all leading-normal ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
-                                                              {suggestions.title}
-                                                            </p>
-                                                          </div>
-                                                          <button
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              handleCopyToClipboard(suggestions.title, "Optimised Title", setSuccessMsg);
-                                                            }}
-                                                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium normal-case tracking-normal shrink-0 transition-all active:scale-95 ${
-                                                              isWhite ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 border-[#082a36]' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500'
-                                                            }`}
-                                                          >
-                                                            Copy Title
-                                                          </button>
+                                                    <div className="space-y-4">
+                                                      {/* Editable Title Target */}
+                                                      <div className="space-y-1">
+                                                        <div className="flex justify-between text-xs text-zinc-500">
+                                                          <span>Optimised Title Target</span>
+                                                          <span className={suggestions.title.length > 60 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                                            {suggestions.title.length} / 60 chars
+                                                          </span>
                                                         </div>
-                                                      )}
+                                                        <input
+                                                          type="text"
+                                                          value={suggestions.title}
+                                                          onChange={(e) => handleUpdateOptimizationField(page.url, 'title', e.target.value)}
+                                                          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
+                                                            isWhite 
+                                                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
+                                                              : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
+                                                          }`}
+                                                        />
+                                                      </div>
 
-                                                      {suggestions.metaDescription && (
-                                                        <div className="flex items-center justify-between gap-4">
-                                                          <div className="min-w-0 flex-1">
-                                                            <span className="text-sm font-medium text-zinc-500 normal-case tracking-normal block mb-0.5">Optimised Meta Description Target</span>
-                                                            <p className={`text-sm font-mono font-medium break-all leading-normal ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
-                                                              {suggestions.metaDescription}
-                                                            </p>
-                                                          </div>
+                                                      {/* Editable Description Target */}
+                                                      <div className="space-y-1">
+                                                        <div className="flex justify-between text-xs text-zinc-500">
+                                                          <span>Optimised Meta Description Target</span>
+                                                          <span className={suggestions.metaDescription.length > 160 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                                            {suggestions.metaDescription.length} / 160 chars
+                                                          </span>
+                                                        </div>
+                                                        <textarea
+                                                          rows={3}
+                                                          value={suggestions.metaDescription}
+                                                          onChange={(e) => handleUpdateOptimizationField(page.url, 'metaDescription', e.target.value)}
+                                                          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
+                                                            isWhite 
+                                                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
+                                                              : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
+                                                          }`}
+                                                        />
+                                                      </div>
+
+                                                      {/* Google Search Snippet Preview */}
+                                                      <div className={`p-4 rounded-xl border space-y-1 ${
+                                                        isWhite ? 'bg-zinc-50 border-zinc-150' : 'bg-zinc-900/30 border-white/5'
+                                                      }`}>
+                                                        <div className="text-[10px] opacity-40 uppercase tracking-wider font-semibold">SERP Snippet Preview</div>
+                                                        <div className="text-[#1a0dab] dark:text-[#8ab4f8] text-[17px] leading-tight hover:underline cursor-pointer truncate font-normal">
+                                                          {suggestions.title || 'Untitled Page'}
+                                                        </div>
+                                                        <div className="text-[#006621] dark:text-[#34a853] text-xs truncate">
+                                                          {selectedClient?.wordpress_url || 'https://example.com'}/{page.url.replace(/^\//, '')}
+                                                        </div>
+                                                        <div className="text-[#545454] dark:text-[#bdc1c6] text-xs line-clamp-2 leading-relaxed">
+                                                          {suggestions.metaDescription || 'No description provided.'}
+                                                        </div>
+                                                      </div>
+
+                                                      {/* Apply Actions */}
+                                                      <div className="flex flex-wrap gap-3 pt-2">
+                                                        <button
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCopyToClipboard(suggestions.title, "Optimised Title", setSuccessMsg);
+                                                          }}
+                                                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition active:scale-95 ${
+                                                            isWhite ? 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50' : 'bg-zinc-900 border-zinc-850 text-zinc-300 hover:bg-zinc-800'
+                                                          }`}
+                                                        >
+                                                          Copy Title
+                                                        </button>
+                                                        <button
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCopyToClipboard(suggestions.metaDescription, "Meta Description", setSuccessMsg);
+                                                          }}
+                                                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition active:scale-95 ${
+                                                            isWhite ? 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50' : 'bg-zinc-900 border-zinc-850 text-zinc-300 hover:bg-zinc-800'
+                                                          }`}
+                                                        >
+                                                          Copy Meta
+                                                        </button>
+
+                                                        {hasWpConfig && (
                                                           <button
                                                             onClick={(e) => {
                                                               e.stopPropagation();
-                                                              handleCopyToClipboard(suggestions.metaDescription, "Meta Description", setSuccessMsg);
+                                                              handleApplyMetadata(page.url, suggestions.title, suggestions.metaDescription);
                                                             }}
-                                                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium normal-case tracking-normal shrink-0 transition-all active:scale-95 ${
-                                                              isWhite ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 border-[#082a36]' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500'
+                                                            disabled={applyingMetadata[page.url]}
+                                                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 shadow flex items-center gap-1.5 ml-auto ${
+                                                              isWhite ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-emerald-600 hover:bg-emerald-500 text-slate-900 shadow-emerald-600/10'
                                                             }`}
                                                           >
-                                                            Copy Meta
+                                                            {applyingMetadata[page.url] ? 'Applying...' : 'Apply to Live Site'}
                                                           </button>
+                                                        )}
+                                                      </div>
+
+                                                      {/* Version history panel */}
+                                                      {hasWpConfig && (
+                                                        <div className="border-t border-zinc-150 dark:border-white/5 pt-3">
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleFetchMetadataHistory(page.url);
+                                                            }}
+                                                            className="text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1"
+                                                          >
+                                                            📋 View Edit History ({history.length})
+                                                          </button>
+
+                                                          {history.length > 0 && (
+                                                            <div className="mt-2 space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                                                              {history.map((hist: any, hIdx: number) => (
+                                                                <div key={hIdx} className="p-2.5 rounded bg-zinc-900/10 border border-zinc-850/40 text-[11px] flex justify-between items-center gap-4">
+                                                                  <div className="min-w-0 flex-1 space-y-0.5">
+                                                                    <div className="font-semibold text-zinc-400">
+                                                                      Applied by {hist.applied_by} on {new Date(hist.created_at).toLocaleDateString()}
+                                                                    </div>
+                                                                    <div className="truncate text-zinc-500">Title: {hist.applied_title}</div>
+                                                                    <div className="truncate text-zinc-500">Desc: {hist.applied_description}</div>
+                                                                  </div>
+                                                                  <button
+                                                                    onClick={(e) => {
+                                                                      e.stopPropagation();
+                                                                      handleRevertMetadata(page.url, hist.id);
+                                                                    }}
+                                                                    className="px-2 py-1 rounded bg-[#e87a43]/10 text-[#e87a43] border border-[#e87a43]/20 hover:bg-[#e87a43]/20 font-bold tracking-tight text-[10px] shrink-0"
+                                                                  >
+                                                                    Rollback
+                                                                  </button>
+                                                                </div>
+                                                              ))}
+                                                            </div>
+                                                          )}
                                                         </div>
                                                       )}
                                                     </div>
                                                   </div>
                                                 );
-                                              }
+                                              }                           }
 
                                               // Optimise Button
                                               return (

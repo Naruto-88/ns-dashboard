@@ -874,3 +874,56 @@ export const syncAdsGrowthData = async (clientId: string, weekStart: string): Pr
     return null;
   }
 };
+
+export const getSeoMetadataHistory = async (clientId: string, url: string): Promise<any[]> => {
+  try {
+    const res = await fetch(`/api/ai/metadata-history?clientId=${clientId}&url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error('Failed to fetch metadata history');
+    return await res.json();
+  } catch (error) {
+    console.error('Error in getSeoMetadataHistory:', error);
+    return [];
+  }
+};
+
+export const applySeoMetadata = async (params: {
+  clientId: string;
+  url: string;
+  title: string;
+  description: string;
+  appliedBy?: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const res = await fetch('/api/ai/apply-metadata', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      return { success: false, error: err.error || 'Failed to apply metadata' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in applySeoMetadata:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const revertSeoMetadata = async (clientId: string, historyId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const res = await fetch('/api/ai/revert-metadata', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, historyId })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      return { success: false, error: err.error || 'Failed to revert metadata' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in revertSeoMetadata:', error);
+    return { success: false, error: error.message };
+  }
+};
