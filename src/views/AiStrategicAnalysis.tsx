@@ -304,7 +304,7 @@ export default function AiStrategicAnalysis() {
     }
   };
 
-  const handleOptimisePage = async (pageUrl: string, pageTitle: string, issues: string[]) => {
+  const handleOptimisePage = async (pageUrl: string, pageTitle: string, pageDescription: string, issues: string[]) => {
     setPageOptimizations(prev => ({
       ...prev,
       [pageUrl]: {
@@ -322,7 +322,8 @@ export default function AiStrategicAnalysis() {
         pageTitle,
         issues,
         model: selectedModel === 'claude' ? selectedClaudeModel : selectedModel === 'gpt' ? selectedGptModel : selectedModel,
-        simulate
+        simulate,
+        currentDescription: pageDescription
       });
 
       setPageOptimizations(prev => ({
@@ -1255,7 +1256,7 @@ export default function AiStrategicAnalysis() {
                                                   <button
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      handleOptimisePage(page.url, page.title, page.issues);
+                                                      handleOptimisePage(page.url, page.title, page.description || '', page.issues);
                                                     }}
                                                     className={`px-3.5 py-2 rounded-lg border text-sm font-medium normal-case tracking-normal transition-all hover:scale-[1.02] active:scale-95 shadow-md flex items-center gap-1.5 shrink-0 ${
                                                       isWhite

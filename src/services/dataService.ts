@@ -729,6 +729,7 @@ export const runAiSinglePageOptimise = async (params: {
   issues: string[];
   model: string;
   simulate?: boolean;
+  currentDescription?: string;
 }): Promise<any> => {
   try {
     const response = await fetch('/api/ai/optimise-page', {

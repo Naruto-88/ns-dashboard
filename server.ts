@@ -2031,6 +2031,7 @@ async function auditPage(url: string) {
       url, 
       issues, 
       title: title || 'Untitled Page',
+      description: description || '',
       titleLength: title.length,
       metaLength: description.length,
       wordCount: wordCount
@@ -3490,7 +3491,7 @@ OUTPUT SCHEMA (return all fields — all are REQUIRED):
 
 // POST on-demand single page SEO optimisation (Strict Australian English - no 'z')
 app.post('/api/ai/optimise-page', async (req, res) => {
-  const { clientId, url, pageTitle, issues, model, simulate } = req.body;
+  const { clientId, url, pageTitle, issues, model, simulate, currentDescription } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'url is required' });
@@ -3498,6 +3499,9 @@ app.post('/api/ai/optimise-page', async (req, res) => {
 
   try {
     const selectedModel = model || 'claude';
+    const parsedIssues = Array.isArray(issues) ? issues : [];
+    const hasTitleIssues = parsedIssues.some((iss: string) => iss.toLowerCase().includes('title'));
+    const hasMetaIssues = parsedIssues.some((iss: string) => iss.toLowerCase().includes('meta') || iss.toLowerCase().includes('description'));
 
     // Fetch API Keys
     const { data: keysData } = await supabase.from('api_keys').select('*');
@@ -3521,17 +3525,24 @@ app.post('/api/ai/optimise-page', async (req, res) => {
     // Run simulation ONLY when simulate === true is EXPLICITLY requested
     if (simulate === true) {
       console.log(`[AI OPTIMISE] Running explicit page simulation for: ${url}`);
-      let simulatedTitle = pageTitle && pageTitle !== 'Untitled Page' 
-        ? `${pageTitle} | Custom SEO Target Australia` 
-        : 'Premium SEO Services & Enterprise Scale Strategy | CSG';
       
-      let simulatedMeta = `Partner with Australia's elite digital growth team. Scale your organic rankings with customised technical audits, content gap optimisation, and high-quality link profiles.`;
+      let simulatedTitle = pageTitle || 'Untitled Page';
+      if (hasTitleIssues) {
+        simulatedTitle = pageTitle && pageTitle !== 'Untitled Page' 
+          ? `${pageTitle} | Custom SEO Target Australia` 
+          : 'Premium SEO Services & Enterprise Scale Strategy | CSG';
+      }
+      
+      let simulatedMeta = currentDescription || '';
+      if (hasMetaIssues || !simulatedMeta) {
+        simulatedMeta = `Partner with Australia's elite digital growth team. Scale your organic rankings with customised technical audits, content gap optimisation, and high-quality link profiles.`;
+      }
       
       let simulatedCodePatch = `<!-- Copy and paste/modify this snippet inside your HTML layout -->\n`;
       let titleFixed = false;
       let metaFixed = false;
 
-      if (issues && Array.isArray(issues)) {
+      if (parsedIssues.length > 0) {
         issues.forEach((iss: string) => {
           const issLower = iss.toLowerCase();
           if (issLower.includes('title') && !titleFixed) {
@@ -3829,6 +3840,13 @@ CRITICAL INTEGRITY & SPELLING RULES:
       if (lastSpace > 130) {
         finalMeta = finalMeta.substring(0, lastSpace).trim();
       }
+    }
+
+    if (!hasTitleIssues) {
+      finalTitle = pageTitle || '';
+    }
+    if (!hasMetaIssues && currentDescription) {
+      finalMeta = currentDescription;
     }
 
     res.json({
