@@ -1056,7 +1056,9 @@ export default function AiStrategicAnalysis() {
                                                     </span>
                                                   </div>
                                                 );
-                                                                   if (isLoaded) {
+                                              }
+                                              
+                                              if (isLoaded) {
                                                 const history = (metadataHistories[page.url] || []);
                                                 const hasWpConfig = !!(selectedClient?.wordpress_url && selectedClient?.seo_webhook_secret);
 
@@ -1216,7 +1218,7 @@ export default function AiStrategicAnalysis() {
                                                     </div>
                                                   </div>
                                                 );
-                                              }                           }
+                                              }
 
                                               // Optimise Button
                                               return (
