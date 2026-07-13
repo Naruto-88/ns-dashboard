@@ -730,6 +730,7 @@ export const runAiSinglePageOptimise = async (params: {
   model: string;
   simulate?: boolean;
   currentDescription?: string;
+  missingAltImages?: string[];
 }): Promise<any> => {
   try {
     const response = await fetch('/api/ai/optimise-page', {
@@ -808,6 +809,7 @@ export interface WeeklyAdsGrowth {
   google_ads_roas: number;
   google_ads_ctr: number;
   google_ads_quality_score: number;
+  google_ads_campaigns?: any[];
   meta_spend: number;
   meta_reach: number;
   meta_leads: number;
@@ -863,19 +865,17 @@ export const updateAdsGrowthData = async (clientId: string, payload: Partial<Wee
 };
 
 export const syncAdsGrowthData = async (clientId: string, weekStart: string): Promise<WeeklyAdsGrowth | null> => {
-  try {
-    const res = await fetch(`/api/clients/${clientId}/sync-ads-growth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weekStart })
-    });
-    if (!res.ok) throw new Error('Failed to sync ads growth data');
-    const result = await res.json();
-    return result.data;
-  } catch (error) {
-    console.error('Error in syncAdsGrowthData:', error);
-    return null;
+  const res = await fetch(`/api/clients/${clientId}/sync-ads-growth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ weekStart })
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => 'Failed to sync ads growth data');
+    throw new Error(errText);
   }
+  const result = await res.json();
+  return result.data;
 };
 
 export const getSeoMetadataHistory = async (clientId: string, url: string): Promise<any[]> => {

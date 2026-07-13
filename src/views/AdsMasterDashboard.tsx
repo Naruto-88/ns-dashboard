@@ -8,6 +8,7 @@ import {
   AlertCircle,
   HelpCircle,
   ChevronRight,
+  ChevronDown,
   Globe,
   Share2,
   BarChart3,
@@ -41,6 +42,7 @@ export default function AdsMasterDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'paid' | 'analytics' | 'deliverables'>('paid');
+  const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({});
 
   // Generate list of weeks (Mondays)
   const weekOptions = useMemo(() => {
@@ -98,8 +100,8 @@ export default function AdsMasterDashboard() {
       const record = list.find(r => r.week_start_date === selectedWeek) || null;
       
       const gSpend = record?.google_ads_spend || 0;
-      const mockGoogleLeads = Math.round(gSpend / 35) || 1;
-      const gCpl = gSpend > 0 ? (gSpend / mockGoogleLeads).toFixed(2) : '0.00';
+      const gLeads = record ? Math.round(record.google_ads_roas * record.google_ads_spend) : 0;
+      const gCpl = gSpend > 0 && gLeads > 0 ? (gSpend / gLeads).toFixed(2) : '0.00';
 
       const mSpend = record?.meta_spend || 0;
       const mLeads = record?.meta_leads || 0;
@@ -364,133 +366,196 @@ export default function AdsMasterDashboard() {
               </thead>
               <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-zinc-900/60'}`}>
                 {rows.map(({ client, adsRecord, googleCpl, metaCpl, webConvRate }) => {
+                  const campaigns = adsRecord?.google_ads_campaigns || [];
+                  const hasCampaigns = campaigns.length > 0;
+                  const isExpanded = !!expandedClients[client.id];
+
                   return (
-                    <tr key={client.id} className="hover:bg-zinc-500/5 transition-colors">
-                      {/* Client */}
-                      <td className="px-5 py-4 font-medium">
-                        <Link to={`/ads-growth?clientId=${client.id}`} className="flex items-center gap-1.5 group hover:underline text-sm">
-                          {client.short_code && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold font-mono ${
-                              theme === 'white' ? 'bg-zinc-150 text-zinc-700' : 'bg-blue-600/20 text-blue-400'
+                    <React.Fragment key={client.id}>
+                      <tr className="hover:bg-zinc-500/5 transition-colors">
+                        {/* Client */}
+                        <td className="px-5 py-4 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            {hasCampaigns ? (
+                              <button
+                                onClick={() => setExpandedClients(prev => ({ ...prev, [client.id]: !prev[client.id] }))}
+                                className={`p-1 rounded hover:bg-zinc-500/10 transition-colors mr-1 cursor-pointer ${
+                                  theme === 'white' ? 'text-zinc-650' : 'text-zinc-400'
+                                }`}
+                                title="Toggle campaign breakdown"
+                              >
+                                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+                            ) : (
+                              <span className="w-7"></span>
+                            )}
+                            <Link to={`/ads-growth?clientId=${client.id}`} className="flex items-center gap-1.5 group hover:underline text-sm">
+                              {client.short_code && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold font-mono ${
+                                  theme === 'white' ? 'bg-zinc-150 text-zinc-700' : 'bg-blue-600/20 text-blue-400'
+                                }`}>
+                                  {client.short_code}
+                                </span>
+                              )}
+                              <span className={`font-semibold ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{client.name}</span>
+                              <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </Link>
+                          </div>
+                        </td>
+
+                        {/* Render Tab Specific Cells */}
+                        {activeTab === 'paid' && (
+                          <>
+                            {/* Google Spend */}
+                            <td className="px-4 py-4 text-center font-mono">
+                              {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_spend' ? (
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  value={editingCell.value}
+                                  onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleCellUpdateSubmit();
+                                    if (e.key === 'Escape') setEditingCell(null);
+                                  }}
+                                  onBlur={handleCellUpdateSubmit}
+                                  className="w-16 px-1 py-0.5 border text-center text-xs rounded outline-none bg-zinc-900 text-white"
+                                />
+                              ) : (
+                                <span 
+                                  onDoubleClick={() => setEditingCell({ clientId: client.id, field: 'google_ads_spend', value: String(adsRecord?.google_ads_spend || 0) })}
+                                  className="cursor-pointer hover:bg-white/10 px-1 py-0.5 rounded"
+                                >
+                                  ${Number(adsRecord?.google_ads_spend || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center font-mono text-blue-400">${googleCpl}</td>
+                            <td className="px-4 py-4 text-center font-mono">
+                              {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_ctr' ? (
+                                <input
+                                  autoFocus
+                                  type="number" step="any"
+                                  value={editingCell.value}
+                                  onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleCellUpdateSubmit();
+                                    if (e.key === 'Escape') setEditingCell(null);
+                                  }}
+                                  onBlur={handleCellUpdateSubmit}
+                                  className="w-14 px-1 py-0.5 border text-center text-xs rounded outline-none bg-zinc-900 text-white"
+                                />
+                              ) : (
+                                <span 
+                                  onDoubleClick={() => setEditingCell({ clientId: client.id, field: 'google_ads_ctr', value: String(adsRecord?.google_ads_ctr || 0) })}
+                                  className="cursor-pointer hover:bg-white/10 px-1 py-0.5 rounded"
+                                >
+                                  {adsRecord?.google_ads_ctr || '0.00'}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_roas || '0.0'}x</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_quality_score || '0'}</td>
+                            <td className="px-4 py-4 text-center font-mono">${Number(adsRecord?.meta_spend || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_leads || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono text-purple-400">${metaCpl}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_ctr || '0.00'}%</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_roas || '0.0'}x</td>
+                            <td className={`px-4 py-4 text-center font-mono font-bold ${
+                              (adsRecord?.meta_frequency || 0) > 3 ? 'text-red-400' : ''
+                            }`}>{adsRecord?.meta_frequency || '0.00'}x</td>
+                          </>
+                        )}
+
+                        {activeTab === 'analytics' && (
+                          <>
+                            <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.website_sessions || 0).toLocaleString()}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.bounce_rate || '0.0'}%</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.avg_time_on_site || 'N/A'}</td>
+                            <td className="px-4 py-4 text-center font-mono text-emerald-400">{webConvRate}%</td>
+                            <td className="px-4 py-4 text-center truncate max-w-[120px]" title={adsRecord?.top_converting_page || ''}>
+                              {adsRecord?.top_converting_page || 'N/A'}
+                            </td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.active_ab_tests || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.landing_pages_live || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.followers_total || 0).toLocaleString()}</td>
+                            <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.organic_social_reach || 0).toLocaleString()}</td>
+                            <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.social_impressions || 0).toLocaleString()}</td>
+                            <td className="px-4 py-4 text-center font-mono text-sky-400">{adsRecord?.engagement_rate || '0.0'}%</td>
+                          </>
+                        )}
+
+                        {activeTab === 'deliverables' && (
+                          <>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.blogs_written || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.avg_blog_quality || '0.0'}/5</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.backlinks_created || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.social_posts_published || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.social_posts_content_total || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.creatives_produced || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono">{adsRecord?.emails_automation || 0}</td>
+                            <td className="px-4 py-4 text-center font-mono text-blue-400">{adsRecord?.seo_organic_leads || 0}</td>
+                          </>
+                        )}
+
+                        {/* Action */}
+                        <td className="px-5 py-4 text-center">
+                          <button
+                            onClick={() => handleSyncClient(client.id)}
+                            disabled={syncingClient === client.id}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold border transition ${
+                              theme === 'white'
+                                ? 'bg-white border-zinc-200 hover:bg-zinc-55 text-zinc-700'
+                                : 'bg-zinc-900 border-zinc-800 text-emerald-400 hover:bg-zinc-800'
+                            }`}
+                          >
+                            {syncingClient === client.id ? 'Syncing...' : 'Sync'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className={`${theme === 'white' ? 'bg-zinc-50/50' : 'bg-zinc-950/10'}`}>
+                          <td colSpan={activeTab === 'deliverables' ? 10 : 13} className="px-8 py-3.5">
+                            <div className={`p-5 rounded-2xl border ${
+                              theme === 'white' ? 'bg-white border-zinc-150 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'
                             }`}>
-                              {client.short_code}
-                            </span>
-                          )}
-                          <span className={`font-semibold ${theme === 'white' ? 'text-zinc-800' : 'text-white'}`}>{client.name}</span>
-                          <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </Link>
-                      </td>
-
-                      {/* Render Tab Specific Cells */}
-                      {activeTab === 'paid' && (
-                        <>
-                          {/* Google Spend */}
-                          <td className="px-4 py-4 text-center font-mono">
-                            {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_spend' ? (
-                              <input
-                                autoFocus
-                                type="number"
-                                value={editingCell.value}
-                                onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleCellUpdateSubmit();
-                                  if (e.key === 'Escape') setEditingCell(null);
-                                }}
-                                onBlur={handleCellUpdateSubmit}
-                                className="w-16 px-1 py-0.5 border text-center text-xs rounded outline-none bg-zinc-900 text-white"
-                              />
-                            ) : (
-                              <span 
-                                onDoubleClick={() => setEditingCell({ clientId: client.id, field: 'google_ads_spend', value: String(adsRecord?.google_ads_spend || 0) })}
-                                className="cursor-pointer hover:bg-white/10 px-1 py-0.5 rounded"
-                              >
-                                ${Number(adsRecord?.google_ads_spend || 0).toLocaleString()}
-                              </span>
-                            )}
+                              <h4 className={`text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-1.5 ${
+                                theme === 'white' ? 'text-zinc-700' : 'text-emerald-400'
+                              }`}>
+                                <Sparkles className="w-3.5 h-3.5" /> Campaign Performance Breakdown
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs border-collapse">
+                                  <thead>
+                                    <tr className={`border-b ${theme === 'white' ? 'border-zinc-150 text-zinc-600' : 'border-zinc-900 text-zinc-400'}`}>
+                                      <th className="py-2.5 font-semibold text-zinc-500">Campaign Name</th>
+                                      <th className="py-2.5 text-right font-semibold text-zinc-500">Spend</th>
+                                      <th className="py-2.5 text-right font-semibold text-zinc-500">Clicks</th>
+                                      <th className="py-2.5 text-right font-semibold text-zinc-500">Impressions</th>
+                                      <th className="py-2.5 text-right font-semibold text-zinc-500 text-blue-400">CTR</th>
+                                      <th className="py-2.5 text-right font-semibold text-zinc-500 text-purple-400">CPC</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className={`divide-y ${theme === 'white' ? 'divide-zinc-100' : 'divide-zinc-900/40'}`}>
+                                    {campaigns.map((camp: any, idx: number) => (
+                                      <tr key={idx} className="hover:bg-zinc-500/5">
+                                        <td className={`py-2.5 font-medium ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>{camp.campaignName}</td>
+                                        <td className="py-2.5 text-right font-mono">${Number(camp.cost || 0).toFixed(2)}</td>
+                                        <td className="py-2.5 text-right font-mono">{camp.clicks || 0}</td>
+                                        <td className="py-2.5 text-right font-mono">{Number(camp.impressions || 0).toLocaleString()}</td>
+                                        <td className="py-2.5 text-right font-mono text-blue-400">{Number(camp.ctr || 0).toFixed(2)}%</td>
+                                        <td className="py-2.5 text-right font-mono text-purple-400">${Number(camp.cpc || 0).toFixed(2)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           </td>
-                          <td className="px-4 py-4 text-center font-mono text-blue-400">${googleCpl}</td>
-                          <td className="px-4 py-4 text-center font-mono">
-                            {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_ctr' ? (
-                              <input
-                                autoFocus
-                                type="number" step="any"
-                                value={editingCell.value}
-                                onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleCellUpdateSubmit();
-                                  if (e.key === 'Escape') setEditingCell(null);
-                                }}
-                                onBlur={handleCellUpdateSubmit}
-                                className="w-14 px-1 py-0.5 border text-center text-xs rounded outline-none bg-zinc-900 text-white"
-                              />
-                            ) : (
-                              <span 
-                                onDoubleClick={() => setEditingCell({ clientId: client.id, field: 'google_ads_ctr', value: String(adsRecord?.google_ads_ctr || 0) })}
-                                className="cursor-pointer hover:bg-white/10 px-1 py-0.5 rounded"
-                              >
-                                {adsRecord?.google_ads_ctr || '0.00'}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_roas || '0.0'}x</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_quality_score || '0'}</td>
-                          <td className="px-4 py-4 text-center font-mono">${Number(adsRecord?.meta_spend || 0).toLocaleString()}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_leads || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono text-purple-400">${metaCpl}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_ctr || '0.00'}%</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_roas || '0.0'}x</td>
-                          <td className={`px-4 py-4 text-center font-mono font-bold ${
-                            (adsRecord?.meta_frequency || 0) > 3 ? 'text-red-400' : ''
-                          }`}>{adsRecord?.meta_frequency || '0.00'}x</td>
-                        </>
+                        </tr>
                       )}
-
-                      {activeTab === 'analytics' && (
-                        <>
-                          <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.website_sessions || 0).toLocaleString()}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.bounce_rate || '0.0'}%</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.avg_time_on_site || 'N/A'}</td>
-                          <td className="px-4 py-4 text-center font-mono text-emerald-400">{webConvRate}%</td>
-                          <td className="px-4 py-4 text-center truncate max-w-[120px]" title={adsRecord?.top_converting_page || ''}>
-                            {adsRecord?.top_converting_page || 'N/A'}
-                          </td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.active_ab_tests || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.landing_pages_live || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.followers_total || 0).toLocaleString()}</td>
-                          <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.organic_social_reach || 0).toLocaleString()}</td>
-                          <td className="px-4 py-4 text-center font-mono">{Number(adsRecord?.social_impressions || 0).toLocaleString()}</td>
-                          <td className="px-4 py-4 text-center font-mono text-sky-400">{adsRecord?.engagement_rate || '0.0'}%</td>
-                        </>
-                      )}
-
-                      {activeTab === 'deliverables' && (
-                        <>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.blogs_written || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.avg_blog_quality || '0.0'}/5</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.backlinks_created || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.social_posts_published || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.social_posts_content_total || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.creatives_produced || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono">{adsRecord?.emails_automation || 0}</td>
-                          <td className="px-4 py-4 text-center font-mono text-blue-400">{adsRecord?.seo_organic_leads || 0}</td>
-                        </>
-                      )}
-
-                      {/* Action */}
-                      <td className="px-5 py-4 text-center">
-                        <button
-                          onClick={() => handleSyncClient(client.id)}
-                          disabled={syncingClient === client.id}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold border transition ${
-                            theme === 'white'
-                              ? 'bg-white border-zinc-200 hover:bg-zinc-55 text-zinc-700'
-                              : 'bg-zinc-900 border-zinc-800 text-emerald-400 hover:bg-zinc-800'
-                          }`}
-                        >
-                          {syncingClient === client.id ? 'Syncing...' : 'Sync'}
-                        </button>
-                      </td>
-                    </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

@@ -1130,6 +1130,9 @@ export default function AiStrategicAnalysis() {
                                               if (isLoaded) {
                                                 const history = (metadataHistories[page.url] || []);
                                                 const hasWpConfig = !!(selectedClient?.wordpress_url && selectedClient?.seo_webhook_secret);
+                                                const hasTitleIssues = page.issues.some((iss: string) => iss.toLowerCase().includes('title'));
+                                                const hasMetaIssues = page.issues.some((iss: string) => iss.toLowerCase().includes('meta') || iss.toLowerCase().includes('description'));
+                                                const hasAltIssues = page.issues.some((iss: string) => iss.toLowerCase().includes('alt') || iss.toLowerCase().includes('lacking alt'));
 
                                                 return (
                                                   <div className={`p-6 rounded-2xl border space-y-5 text-left ${
@@ -1149,44 +1152,48 @@ export default function AiStrategicAnalysis() {
                                                     
                                                     <div className="space-y-4">
                                                       {/* Editable Title Target */}
-                                                      <div className="space-y-1">
-                                                        <div className="flex justify-between text-xs text-zinc-500">
-                                                          <span>Optimised Title Target</span>
-                                                          <span className={suggestions.title.length > 60 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
-                                                            {suggestions.title.length} / 60 chars
-                                                          </span>
+                                                      {hasTitleIssues && (
+                                                        <div className="space-y-1">
+                                                          <div className="flex justify-between text-xs text-zinc-500">
+                                                            <span>Optimised Title Target</span>
+                                                            <span className={suggestions.title.length > 60 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                                              {suggestions.title.length} / 60 chars
+                                                            </span>
+                                                          </div>
+                                                          <input
+                                                            type="text"
+                                                            value={suggestions.title}
+                                                            onChange={(e) => handleUpdateOptimizationField(page.url, 'title', e.target.value)}
+                                                            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
+                                                              isWhite 
+                                                                ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
+                                                                : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
+                                                            }`}
+                                                          />
                                                         </div>
-                                                        <input
-                                                          type="text"
-                                                          value={suggestions.title}
-                                                          onChange={(e) => handleUpdateOptimizationField(page.url, 'title', e.target.value)}
-                                                          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
-                                                            isWhite 
-                                                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
-                                                              : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
-                                                          }`}
-                                                        />
-                                                      </div>
+                                                      )}
 
                                                       {/* Editable Description Target */}
-                                                      <div className="space-y-1">
-                                                        <div className="flex justify-between text-xs text-zinc-500">
-                                                          <span>Optimised Meta Description Target</span>
-                                                          <span className={suggestions.metaDescription.length > 160 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
-                                                            {suggestions.metaDescription.length} / 160 chars
-                                                          </span>
+                                                      {hasMetaIssues && (
+                                                        <div className="space-y-1">
+                                                          <div className="flex justify-between text-xs text-zinc-500">
+                                                            <span>Optimised Meta Description Target</span>
+                                                            <span className={suggestions.metaDescription.length > 160 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                                              {suggestions.metaDescription.length} / 160 chars
+                                                            </span>
+                                                          </div>
+                                                          <textarea
+                                                            rows={3}
+                                                            value={suggestions.metaDescription}
+                                                            onChange={(e) => handleUpdateOptimizationField(page.url, 'metaDescription', e.target.value)}
+                                                            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
+                                                              isWhite 
+                                                                ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
+                                                                : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
+                                                            }`}
+                                                          />
                                                         </div>
-                                                        <textarea
-                                                          rows={3}
-                                                          value={suggestions.metaDescription}
-                                                          onChange={(e) => handleUpdateOptimizationField(page.url, 'metaDescription', e.target.value)}
-                                                          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
-                                                            isWhite 
-                                                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
-                                                              : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
-                                                          }`}
-                                                        />
-                                                      </div>
+                                                      )}
 
                                                        {/* Google Search Snippet Preview */}
                                                        {(() => {

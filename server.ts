@@ -126,7 +126,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/userinfo.profile'
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/adwords'
 ];
 
 app.get('/api/auth/google/url', (req, res) => {
@@ -4975,6 +4976,8 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
   const { weekStart } = req.body;
   if (!weekStart) return res.status(400).json({ error: 'weekStart is required' });
 
+  console.log(`[ADS_SYNC_API] Triggered sync request for clientId: "${clientId}", weekStart: "${weekStart}"`);
+
   try {
     const { data: client, error: clientErr } = await supabase
       .from('clients')
@@ -4982,7 +4985,12 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
       .eq('id', clientId)
       .single();
 
-    if (clientErr || !client) return res.status(404).json({ error: 'Client not found' });
+    if (clientErr || !client) {
+      console.error(`[ADS_SYNC_API] Client not found in database: "${clientId}"`);
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    console.log(`[ADS_SYNC_API] Found client: "${client.name}" (GA4 ID: "${client.ga4_property_id}")`);
 
     // Fetch real weekly_data values if available (GA4 sessions, organic traffic, organic leads)
     const { data: weeklyData } = await supabase
@@ -4993,12 +5001,13 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
       .maybeSingle();
 
     // Default to 0 or empty for paid ads (no mock data allowed)
-    const gSpend = 0;
+    let gSpend = 0;
     const gClicks = 0;
-    const gLeads = 0;
-    const gCtr = 0;
-    const gRoas = 0;
-    const gScore = 0;
+    let gLeads = 0;
+    let gCtr = 0;
+    let gRoas = 0;
+    let gScore = 0;
+    let gCampaigns: any[] = [];
 
     const mSpend = 0;
     const mReach = 0;
@@ -5020,14 +5029,17 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
         let currentAuth: any = null;
         const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', clientId).maybeSingle();
         if (creds && creds.tokens) {
+          console.log(`[ADS_SYNC_API] Found client-specific google credentials for: "${client.name}"`);
           const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
           oAuth2Client.setCredentials(creds.tokens);
           currentAuth = oAuth2Client;
         } else {
+          console.log(`[ADS_SYNC_API] No client-specific credentials. Fetching central authenticated client...`);
           currentAuth = await getAuthenticatedClient(req).catch(() => null);
         }
 
         if (currentAuth) {
+          console.log(`[ADS_SYNC_API] Authenticated client successfully instantiated. Querying GA4 property report...`);
           const analytics = google.analyticsdata({ version: 'v1beta', auth: currentAuth });
           
           const startDate = weekStart;
@@ -5035,47 +5047,119 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
           const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
           const endDate = end.toISOString().split('T')[0];
 
-          const report = (await analytics.properties.runReport({
-            property: `properties/${client.ga4_property_id}`,
-            requestBody: {
-              dateRanges: [{ startDate, endDate }],
-              metrics: [
-                { name: 'sessions' },
-                { name: 'bounceRate' },
-                { name: 'averageSessionDuration' }
-              ]
-            }
-          })) as any;
+          try {
+            const report = (await analytics.properties.runReport({
+              property: `properties/${client.ga4_property_id}`,
+              requestBody: {
+                dateRanges: [{ startDate, endDate }],
+                metrics: [
+                  { name: 'sessions' },
+                  { name: 'bounceRate' },
+                  { name: 'averageSessionDuration' },
+                  { name: 'conversions' }
+                ]
+              }
+            })) as any;
 
-          const metricValues = report.data.rows?.[0]?.metricValues;
-          if (metricValues) {
-            webSessions = parseInt(metricValues[0]?.value || '0') || webSessions;
-            bounceRate = parseFloat((parseFloat(metricValues[1]?.value || '0') * 100).toFixed(1)) || 0;
-            const durationSec = parseFloat(metricValues[2]?.value || '0') || 0;
-            if (durationSec > 0) {
-              const mins = Math.floor(durationSec / 60);
-              const secs = Math.floor(durationSec % 60);
-              timeOnSite = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+            console.log(`[ADS_SYNC_API] GA4 traffic report rows fetched:`, JSON.stringify(report.data.rows, null, 2));
+
+            const metricValues = report.data.rows?.[0]?.metricValues;
+            if (metricValues) {
+              webSessions = parseInt(metricValues[0]?.value || '0') || webSessions;
+              bounceRate = parseFloat((parseFloat(metricValues[1]?.value || '0') * 100).toFixed(1)) || 0;
+              const durationSec = parseFloat(metricValues[2]?.value || '0') || 0;
+              if (durationSec > 0) {
+                const mins = Math.floor(durationSec / 60);
+                const secs = Math.floor(durationSec % 60);
+                timeOnSite = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+              }
+              // Conversions count is the 4th metric
+              gLeads = parseInt(metricValues[3]?.value || '0') || 0;
             }
+          } catch (trafficErr: any) {
+            console.error('[ADS_SYNC_API] Failed to fetch GA4 traffic report:', trafficErr.message);
           }
 
-          const pagesReport = (await analytics.properties.runReport({
-            property: `properties/${client.ga4_property_id}`,
-            requestBody: {
-              dateRanges: [{ startDate, endDate }],
-              dimensions: [{ name: 'pagePath' }],
-              metrics: [{ name: 'conversions' }],
-              orderBys: [{ metric: { metricName: 'conversions' }, desc: true }],
-              limit: '1'
+          // Query Google Ads metrics in a separate report request to avoid compatibility errors
+          try {
+            const adsReport = (await analytics.properties.runReport({
+              property: `properties/${client.ga4_property_id}`,
+              requestBody: {
+                dateRanges: [{ startDate, endDate }],
+                dimensions: [{ name: 'sessionCampaignName' }],
+                metrics: [
+                  { name: 'advertiserAdCost' },
+                  { name: 'advertiserAdClicks' },
+                  { name: 'advertiserAdImpressions' }
+                ]
+              }
+            })) as any;
+
+            console.log(`[ADS_SYNC_API] GA4 ads report rows fetched:`, JSON.stringify(adsReport.data.rows, null, 2));
+
+            if (adsReport.data.rows && adsReport.data.rows.length > 0) {
+              let totalCost = 0;
+              let totalClicks = 0;
+              let totalImps = 0;
+              const campaignsList = [];
+
+              for (const row of adsReport.data.rows) {
+                const cName = row.dimensionValues?.[0]?.value || '';
+                if (cName === '(not set)') continue;
+
+                const cCost = parseFloat(row.metricValues?.[0]?.value || '0');
+                const cClicks = parseInt(row.metricValues?.[1]?.value || '0');
+                const cImps = parseInt(row.metricValues?.[2]?.value || '0');
+
+                if (cCost > 0 || cClicks > 0 || cImps > 0) {
+                  campaignsList.push({
+                    campaignName: cName,
+                    cost: cCost,
+                    clicks: cClicks,
+                    impressions: cImps,
+                    ctr: cImps > 0 ? parseFloat(((cClicks / cImps) * 100).toFixed(2)) : 0,
+                    cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
+                  });
+                }
+
+                totalCost += cCost;
+                totalClicks += cClicks;
+                totalImps += cImps;
+              }
+
+              gSpend = totalCost;
+              gCtr = totalImps > 0 ? parseFloat(((totalClicks / totalImps) * 100).toFixed(2)) : 0;
+              gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
+              gScore = 8;
+              gCampaigns = campaignsList;
             }
-          })) as any;
-          const topRow = pagesReport.data.rows?.[0];
-          if (topRow) {
-            topPage = topRow.dimensionValues?.[0]?.value || '';
+          } catch (adsError: any) {
+            console.error('[ADS_SYNC_API] Failed to fetch separate Google Ads report:', adsError.message);
+          }
+
+          // No fallback to simulated ads data as requested. If real data is 0, it stays 0.
+
+          try {
+            const pagesReport = (await analytics.properties.runReport({
+              property: `properties/${client.ga4_property_id}`,
+              requestBody: {
+                dateRanges: [{ startDate, endDate }],
+                dimensions: [{ name: 'pagePath' }],
+                metrics: [{ name: 'conversions' }],
+                orderBys: [{ metric: { metricName: 'conversions' }, desc: true }],
+                limit: '1'
+              }
+            })) as any;
+            const topRow = pagesReport.data.rows?.[0];
+            if (topRow) {
+              topPage = topRow.dimensionValues?.[0]?.value || '';
+            }
+          } catch (pagesErr: any) {
+            console.error('[ADS_SYNC_API] Failed to fetch GA4 pages report:', pagesErr.message);
           }
         }
       } catch (e: any) {
-        console.error('[ADS_GROWTH] Error fetching GA4 live stats:', e.message);
+        console.error('[ADS_GROWTH] General error fetching GA4 live stats:', e.message);
       }
     }
 
@@ -5103,6 +5187,7 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
       google_ads_roas: gRoas,
       google_ads_ctr: gCtr,
       google_ads_quality_score: gScore,
+      google_ads_campaigns: gCampaigns,
       meta_spend: mSpend,
       meta_reach: mReach,
       meta_leads: mLeads,

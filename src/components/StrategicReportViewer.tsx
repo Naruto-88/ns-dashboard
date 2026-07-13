@@ -234,6 +234,111 @@ export default function StrategicReportViewer({ result, clientName, propertyUrl,
         </section>
       )}
 
+      {/* ── GOOGLE ADS PERFORMANCE ────────────────────────────────────────── */}
+      {cur?.ga4 && (
+        <section className="border-b border-[#ded5c5] py-12 px-8">
+          <div className="max-w-[860px] mx-auto">
+            <Kicker>Google Ads Integration</Kicker>
+            <h2 className="text-[clamp(24px,4vw,34px)] font-bold mb-6">
+              Paid Search <span className="italic font-medium text-[#0088a2]">campaign metrics</span>
+            </h2>
+            
+            {!(cur.ga4.adsClicks > 0 || cur.ga4.adsCost > 0 || (cur.ga4.adsCampaigns && cur.ga4.adsCampaigns.length > 0)) ? (
+              <div className="sds-card bg-[#fffdf9] border border-dashed border-[#ded5c5] rounded-[15px] p-6 text-center text-[#8a857b] sds-mono text-xs">
+                No active Google Ads campaign data detected in this period. 
+                <div className="mt-1.5 text-[11px] text-zinc-500">
+                  Ensure Google Ads is linked to your Google Analytics 4 property under Admin settings to sync campaign cost and clicks.
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid md:grid-cols-4 gap-3.5 mb-8">
+                  <div className="sds-card bg-[#fffdf9] border border-[#ded5c5] rounded-[15px] p-5 shadow-sm">
+                    <div className="sds-mono text-[10.5px] tracking-[0.14em] uppercase text-[#8a857b] mb-3">Ad Spend</div>
+                    <div className="sds-display text-[26px] font-extrabold leading-none text-[#1b1d1c]">
+                      ${cur.ga4.adsCost ? cur.ga4.adsCost.toFixed(2) : '0.00'}
+                    </div>
+                    {prev?.ga4?.adsCost != null && prev.ga4.adsCost > 0 && (
+                      <div className={`text-[12px] font-bold mt-2 ${cur.ga4.adsCost < prev.ga4.adsCost ? 'text-[#3d7a4e]' : 'text-[#b23a32]'}`}>
+                        vs ${prev.ga4.adsCost.toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="sds-card bg-[#fffdf9] border border-[#ded5c5] rounded-[15px] p-5 shadow-sm">
+                    <div className="sds-mono text-[10.5px] tracking-[0.14em] uppercase text-[#8a857b] mb-3">Ad Clicks</div>
+                    <div className="sds-display text-[26px] font-extrabold leading-none text-[#1b1d1c]">
+                      {cur.ga4.adsClicks || '0'}
+                    </div>
+                    {prev?.ga4?.adsClicks != null && prev.ga4.adsClicks > 0 && (
+                      <div className={`text-[12px] font-bold mt-2 ${cur.ga4.adsClicks > prev.ga4.adsClicks ? 'text-[#3d7a4e]' : 'text-[#b23a32]'}`}>
+                        vs {prev.ga4.adsClicks}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="sds-card bg-[#fffdf9] border border-[#ded5c5] rounded-[15px] p-5 shadow-sm">
+                    <div className="sds-mono text-[10.5px] tracking-[0.14em] uppercase text-[#8a857b] mb-3">Ad Impressions</div>
+                    <div className="sds-display text-[26px] font-extrabold leading-none text-[#1b1d1c]">
+                      {cur.ga4.adsImpressions || '0'}
+                    </div>
+                    {prev?.ga4?.adsImpressions != null && prev.ga4.adsImpressions > 0 && (
+                      <div className={`text-[12px] font-bold mt-2 ${cur.ga4.adsImpressions > prev.ga4.adsImpressions ? 'text-[#3d7a4e]' : 'text-[#b23a32]'}`}>
+                        vs {prev.ga4.adsImpressions}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="sds-card bg-[#fffdf9] border border-[#ded5c5] rounded-[15px] p-5 shadow-sm">
+                    <div className="sds-mono text-[10.5px] tracking-[0.14em] uppercase text-[#8a857b] mb-3">Ad Conversions</div>
+                    <div className="sds-display text-[26px] font-extrabold leading-none text-[#1b1d1c]">
+                      {cur.ga4.adsConversions || '0'}
+                    </div>
+                    {prev?.ga4?.adsConversions != null && prev.ga4.adsConversions > 0 && (
+                      <div className={`text-[12px] font-bold mt-2 ${cur.ga4.adsConversions > prev.ga4.adsConversions ? 'text-[#3d7a4e]' : 'text-[#b23a32]'}`}>
+                        vs {prev.ga4.adsConversions}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {cur.ga4.adsCampaigns && cur.ga4.adsCampaigns.length > 0 && (
+                  <div className="sds-card bg-[#fffdf9] border border-[#ded5c5] rounded-[15px] p-6 shadow-sm overflow-hidden">
+                    <div className="sds-mono text-[11px] tracking-[0.14em] uppercase text-[#8a857b] mb-4">Active Campaigns Breakdown</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-[#ded5c5] text-[11px] uppercase tracking-wider text-[#8a857b] sds-mono">
+                            <th className="py-2.5">Campaign Name</th>
+                            <th className="py-2.5 text-right">Spend</th>
+                            <th className="py-2.5 text-right">Clicks</th>
+                            <th className="py-2.5 text-right">CTR</th>
+                            <th className="py-2.5 text-right">Avg CPC</th>
+                            <th className="py-2.5 text-right">Conversions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#eee5d8]">
+                          {cur.ga4.adsCampaigns.map((c: any, index: number) => (
+                            <tr key={index} className="text-[#1b1d1c]">
+                              <td className="py-3 font-medium">{c.campaignName}</td>
+                              <td className="py-3 text-right font-mono">${c.cost.toFixed(2)}</td>
+                              <td className="py-3 text-right font-mono">{c.clicks}</td>
+                              <td className="py-3 text-right font-mono">{c.ctr.toFixed(1)}%</td>
+                              <td className="py-3 text-right font-mono">${c.cpc.toFixed(2)}</td>
+                              <td className="py-3 text-right font-mono">{c.conversions}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ── STRATEGIC DIRECTIVES ─────────────────────────────────────────── */}
       {result.actionableDirectives && result.actionableDirectives.length > 0 && (
         <section className="border-b border-[#ded5c5] py-12 px-8">
