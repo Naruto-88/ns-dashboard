@@ -336,68 +336,64 @@ export default function MasterDashboard() {
           hasPrev: true
         };
 
-        let score = 0;
-        const leadTargetWeekly = (client.lead_target_monthly || 0) / 4;
-        const reasons: string[] = [];
+        // Calculate duration of selected timeframe in days
+        const durationMs = currentEnd.getTime() - currentStart.getTime();
+        const daysCount = Math.max(1, Math.round(durationMs / (1000 * 60 * 60 * 24)));
 
-        // Positive Points
-        if (gscTraffic.change > 5) {
-          score += 2;
-          reasons.push(`GSC Clicks up by ${gscTraffic.change.toFixed(1)}%`);
+        // Scale monthly target to selected timeframe
+        const monthlyTarget = client.lead_target_monthly || 0;
+        const periodLeadTarget = monthlyTarget * (daysCount / 30.4);
+
+        // Leads score (60% weight)
+        let leadsScore = 100;
+        const reasons: string[] = [];
+        if (monthlyTarget > 0) {
+          leadsScore = periodLeadTarget > 0 ? (leads.legit / periodLeadTarget) * 100 : 100;
+          leadsScore = Math.min(100, Math.max(0, leadsScore));
+          reasons.push(`Leads: ${leadsScore.toFixed(0)}% (${leads.legit}/${Math.round(periodLeadTarget)} target)`);
+        } else {
+          reasons.push("No Lead Target");
         }
-        // GA4 Traffic intentionally excluded from scoring logic as we only want organic traffic
-        // if (ga4Traffic.change > 5) {
-        //   score += 2;
-        //   reasons.push(`GA4 Traffic up by ${ga4Traffic.change.toFixed(1)}%`);
-        // }
-        if (client.lead_target_monthly > 0 && leads.legit >= leadTargetWeekly) {
-          score += 2;
-          reasons.push(`Weekly Lead Target Hit`);
-        }
-        
+
+        // SEO Score (40% weight)
+        let seoScore = 50;
+        const imprChange = calculateChange(gscTraffic.impressions, gscTraffic.prevImpressions);
         const currentPos = gscTraffic.position;
         const prevPos = gscTraffic.prevPosition;
-        if (currentPos > 0 && prevPos > 0 && currentPos < prevPos) {
-          score += 0.5;
-          reasons.push(`Avg Position improved to ${currentPos.toFixed(1)}`);
+
+        if (gscTraffic.change > 5) {
+          seoScore += 20;
+          reasons.push(`Clicks +${gscTraffic.change.toFixed(1)}%`);
+        } else if (gscTraffic.change < -5) {
+          seoScore -= 20;
+          reasons.push(`Clicks -${Math.abs(gscTraffic.change).toFixed(1)}%`);
         }
-        
-        const imprChange = calculateChange(gscTraffic.impressions, gscTraffic.prevImpressions);
+
         if (imprChange > 10) {
-          score += 1;
-          reasons.push(`Impressions up by ${imprChange.toFixed(1)}%`);
+          seoScore += 15;
+          reasons.push(`Imps +${imprChange.toFixed(1)}%`);
+        } else if (imprChange < -10) {
+          seoScore -= 15;
+          reasons.push(`Imps -${Math.abs(imprChange).toFixed(1)}%`);
         }
 
-        // Negative Points
-        if (gscTraffic.change < -5) {
-          score -= 2;
-          reasons.push(`GSC Clicks dropped by ${Math.abs(gscTraffic.change).toFixed(1)}%`);
-        }
-        // GA4 Traffic intentionally excluded from scoring logic
-        // if (ga4Traffic.change < -5) {
-        //   score -= 2;
-        //   reasons.push(`GA4 Traffic dropped by ${Math.abs(ga4Traffic.change).toFixed(1)}%`);
-        // }
-        if (client.lead_target_monthly > 0 && (leads.legit === 0 || leads.legit < (leadTargetWeekly / 2))) {
-          score -= 2;
-          reasons.push(`Missed Lead Targets`);
+        if (currentPos > 0 && prevPos > 0 && currentPos < prevPos) {
+          seoScore += 15;
+          reasons.push(`Pos improved`);
+        } else if (currentPos > 0 && prevPos > 0 && currentPos >= prevPos + 3) {
+          seoScore -= 15;
+          reasons.push(`Pos dropped`);
         }
         
-        if (currentPos > 0 && prevPos > 0 && currentPos >= prevPos + 3) {
-          score -= 0.5;
-          reasons.push(`Avg Position dropped to ${currentPos.toFixed(1)}`);
-        }
-        
-        if (imprChange < -10) {
-          score -= 1;
-          reasons.push(`Impressions dropped by ${Math.abs(imprChange).toFixed(1)}%`);
-        }
+        const finalSeoScore = Math.min(100, Math.max(0, seoScore));
 
-        const reasonStr = reasons.length > 0 ? reasons.join(' | ') : 'Stable across metrics';
+        // Combined Score (60% Leads / 40% SEO)
+        const overallScore = (leadsScore * 0.6) + (finalSeoScore * 0.4);
+        const reasonStr = reasons.join(' | ');
 
-        const status: DashboardRow['status'] = score >= 3
+        const status: DashboardRow['status'] = overallScore >= 80
           ? { color: 'green', reason: reasonStr }
-          : score <= -2
+          : overallScore < 50
             ? { color: 'red', reason: reasonStr }
             : { color: 'orange', reason: reasonStr };
 

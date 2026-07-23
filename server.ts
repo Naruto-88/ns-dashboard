@@ -1942,10 +1942,33 @@ app.post('/api/admin/sync-sheets', async (req, res) => {
   }
 });
 
+function decodeHtmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&ndash;/g, '–')
+    .replace(/&mdash;/g, '—')
+    .replace(/&nbsp;/g, ' ');
+}
+
 async function auditPage(url: string) {
   try {
-    const res = await fetch(url, { 
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }, 
+    const cacheBustUrl = url.includes('?') 
+      ? `${url}&nocache=${Date.now()}` 
+      : `${url}?nocache=${Date.now()}`;
+      
+    const res = await fetch(cacheBustUrl, { 
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }, 
       signal: AbortSignal.timeout(15000) 
     });
     if (!res.ok) {
@@ -1986,7 +2009,7 @@ async function auditPage(url: string) {
 
     // Title checks
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const title = titleMatch ? titleMatch[1].trim() : '';
+    const title = titleMatch ? decodeHtmlEntities(titleMatch[1].trim()) : '';
     if (!title) {
       issues.push('Missing Page Title Tag');
     } else if (title.length > 60) {
@@ -1998,7 +2021,7 @@ async function auditPage(url: string) {
     // Meta Description checks
     const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([\s\S]*?)["']/i) || 
                       html.match(/<meta[^>]*content=["']([\s\S]*?)["'][^>]*name=["']description["']/i);
-    const description = descMatch ? descMatch[1].trim() : '';
+    const description = descMatch ? decodeHtmlEntities(descMatch[1].trim()) : '';
     if (!description) {
       issues.push('Missing Meta Description Tag');
     } else if (description.length > 160) {
@@ -2127,7 +2150,12 @@ async function crawlSite(siteUrl: string, maxPages: number = 100) {
         const absoluteMatches = homeHtml.match(domainRegex) || [];
 
         const links = [
-          ...linkMatches.map(m => cleanUrl + m.replace(/href=["']/, '').replace(/["']$/, '')),
+          ...linkMatches.map(m => {
+            const rawPath = m.replace(/href=["']/, '').replace(/["']$/, '');
+            const base = cleanUrl.endsWith('/') ? cleanUrl.slice(0, -1) : cleanUrl;
+            const path = rawPath.startsWith('/') ? rawPath : '/' + rawPath;
+            return base + path;
+          }),
           ...absoluteMatches.map(m => m.replace(/href=["']/, '').replace(/["']$/, ''))
         ];
         
@@ -3629,6 +3657,7 @@ app.post('/api/ai/optimise-page', async (req, res) => {
     const prompt = `You are a high-priced enterprise SEO Consultant conducting audits in Australia. Conduct an on-page audit and write specific code corrections for a single URL.
 Page URL: ${url}
 Current Title: ${pageTitle || 'Untitled Page'}
+Current Meta Description: ${currentDescription || 'None'}
 Detected Structural / Technical Issues:
 ${JSON.stringify(issues || [], null, 2)}
 
@@ -3640,8 +3669,9 @@ Provide your response as a valid, parsable JSON object strictly conforming to th
 }
 
 CRITICAL SEO RULES & JUDGMENT:
-- Your generated "title" MUST be strictly between 50 and 60 characters in total length. If it is shorter than 50 or longer than 60, it violates constraints.
-- Your generated "metaDescription" MUST be strictly between 120 and 160 characters in total length. If it is shorter than 120 or longer than 160, it violates constraints.
+- Your generated "title" MUST be strictly between 50 and 60 characters in total length. Frontload the primary page keyword, use conversion-driven power words (e.g., 'Best', 'Top', 'Trusted', 'Premium', 'Direct'), and target Australian commercial intent.
+- Your generated "metaDescription" MUST be strictly between 120 and 160 characters in total length. Optimize it for maximum click-through rate (CTR): start with an active, conversion-driven verb, highlight a unique selling point (USP), naturally weave in page keywords, and end with an explicit, high-intent Call to Action (CTA) (e.g. 'Get a free quote today!', 'Claim your audit now!', 'Browse our premium range!').
+- The generated title and meta description MUST consist of complete, fully-formed sentences. NEVER include any truncation indicators, incomplete thoughts, or ellipses like '[...]' or '...'.
 - Count the characters of your generated title and description values before outputting to ensure absolute compliance!
 - The optimised title MUST be SHORTER than the original title if the issue is "title too long" or "over-optimised title". Do NOT just append text to the original title.
 - Decode HTML entities: NEVER output "&amp;" inside your title or meta description — always use a real "&" or rephrase the wording to avoid it completely.
@@ -3826,29 +3856,6 @@ CRITICAL INTEGRITY & SPELLING RULES:
     // Clean generic suffixes added by models
     finalTitle = finalTitle.replace(/\s*\|\s*Custom SEO Target Australia$/gi, '');
     finalTitle = finalTitle.replace(/\s*\|\s*SEO Target Australia$/gi, '');
-
-    // Programmatic constraint enforcement to fit character guidelines:
-    if (finalTitle.length > 60) {
-      finalTitle = finalTitle.substring(0, 60);
-      const lastSpace = finalTitle.lastIndexOf(' ');
-      if (lastSpace > 45) {
-        finalTitle = finalTitle.substring(0, lastSpace).trim();
-      }
-    }
-    if (finalMeta.length > 160) {
-      finalMeta = finalMeta.substring(0, 160);
-      const lastSpace = finalMeta.lastIndexOf(' ');
-      if (lastSpace > 130) {
-        finalMeta = finalMeta.substring(0, lastSpace).trim();
-      }
-    }
-
-    if (!hasTitleIssues) {
-      finalTitle = pageTitle || '';
-    }
-    if (!hasMetaIssues && currentDescription) {
-      finalMeta = currentDescription;
-    }
 
     res.json({
       title: finalTitle,
@@ -5090,7 +5097,8 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
                 metrics: [
                   { name: 'advertiserAdCost' },
                   { name: 'advertiserAdClicks' },
-                  { name: 'advertiserAdImpressions' }
+                  { name: 'advertiserAdImpressions' },
+                  { name: 'conversions' }
                 ]
               }
             })) as any;
@@ -5101,22 +5109,25 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
               let totalCost = 0;
               let totalClicks = 0;
               let totalImps = 0;
+              let totalConversions = 0;
               const campaignsList = [];
 
               for (const row of adsReport.data.rows) {
                 const cName = row.dimensionValues?.[0]?.value || '';
-                if (cName === '(not set)') continue;
+                if (cName === '(not set)' || cName === '(direct)' || cName === '(organic)' || cName === '(referral)') continue;
 
                 const cCost = parseFloat(row.metricValues?.[0]?.value || '0');
                 const cClicks = parseInt(row.metricValues?.[1]?.value || '0');
                 const cImps = parseInt(row.metricValues?.[2]?.value || '0');
+                const cConvs = parseInt(row.metricValues?.[3]?.value || '0');
 
-                if (cCost > 0 || cClicks > 0 || cImps > 0) {
+                if (cCost > 0 || cClicks > 0 || cImps > 0 || cConvs > 0) {
                   campaignsList.push({
                     campaignName: cName,
                     cost: cCost,
                     clicks: cClicks,
                     impressions: cImps,
+                    conversions: cConvs,
                     ctr: cImps > 0 ? parseFloat(((cClicks / cImps) * 100).toFixed(2)) : 0,
                     cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
                   });
@@ -5125,10 +5136,12 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
                 totalCost += cCost;
                 totalClicks += cClicks;
                 totalImps += cImps;
+                totalConversions += cConvs;
               }
 
               gSpend = totalCost;
               gCtr = totalImps > 0 ? parseFloat(((totalClicks / totalImps) * 100).toFixed(2)) : 0;
+              gLeads = totalConversions;
               gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
               gScore = 8;
               gCampaigns = campaignsList;
@@ -5184,6 +5197,7 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
       client_id: clientId,
       week_start_date: weekStart,
       google_ads_spend: gSpend,
+      google_ads_conversions: gLeads,
       google_ads_roas: gRoas,
       google_ads_ctr: gCtr,
       google_ads_quality_score: gScore,
@@ -5233,18 +5247,27 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
 // Helper to fetch live site metadata (title and description)
 async function getLiveSiteMetadata(url: string): Promise<{ title: string; description: string }> {
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+    const cacheBustUrl = url.includes('?') 
+      ? `${url}&nocache=${Date.now()}` 
+      : `${url}?nocache=${Date.now()}`;
+
+    const res = await fetch(cacheBustUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
       signal: AbortSignal.timeout(5000)
     });
     const html = await res.text();
     
     const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
-    const title = titleMatch ? titleMatch[1].trim() : '';
+    const title = titleMatch ? decodeHtmlEntities(titleMatch[1].trim()) : '';
     
     const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i) ||
                       html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i);
-    const description = descMatch ? descMatch[1].trim() : '';
+    const description = descMatch ? decodeHtmlEntities(descMatch[1].trim()) : '';
     
     return { title, description };
   } catch (e) {

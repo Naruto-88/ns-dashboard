@@ -25,7 +25,7 @@ import {
   ChevronUp,
   Trash2
 } from 'lucide-react';
-import { getClients, runAiAnalysis, runAiSinglePageOptimise, updateClient, Client, getSeoMetadataHistory, applySeoMetadata, revertSeoMetadata } from '../services/dataService';
+import { getClients, runAiAnalysis, runAiSinglePageOptimise, updateClient, Client, getSeoMetadataHistory, applySeoMetadata, revertSeoMetadata, getSeoPageOptimizations, saveSeoPageOptimization } from '../services/dataService';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
@@ -153,7 +153,7 @@ export default function AiStrategicAnalysis() {
   const [selectedClaudeModel, setSelectedClaudeModel] = useState<string>('claude-sonnet-4-6');
   const [selectedGptModel, setSelectedGptModel] = useState<string>('gpt-4o-mini');
   const [analysisType, setAnalysisType] = useState<'light' | 'deep'>('light');
-  const [simulate, setSimulate] = useState(true); // Default to simulation mode to prevent initial API cost blockers
+  const [simulate, setSimulate] = useState(false); // Default to false as requested by the user
   const [runTechnicalCrawl, setRunTechnicalCrawl] = useState(false);
   const [showCrawlDetails, setShowCrawlDetails] = useState(false);
   const [expandedPages, setExpandedPages] = useState<Record<string, boolean>>({});
@@ -162,6 +162,12 @@ export default function AiStrategicAnalysis() {
   const [activeDrawerTabs, setActiveDrawerTabs] = useState<Record<string, 'targets' | 'issues' | 'code'>>({});
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [filterTitleMetaIssues, setFilterTitleMetaIssues] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkApplyProgress, setBulkApplyProgress] = useState({ current: 0, total: 0 });
+  const cancelRef = React.useRef(false);
+  const [persistenceActive, setPersistenceActive] = useState<boolean | null>(null);
 
   // Default dates: GSC has a ~2 day data-lag. Set end date to 2 days ago, start date to 8 days ago.
   const today = new Date();
@@ -226,6 +232,27 @@ export default function AiStrategicAnalysis() {
     });
   }, []);
 
+  const loadSavedOptimizations = async (clientId: string) => {
+    try {
+      const data = await getSeoPageOptimizations(clientId);
+      setPersistenceActive(true);
+      const map: Record<string, { title: string; metaDescription: string; codePatch: string }> = {};
+      data.forEach((row: any) => {
+        map[row.page_url] = {
+          title: row.optimized_title || '',
+          metaDescription: row.optimized_description || '',
+          codePatch: row.code_patch || ''
+        };
+      });
+      setPageOptimizations(map);
+    } catch (e: any) {
+      console.warn('Error loading optimizations:', e);
+      if (e.message?.includes('does not exist') || e.message?.includes('relation') || e.message?.includes('cache')) {
+        setPersistenceActive(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (selectedClientId) {
       fetchHistory(selectedClientId);
@@ -233,6 +260,7 @@ export default function AiStrategicAnalysis() {
       setError(null);
       setSuccessMsg(null);
       setPageOptimizations({});
+      loadSavedOptimizations(selectedClientId);
     }
   }, [selectedClientId]);
 
@@ -271,6 +299,7 @@ export default function AiStrategicAnalysis() {
       });
 
       setResult(response);
+      loadSavedOptimizations(selectedClientId);
       playSuccessChime();
       setSuccessMsg(`Strategic audit successfully synthesized and cached in history!`);
       
@@ -337,6 +366,13 @@ export default function AiStrategicAnalysis() {
           loading: false
         }
       }));
+      saveSeoPageOptimization({
+        clientId: selectedClientId,
+        pageUrl,
+        optimizedTitle: data.title,
+        optimizedDescription: data.metaDescription,
+        codePatch: data.codePatch
+      });
       setSuccessMsg(`Optimised title, meta and HTML patch generated successfully for: ${pageUrl}`);
     } catch (err: any) {
       console.error(err);
@@ -352,17 +388,28 @@ export default function AiStrategicAnalysis() {
   const handleBulkOptimise = async () => {
     if (selectedPages.length === 0) return;
     setBulkLoading(true);
+    cancelRef.current = false;
+    setBulkProgress({ current: 0, total: selectedPages.length });
+    let count = 0;
     try {
       const pagesList = result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || [];
       for (const url of selectedPages) {
+        if (cancelRef.current) {
+          setSuccessMsg(`Bulk optimisation stopped. Processed ${count} of ${selectedPages.length} pages.`);
+          break;
+        }
         const page = pagesList.find((p: any) => p.url === url);
         if (page) {
           // Await sequentially to avoid overloading local token limits
           await handleOptimisePage(page.url, page.title, page.description || '', page.issues);
         }
+        count++;
+        setBulkProgress({ current: count, total: selectedPages.length });
       }
       setSelectedPages([]);
-      setSuccessMsg(`Successfully optimised ${selectedPages.length} selected pages!`);
+      if (!cancelRef.current) {
+        setSuccessMsg(`Successfully optimised ${count} selected pages!`);
+      }
     } catch (e: any) {
       setError(`Bulk optimisation failed: ${e.message}`);
     } finally {
@@ -370,20 +417,76 @@ export default function AiStrategicAnalysis() {
     }
   };
 
+  const handleBulkApply = async () => {
+    const toApply = selectedPages.filter(url => {
+      const opt = pageOptimizations[url];
+      return opt && !opt.loading && (opt.title || opt.metaDescription);
+    });
+
+    if (toApply.length === 0) {
+      setError("No generated AI fixes found for the selected pages. Please select pages that have optimized titles/descriptions generated.");
+      return;
+    }
+
+    setBulkApplying(true);
+    cancelRef.current = false;
+    setBulkApplyProgress({ current: 0, total: toApply.length });
+    let count = 0;
+    try {
+      for (const url of toApply) {
+        if (cancelRef.current) {
+          setSuccessMsg(`Bulk publishing stopped. Applied ${count} of ${toApply.length} page fixes.`);
+          break;
+        }
+        const opt = pageOptimizations[url];
+        await handleApplyMetadata(url, opt.title, opt.metaDescription);
+        count++;
+        setBulkApplyProgress({ current: count, total: toApply.length });
+      }
+      setSelectedPages([]);
+      if (!cancelRef.current) {
+        setSuccessMsg(`Successfully applied SEO metadata to live website for ${toApply.length} pages!`);
+      }
+    } catch (e: any) {
+      setError(`Bulk metadata application failed: ${e.message}`);
+    } finally {
+      setBulkApplying(false);
+    }
+  };
+
   const [metadataHistories, setMetadataHistories] = useState<Record<string, any[]>>({});
   const [loadingMetadataHistory, setLoadingMetadataHistory] = useState<Record<string, boolean>>({});
   const [applyingMetadata, setApplyingMetadata] = useState<Record<string, boolean>>({});
+
+  const saveTimeoutRef = React.useRef<Record<string, NodeJS.Timeout>>({});
 
   const handleUpdateOptimizationField = (pageUrl: string, field: 'title' | 'metaDescription', value: string) => {
     setPageOptimizations(prev => {
       const existing = prev[pageUrl];
       if (!existing) return prev;
+      
+      const updated = {
+        ...existing,
+        [field]: value
+      };
+
+      if (saveTimeoutRef.current[pageUrl]) {
+        clearTimeout(saveTimeoutRef.current[pageUrl]);
+      }
+
+      saveTimeoutRef.current[pageUrl] = setTimeout(() => {
+        saveSeoPageOptimization({
+          clientId: selectedClientId,
+          pageUrl,
+          optimizedTitle: field === 'title' ? value : (existing.title || ''),
+          optimizedDescription: field === 'metaDescription' ? value : (existing.metaDescription || ''),
+          codePatch: existing.codePatch || ''
+        });
+      }, 1000);
+
       return {
         ...prev,
-        [pageUrl]: {
-          ...existing,
-          [field]: value
-        }
+        [pageUrl]: updated
       };
     });
   };
@@ -400,6 +503,48 @@ export default function AiStrategicAnalysis() {
     }
   };
 
+  const clearPageIssuesLocally = (pageUrl: string, titleApplied: string, descApplied: string) => {
+    setResult(prev => {
+      if (!prev || !prev.crawlDiagnostics) return prev;
+      const pages = prev.crawlDiagnostics.pages || prev.crawlDiagnostics.scannedPages || [];
+      const updatedPages = pages.map((page: any) => {
+        if (page.url !== pageUrl) return page;
+        
+        let updatedIssues = [...(page.issues || [])];
+        
+        const titleLength = titleApplied.length;
+        if (titleLength >= 10 && titleLength <= 60) {
+          updatedIssues = updatedIssues.filter(iss => 
+            !iss.toLowerCase().includes('title')
+          );
+        }
+        
+        const descLength = descApplied.length;
+        if (descLength >= 50 && descLength <= 160) {
+          updatedIssues = updatedIssues.filter(iss => 
+            !iss.toLowerCase().includes('meta') && !iss.toLowerCase().includes('description')
+          );
+        }
+        
+        return {
+          ...page,
+          title: titleApplied,
+          description: descApplied,
+          issues: updatedIssues
+        };
+      });
+      
+      const keyName = prev.crawlDiagnostics.pages ? 'pages' : 'scannedPages';
+      return {
+        ...prev,
+        crawlDiagnostics: {
+          ...prev.crawlDiagnostics,
+          [keyName]: updatedPages
+        }
+      };
+    });
+  };
+
   const handleApplyMetadata = async (pageUrl: string, title: string, description: string) => {
     setApplyingMetadata(prev => ({ ...prev, [pageUrl]: true }));
     try {
@@ -413,6 +558,7 @@ export default function AiStrategicAnalysis() {
       if (res.success) {
         setSuccessMsg(`Successfully applied metadata to live website for page: ${pageUrl}`);
         handleFetchMetadataHistory(pageUrl);
+        clearPageIssuesLocally(pageUrl, title, description);
       } else {
         setError(`Failed to apply metadata: ${res.error}`);
       }
@@ -443,6 +589,18 @@ export default function AiStrategicAnalysis() {
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const historiesForClient = metadataHistories[selectedClient?.id || ''] || [];
+
+  const pageHasTitleMetaIssues = (p: any) => {
+    return p.issues && p.issues.some((iss: string) => {
+      const lower = iss.toLowerCase();
+      return lower.includes('title') || lower.includes('meta') || lower.includes('description');
+    });
+  };
+
+  const allPagesList = result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || [];
+  const displayedPages = filterTitleMetaIssues 
+    ? allPagesList.filter(pageHasTitleMetaIssues)
+    : allPagesList;
 
   return (
     <div className="space-y-8 pb-16">
@@ -509,6 +667,7 @@ export default function AiStrategicAnalysis() {
                             setSelectedModel(h.model);
                             setAnalysisType(h.analysis_type);
                             setPageOptimizations({});
+                            loadSavedOptimizations(selectedClientId);
                             setSuccessMsg(`Restored cached strategic audit from ${new Date(h.created_at).toLocaleDateString()} (${h.model.toUpperCase()})`);
                             setError(null);
                           }}
@@ -902,54 +1061,113 @@ export default function AiStrategicAnalysis() {
 
               {/* Scanned URL Registry Accordion */}
               {showCrawlDetails && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-white/5 pb-3">
-                    <div className="text-sm font-medium normal-case tracking-normal text-zinc-500">
-                      Select pages to optimize in bulk:
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => {
-                          const allUrls = (result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || []).map((p: any) => p.url);
-                          setSelectedPages(allUrls);
-                        }}
-                        className="text-xs font-semibold text-blue-400 hover:underline"
-                      >
-                        Select All
-                      </button>
-                      <span className="text-zinc-600">•</span>
-                      <button
-                        onClick={() => setSelectedPages([])}
-                        className="text-xs font-semibold text-zinc-400 hover:underline"
-                      >
-                        Clear Selection
-                      </button>
-                      {selectedPages.length > 0 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    {persistenceActive === false && (
+                      <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-semibold flex items-start gap-2.5">
+                        <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">⚠️ Database Persistence Offline</div>
+                          <div className="font-medium opacity-90 mt-0.5 normal-case tracking-normal leading-relaxed">
+                            The table <code>seo_page_optimizations</code> was not found in your Supabase schema. Your custom targets and edits will not persist after browser refresh. Please execute the SQL script in your Supabase SQL Editor and refresh schema cache.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-white/5 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="text-sm font-medium normal-case tracking-normal text-zinc-500">
+                          Select pages to optimize in bulk:
+                        </div>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold select-none text-zinc-400 hover:text-zinc-350 dark:hover:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={filterTitleMetaIssues}
+                            onChange={(e) => {
+                              setFilterTitleMetaIssues(e.target.checked);
+                              setSelectedPages([]); // Reset selection to avoid accidental bulk optimizations
+                            }}
+                            className="w-3.5 h-3.5 rounded border-zinc-300 dark:border-zinc-800 text-blue-650 focus:ring-blue-500 cursor-pointer"
+                          />
+                          ⚠️ Title / Meta Issues Only
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-3">
                         <button
-                          onClick={handleBulkOptimise}
-                          disabled={bulkLoading}
-                          className={`ml-2 px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1.5 ${
-                            isWhite ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-blue-600 hover:bg-blue-500 text-white shadow shadow-blue-500/20'
-                          }`}
+                          onClick={() => {
+                            const allUrls = displayedPages.map((p: any) => p.url);
+                            setSelectedPages(allUrls);
+                          }}
+                          className="text-xs font-semibold text-blue-400 hover:underline"
                         >
-                          {bulkLoading ? 'Optimising...' : `Optimise Selected (${selectedPages.length})`}
+                          Select All ({displayedPages.length})
                         </button>
-                      )}
+                        <span className="text-zinc-600">•</span>
+                        <button
+                          onClick={() => setSelectedPages([])}
+                          className="text-xs font-semibold text-zinc-400 hover:underline"
+                        >
+                          Clear Selection
+                        </button>
+                        
+                        {selectedPages.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleBulkOptimise}
+                              disabled={bulkLoading || bulkApplying}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1.5 ${
+                                isWhite ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90' : 'bg-blue-600 hover:bg-blue-500 text-white shadow shadow-blue-500/20'
+                              }`}
+                            >
+                              {bulkLoading ? `Optimising (${bulkProgress.current}/${bulkProgress.total})...` : `Optimise Selected (${selectedPages.length})`}
+                            </button>
+                            
+                            <button
+                              onClick={handleBulkApply}
+                              disabled={bulkLoading || bulkApplying}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-500/20"
+                            >
+                              {bulkApplying ? `Publishing (${bulkApplyProgress.current}/${bulkApplyProgress.total})...` : `Publish Selected (${selectedPages.length})`}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    {(result?.crawlDiagnostics?.pages || result?.crawlDiagnostics?.scannedPages || [])?.map((page: any, index: number) => {
-                      const hasIssues = page.issues && page.issues.length > 0;
-                      const isError = !!page.error;
-                      const isExpanded = !!expandedPages[page.url];
+                    {(bulkLoading || bulkApplying) && (
+                      <div className="flex items-center gap-3 w-full bg-zinc-50 dark:bg-zinc-950/20 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
+                        <div className="flex-1 bg-zinc-200 dark:bg-zinc-900/60 rounded-full h-2.5 overflow-hidden border border-zinc-300 dark:border-white/5">
+                          <div 
+                            className={`h-full transition-all duration-300 ${bulkApplying ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                            style={{ 
+                              width: `${((bulkApplying ? bulkApplyProgress.current : bulkProgress.current) / (bulkApplying ? bulkApplyProgress.total : bulkProgress.total)) * 100}%` 
+                            }}
+                          />
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelRef.current = true;
+                          }}
+                          className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 active:scale-95 transition text-white text-xs font-bold shrink-0 shadow shadow-rose-600/10"
+                        >
+                          🛑 Stop Queue
+                        </button>
+                      </div>
+                    )}
 
-                      const togglePageExpand = (url: string) => {
-                        setExpandedPages(prev => ({
-                          ...prev,
-                          [url]: !prev[url]
-                        }));
-                      };
+                    <div className="space-y-3">
+                      {displayedPages.map((page: any, index: number) => {
+                        const hasIssues = page.issues && page.issues.length > 0;
+                        const isError = !!page.error;
+                        const isExpanded = !!expandedPages[page.url];
+
+                        const togglePageExpand = (url: string) => {
+                          setExpandedPages(prev => ({
+                            ...prev,
+                            [url]: !prev[url]
+                          }));
+                        };
 
                       return (
                         <div
@@ -1152,48 +1370,44 @@ export default function AiStrategicAnalysis() {
                                                     
                                                     <div className="space-y-4">
                                                       {/* Editable Title Target */}
-                                                      {hasTitleIssues && (
-                                                        <div className="space-y-1">
-                                                          <div className="flex justify-between text-xs text-zinc-500">
-                                                            <span>Optimised Title Target</span>
-                                                            <span className={suggestions.title.length > 60 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
-                                                              {suggestions.title.length} / 60 chars
-                                                            </span>
-                                                          </div>
-                                                          <input
-                                                            type="text"
-                                                            value={suggestions.title}
-                                                            onChange={(e) => handleUpdateOptimizationField(page.url, 'title', e.target.value)}
-                                                            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
-                                                              isWhite 
-                                                                ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
-                                                                : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
-                                                            }`}
-                                                          />
+                                                      <div className="space-y-1">
+                                                        <div className="flex justify-between text-xs text-zinc-500">
+                                                          <span>Optimised Title Target</span>
+                                                          <span className={(suggestions.title || '').length > 60 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                                            {(suggestions.title || '').length} / 60 chars
+                                                          </span>
                                                         </div>
-                                                      )}
+                                                        <input
+                                                          type="text"
+                                                          value={suggestions.title || ''}
+                                                          onChange={(e) => handleUpdateOptimizationField(page.url, 'title', e.target.value)}
+                                                          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
+                                                            isWhite 
+                                                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
+                                                              : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
+                                                          }`}
+                                                        />
+                                                      </div>
 
                                                       {/* Editable Description Target */}
-                                                      {hasMetaIssues && (
-                                                        <div className="space-y-1">
-                                                          <div className="flex justify-between text-xs text-zinc-500">
-                                                            <span>Optimised Meta Description Target</span>
-                                                            <span className={suggestions.metaDescription.length > 160 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
-                                                              {suggestions.metaDescription.length} / 160 chars
-                                                            </span>
-                                                          </div>
-                                                          <textarea
-                                                            rows={3}
-                                                            value={suggestions.metaDescription}
-                                                            onChange={(e) => handleUpdateOptimizationField(page.url, 'metaDescription', e.target.value)}
-                                                            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
-                                                              isWhite 
-                                                                ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
-                                                                : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
-                                                            }`}
-                                                          />
+                                                      <div className="space-y-1">
+                                                        <div className="flex justify-between text-xs text-zinc-500">
+                                                          <span>Optimised Meta Description Target</span>
+                                                          <span className={(suggestions.metaDescription || '').length > 160 ? 'text-red-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                                            {(suggestions.metaDescription || '').length} / 160 chars
+                                                          </span>
                                                         </div>
-                                                      )}
+                                                        <textarea
+                                                          rows={3}
+                                                          value={suggestions.metaDescription || ''}
+                                                          onChange={(e) => handleUpdateOptimizationField(page.url, 'metaDescription', e.target.value)}
+                                                          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono outline-none ${
+                                                            isWhite 
+                                                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300' 
+                                                              : 'bg-zinc-900 border-zinc-850 text-white focus:border-zinc-800'
+                                                          }`}
+                                                        />
+                                                      </div>
 
                                                        {/* Google Search Snippet Preview */}
                                                        {(() => {

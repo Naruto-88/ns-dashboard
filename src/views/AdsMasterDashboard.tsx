@@ -100,12 +100,12 @@ export default function AdsMasterDashboard() {
       const record = list.find(r => r.week_start_date === selectedWeek) || null;
       
       const gSpend = record?.google_ads_spend || 0;
-      const gLeads = record ? Math.round(record.google_ads_roas * record.google_ads_spend) : 0;
-      const gCpl = gSpend > 0 && gLeads > 0 ? (gSpend / gLeads).toFixed(2) : '0.00';
+      const gLeads = record?.google_ads_conversions || 0;
+      const gCpl = gSpend > 0 && gLeads > 0 ? `$${(gSpend / gLeads).toFixed(2)}` : '—';
 
       const mSpend = record?.meta_spend || 0;
       const mLeads = record?.meta_leads || 0;
-      const mCpl = mSpend > 0 && mLeads > 0 ? (mSpend / mLeads).toFixed(2) : '0.00';
+      const mCpl = mSpend > 0 && mLeads > 0 ? `$${(mSpend / mLeads).toFixed(2)}` : '—';
 
       const sessions = record?.website_sessions || 0;
       const totalLeads = (record?.meta_leads || 0) + (record?.seo_organic_leads || 0);
@@ -319,13 +319,13 @@ export default function AdsMasterDashboard() {
                   {activeTab === 'paid' && (
                     <>
                       <th className="px-4 py-3 text-sm font-medium text-center">Google Spend</th>
-                      <th className="px-4 py-3 text-sm font-medium text-center">Google CPL</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Google Cost/Conv.</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Google CTR</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Google ROAS</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Quality Score</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Meta Spend</th>
-                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Leads</th>
-                      <th className="px-4 py-3 text-sm font-medium text-center">Meta CPL</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Conversions</th>
+                      <th className="px-4 py-3 text-sm font-medium text-center">Meta Cost/Conv.</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Meta CTR</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Meta ROAS</th>
                       <th className="px-4 py-3 text-sm font-medium text-center">Frequency</th>
@@ -430,7 +430,7 @@ export default function AdsMasterDashboard() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-4 text-center font-mono text-blue-400">${googleCpl}</td>
+                            <td className="px-4 py-4 text-center font-mono text-blue-400">{googleCpl}</td>
                             <td className="px-4 py-4 text-center font-mono">
                               {editingCell?.clientId === client.id && editingCell?.field === 'google_ads_ctr' ? (
                                 <input
@@ -458,7 +458,7 @@ export default function AdsMasterDashboard() {
                             <td className="px-4 py-4 text-center font-mono">{adsRecord?.google_ads_quality_score || '0'}</td>
                             <td className="px-4 py-4 text-center font-mono">${Number(adsRecord?.meta_spend || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_leads || 0}</td>
-                            <td className="px-4 py-4 text-center font-mono text-purple-400">${metaCpl}</td>
+                            <td className="px-4 py-4 text-center font-mono text-purple-400">{metaCpl}</td>
                             <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_ctr || '0.00'}%</td>
                             <td className="px-4 py-4 text-center font-mono">{adsRecord?.meta_roas || '0.0'}x</td>
                             <td className={`px-4 py-4 text-center font-mono font-bold ${

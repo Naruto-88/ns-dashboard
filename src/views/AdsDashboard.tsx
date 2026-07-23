@@ -100,6 +100,7 @@ export default function AdsDashboard() {
           setFormState({
             week_start_date: defaultWeek,
             google_ads_spend: 0,
+            google_ads_conversions: 0,
             google_ads_roas: 0,
             google_ads_ctr: 0,
             google_ads_quality_score: 0,
@@ -151,6 +152,7 @@ export default function AdsDashboard() {
       setFormState({
         week_start_date: selectedWeek,
         google_ads_spend: 0,
+        google_ads_conversions: 0,
         google_ads_roas: 0,
         google_ads_ctr: 0,
         google_ads_quality_score: 0,
@@ -231,20 +233,14 @@ export default function AdsDashboard() {
   // Helper calculations
   const googleCpl = useMemo(() => {
     const spend = Number(formState.google_ads_spend) || 0;
-    // Calculate leads roughly (Quality Score/Clicks could determine it, or we assume conversions exist)
-    // For presentation, since Google Leads is simulated in CPL calculations:
-    // Let's assume a default conversion rate of 8% or use G Ads CPL (spend / conversions).
-    // Let's compute Google CPL dynamically based on spend and conversions.
-    // If not set, let's show calculated G Ads CPL. 
-    // In our DB model, if conversions aren't mapped individually, we can assume:
-    const mockGoogleLeads = Math.round(spend / 35) || 1; // Assume $35 CPL if not custom set
-    return spend > 0 ? (spend / mockGoogleLeads).toFixed(2) : '0.00';
-  }, [formState.google_ads_spend]);
+    const conversions = Number(formState.google_ads_conversions) || 0;
+    return spend > 0 && conversions > 0 ? `$${(spend / conversions).toFixed(2)}` : '—';
+  }, [formState.google_ads_spend, formState.google_ads_conversions]);
 
   const metaCpl = useMemo(() => {
     const spend = Number(formState.meta_spend) || 0;
     const leads = Number(formState.meta_leads) || 0;
-    return spend > 0 && leads > 0 ? (spend / leads).toFixed(2) : '0.00';
+    return spend > 0 && leads > 0 ? `$${(spend / leads).toFixed(2)}` : '—';
   }, [formState.meta_spend, formState.meta_leads]);
 
   const webConvRate = useMemo(() => {
@@ -420,6 +416,17 @@ export default function AdsDashboard() {
                     type="number" max="10" min="0"
                     value={formState.google_ads_quality_score || ''}
                     onChange={(e) => setFormState({ ...formState, google_ads_quality_score: parseInt(e.target.value) || 0 })}
+                    className={`w-full px-3 py-2 text-sm rounded-lg outline-none border ${
+                      theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900 border-zinc-800 text-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs opacity-75 block mb-1">Conversions</label>
+                  <input
+                    type="number"
+                    value={formState.google_ads_conversions || ''}
+                    onChange={(e) => setFormState({ ...formState, google_ads_conversions: parseInt(e.target.value) || 0 })}
                     className={`w-full px-3 py-2 text-sm rounded-lg outline-none border ${
                       theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900 border-zinc-800 text-white'
                     }`}
@@ -703,15 +710,15 @@ export default function AdsDashboard() {
                   </div>
                 </div>
 
-                <div className={`p-4 rounded-xl ${theme === 'white' ? 'bg-zinc-50' : 'bg-zinc-900/30'}`}>
+                 <div className={`p-4 rounded-xl ${theme === 'white' ? 'bg-zinc-50' : 'bg-zinc-900/30'}`}>
                   <div className="text-xs opacity-60 flex items-center gap-1">
-                    G Ads CPL
+                    G Ads Cost/Conv.
                     <Tooltip position="top" content="Calculated dynamically: Google Ads Spend / Google conversions">
                       <HelpCircle className="w-3.5 h-3.5 opacity-60 cursor-pointer" />
                     </Tooltip>
                   </div>
                   <div className={`text-xl font-bold font-heading tracking-tight mt-1 text-blue-400`}>
-                    ${googleCpl}
+                    {googleCpl}
                   </div>
                 </div>
 
@@ -759,18 +766,18 @@ export default function AdsDashboard() {
 
                 <div className={`p-4 rounded-xl ${theme === 'white' ? 'bg-zinc-50' : 'bg-zinc-900/30'}`}>
                   <div className="text-xs opacity-60 flex items-center gap-1">
-                    Meta CPL
-                    <Tooltip position="top" content="Auto-calculated: Meta Spend / Meta Leads">
+                    Meta Cost/Conv.
+                    <Tooltip position="top" content="Auto-calculated: Meta Spend / Meta Conversions">
                       <HelpCircle className="w-3.5 h-3.5 opacity-60 cursor-pointer" />
                     </Tooltip>
                   </div>
                   <div className={`text-xl font-bold font-heading tracking-tight mt-1 text-purple-400`}>
-                    ${metaCpl}
+                    {metaCpl}
                   </div>
                 </div>
 
                 <div className={`p-4 rounded-xl ${theme === 'white' ? 'bg-zinc-50' : 'bg-zinc-900/30'}`}>
-                  <div className="text-xs opacity-60 flex items-center gap-1">Ad Leads</div>
+                  <div className="text-xs opacity-60 flex items-center gap-1">Ad Conversions</div>
                   <div className={`text-xl font-bold font-heading tracking-tight mt-1 ${theme === 'white' ? 'text-zinc-850' : 'text-white'}`}>
                     {formState.meta_leads || '0'}
                   </div>

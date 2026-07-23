@@ -930,3 +930,44 @@ export const revertSeoMetadata = async (clientId: string, historyId: string): Pr
     return { success: false, error: error.message };
   }
 };
+
+export const getSeoPageOptimizations = async (clientId: string): Promise<any[]> => {
+  const { data, error } = await supabase
+    .from('seo_page_optimizations')
+    .select('*')
+    .eq('client_id', clientId);
+  
+  if (error) {
+    throw error;
+  }
+  return data || [];
+};
+
+export const saveSeoPageOptimization = async (params: {
+  clientId: string;
+  pageUrl: string;
+  optimizedTitle: string;
+  optimizedDescription: string;
+  codePatch: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('seo_page_optimizations')
+      .upsert({
+        client_id: params.clientId,
+        page_url: params.pageUrl,
+        optimized_title: params.optimizedTitle,
+        optimized_description: params.optimizedDescription,
+        code_patch: params.codePatch,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'client_id,page_url'
+      });
+      
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in saveSeoPageOptimization:', error);
+    return { success: false, error: error.message };
+  }
+};
