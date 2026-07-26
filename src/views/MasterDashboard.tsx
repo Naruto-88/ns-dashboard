@@ -344,7 +344,7 @@ export default function MasterDashboard() {
         const monthlyTarget = client.lead_target_monthly || 0;
         const periodLeadTarget = monthlyTarget * (daysCount / 30.4);
 
-        // Leads score (60% weight)
+        // Leads score (70% weight)
         let leadsScore = 100;
         const reasons: string[] = [];
         if (monthlyTarget > 0) {
@@ -355,7 +355,7 @@ export default function MasterDashboard() {
           reasons.push("No Lead Target");
         }
 
-        // SEO Score (40% weight)
+        // SEO Score (30% weight)
         let seoScore = 50;
         const imprChange = calculateChange(gscTraffic.impressions, gscTraffic.prevImpressions);
         const currentPos = gscTraffic.position;
@@ -390,8 +390,8 @@ export default function MasterDashboard() {
         
         const finalSeoScore = Math.min(100, Math.max(0, seoScore));
 
-        // Combined Score (60% Leads / 40% SEO)
-        const overallScore = (leadsScore * 0.6) + (finalSeoScore * 0.4);
+        // Combined Score (70% Leads / 30% SEO)
+        const overallScore = (leadsScore * 0.7) + (finalSeoScore * 0.3);
         const reasonStr = reasons.join(' | ');
 
         const status: DashboardRow['status'] = overallScore >= 80
