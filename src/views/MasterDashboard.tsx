@@ -364,8 +364,11 @@ export default function MasterDashboard() {
         if (gscTraffic.change > 5) {
           seoScore += 20;
           reasons.push(`Clicks +${gscTraffic.change.toFixed(1)}%`);
-        } else if (gscTraffic.change < -5) {
+        } else if (gscTraffic.change < -10) {
           seoScore -= 20;
+          reasons.push(`Clicks -${Math.abs(gscTraffic.change).toFixed(1)}%`);
+        } else if (gscTraffic.change < -5) {
+          seoScore -= 10;
           reasons.push(`Clicks -${Math.abs(gscTraffic.change).toFixed(1)}%`);
         }
 
