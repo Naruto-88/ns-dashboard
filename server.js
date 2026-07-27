@@ -2185,8 +2185,14 @@ Do not return markdown code blocks in your JSON values.
 ANTI-HALLUCINATION REQUIREMENT:
 You must ONLY reference URLs, keywords, positions, CTRs, and error messages that explicitly appear in the provided data. You must NEVER invent or fabricate URLs, keywords, positions, CTRs, or errors that are not in the data \u2014 but you MAY calculate grounded projections derived from those actual numbers as explicitly permitted under the PROJECTIONS rule below. You MUST NOT perform manual calculations or arithmetic to sum or calculate crawl totals \u2014 use ONLY the exact numbers provided in the '[PRE-COMPUTED AGGREGATE CRAWL TOTALS]' section.
 
-FORCED KEYWORD USAGE RULES:
-You MUST reference at least 3 specific keywords by name from the TOP KEYWORDS list, along with their exact position and CTR. You MUST explicitly flag keywords that are ranking less than 10 (<10) but have a low CTR as priority organic search opportunities.
+KEYWORD USAGE RULES:
+Reference at least three specific keywords with their exact position and CTR only when three or more keywords with those metrics are present in the supplied data. If fewer than three valid keywords are available, reference all available keywords. Never invent missing keywords, positions or CTR values. You MUST explicitly flag keywords that are ranking less than 10 (<10) but have a low CTR as priority organic search opportunities.
+
+METADATA AUDIT RULES:
+- When identifying or recommending title and meta description improvements, do not classify metadata as an error solely because it falls outside a specific character range.
+- Prioritise accuracy, uniqueness, page relevance, search intent, natural keyword use and click appeal over rigid character counting.
+- Character length may be mentioned as a display consideration, but it must not be treated as a strict Google requirement.
+- Do not promise specific ranking, traffic or lead improvements from metadata changes.
 
 AUDIT DEPTH REQUIREMENTS:
 Since the Selected Analysis Level is ${analysisType.toUpperCase()}:
@@ -2935,15 +2941,31 @@ OUTPUT SCHEMA (return all fields \u2014 all are REQUIRED):
   }
 });
 app.post("/api/ai/optimise-page", async (req, res) => {
-  const { clientId, url, pageTitle, issues, model, simulate, currentDescription } = req.body;
+  const {
+    clientId,
+    url,
+    pageTitle,
+    issues,
+    model,
+    simulate,
+    currentDescription,
+    brandName,
+    primaryKeyword,
+    searchIntent,
+    currentH1,
+    pageContent
+  } = req.body;
   if (!url) {
     return res.status(400).json({ error: "url is required" });
   }
   try {
     const selectedModel = model || "claude";
     const parsedIssues = Array.isArray(issues) ? issues : [];
-    const hasTitleIssues = parsedIssues.some((iss) => iss.toLowerCase().includes("title"));
-    const hasMetaIssues = parsedIssues.some((iss) => iss.toLowerCase().includes("meta") || iss.toLowerCase().includes("description"));
+    let resolvedBrandName = brandName || "";
+    if (!resolvedBrandName && clientId) {
+      const { data: cData } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+      if (cData?.name) resolvedBrandName = cData.name;
+    }
     const { data: keysData } = await supabase.from("api_keys").select("*");
     const keysMap = {};
     if (keysData) {
@@ -2963,38 +2985,28 @@ app.post("/api/ai/optimise-page", async (req, res) => {
     if (simulate === true) {
       console.log(`[AI OPTIMISE] Running explicit page simulation for: ${url}`);
       let simulatedTitle = pageTitle || "Untitled Page";
-      if (hasTitleIssues) {
-        simulatedTitle = pageTitle && pageTitle !== "Untitled Page" ? `${pageTitle} | Custom SEO Target Australia` : "Premium SEO Services & Enterprise Scale Strategy | CSG";
-      }
       let simulatedMeta = currentDescription || "";
-      if (hasMetaIssues || !simulatedMeta) {
-        simulatedMeta = `Partner with Australia's elite digital growth team. Scale your organic rankings with customised technical audits, content gap optimisation, and high-quality link profiles.`;
-      }
       let simulatedCodePatch = `<!-- Copy and paste/modify this snippet inside your HTML layout -->
 `;
-      let titleFixed = false;
-      let metaFixed = false;
       if (parsedIssues.length > 0) {
         issues.forEach((iss) => {
           const issLower = iss.toLowerCase();
-          if (issLower.includes("title") && !titleFixed) {
+          if (issLower.includes("title")) {
             simulatedCodePatch += `<title>${simulatedTitle}</title>
 `;
-            titleFixed = true;
           }
-          if (issLower.includes("meta description") && !metaFixed) {
-            simulatedCodePatch += `<meta name="description" content="${simulatedMeta}" />
+          if (issLower.includes("meta description")) {
+            simulatedCodePatch += `<meta name='description' content='${simulatedMeta}' />
 `;
-            metaFixed = true;
           }
           if (issLower.includes("alt tag") || issLower.includes("lacking alt")) {
             simulatedCodePatch += `<!-- Corrected Images with optimised ALT attributes -->
-<img src="/wp-content/uploads/hero-image.png" alt="Optimised digital marketing representation for ${pageTitle || "client"} page" />
+<img src='/wp-content/uploads/hero-image.png' alt='Optimised digital marketing representation for ${pageTitle || "client"} page' />
 `;
           }
           if (issLower.includes("heading") || issLower.includes("h1")) {
             simulatedCodePatch += `<!-- Heading Hierarchy Correction -->
-<h1>${pageTitle || "Primary Section Heading"}</h1>
+<h1>${currentH1 || pageTitle || "Primary Section Heading"}</h1>
 `;
           }
         });
@@ -3003,28 +3015,9 @@ app.post("/api/ai/optimise-page", async (req, res) => {
 `) {
         simulatedCodePatch += `<!-- Page structural tags are already fully optimised. No critical code patches needed! -->`;
       }
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      let finalTitle2 = (simulatedTitle || "").replace(/&amp;/g, "&").trim();
-      let finalMeta2 = (simulatedMeta || "").replace(/&amp;/g, "&").trim();
-      finalTitle2 = finalTitle2.replace(/\s*\|\s*Custom SEO Target Australia$/gi, "");
-      finalTitle2 = finalTitle2.replace(/\s*\|\s*SEO Target Australia$/gi, "");
-      if (finalTitle2.length > 60) {
-        finalTitle2 = finalTitle2.substring(0, 60);
-        const lastSpace = finalTitle2.lastIndexOf(" ");
-        if (lastSpace > 45) {
-          finalTitle2 = finalTitle2.substring(0, lastSpace).trim();
-        }
-      }
-      if (finalMeta2.length > 160) {
-        finalMeta2 = finalMeta2.substring(0, 160);
-        const lastSpace = finalMeta2.lastIndexOf(" ");
-        if (lastSpace > 130) {
-          finalMeta2 = finalMeta2.substring(0, lastSpace).trim();
-        }
-      }
       return res.json({
-        title: finalTitle2,
-        metaDescription: finalMeta2,
+        title: (simulatedTitle || "").trim(),
+        metaDescription: (simulatedMeta || "").trim(),
         codePatch: simulatedCodePatch
       });
     }
@@ -3051,35 +3044,54 @@ app.post("/api/ai/optimise-page", async (req, res) => {
       console.error(`[AI OPTIMISE ERROR] Blocked: Unknown model parameter "${selectedModel}".`);
       return res.status(400).json({ error: `Unknown model: ${selectedModel}` });
     }
-    const prompt = `You are a high-priced enterprise SEO Consultant conducting audits in Australia. Conduct an on-page audit and write specific code corrections for a single URL.
-Page URL: ${url}
-Current Title: ${pageTitle || "Untitled Page"}
-Current Meta Description: ${currentDescription || "None"}
-Detected Structural / Technical Issues:
-${JSON.stringify(issues || [], null, 2)}
+    const prompt = `You are an enterprise SEO Consultant. Conduct an on-page audit and write specific preferred metadata and code corrections for a single URL.
 
-Provide your response as a valid, parsable JSON object strictly conforming to the following structure. Do not include any markdown format blocks or introductory/concluding text:
+PAGE DATA:
+- Brand / Business Name: ${resolvedBrandName || "Not specified"}
+- Page URL: ${url}
+- Current Title: ${pageTitle || "None"}
+- Current Meta Description: ${currentDescription || "None"}
+- Current H1 Heading: ${currentH1 || "None"}
+- Primary Target Keyword: ${primaryKeyword || "Not specified"}
+- Intended Search Intent: ${searchIntent || "Informational / Commercial"}
+- Visible Page Content Summary: ${pageContent || "Not specified"}
+- Detected Technical Issues: ${JSON.stringify(issues || [], null, 2)}
+
+Provide your response as a valid, parsable JSON object strictly conforming to the following structure:
 {
-  "title": "SEO-Optimised Page Title (MUST be strictly between 50 and 60 characters. Count the characters to make sure it is exactly between 50 and 60 chars. CTR and commercial intent)",
-  "metaDescription": "SEO-Optimised Meta Description (MUST be strictly between 120 and 160 characters. Count the characters to make sure it is exactly between 120 and 160 chars. Compelling CTA)",
-  "codePatch": "Write a clean HTML developer code snippet showing exactly what tags the developer should insert inside their page to resolve the specific issues listed. (For alt images, write exact <img src='...' alt='custom descriptive alt'> tags; for headings, show demoted H1s; for title/meta errors, show the correct tags. Use single quotes for any HTML attributes in the code to ensure JSON string validity!)"
+  "title": "Preferred SEO Page Title",
+  "metaDescription": "Preferred SEO Meta Description",
+  "codePatch": "Write a clean HTML developer code snippet showing the exact tags to insert inside the page. (Use single quotes for HTML attributes, and use &amp; for ampersands in HTML attributes where technically required)."
 }
 
-CRITICAL SEO RULES & JUDGMENT:
-- Your generated "title" MUST be strictly between 50 and 60 characters in total length. Frontload the primary page keyword, use conversion-driven power words (e.g., 'Best', 'Top', 'Trusted', 'Premium', 'Direct'), and target Australian commercial intent.
-- Your generated "metaDescription" MUST be strictly between 120 and 160 characters in total length. Optimize it for maximum click-through rate (CTR): start with an active, conversion-driven verb, highlight a unique selling point (USP), naturally weave in page keywords, and end with an explicit, high-intent Call to Action (CTA) (e.g. 'Get a free quote today!', 'Claim your audit now!', 'Browse our premium range!').
-- The generated title and meta description MUST consist of complete, fully-formed sentences. NEVER include any truncation indicators, incomplete thoughts, or ellipses like '[...]' or '...'.
-- Count the characters of your generated title and description values before outputting to ensure absolute compliance!
-- The optimised title MUST be SHORTER than the original title if the issue is "title too long" or "over-optimised title". Do NOT just append text to the original title.
-- Decode HTML entities: NEVER output "&amp;" inside your title or meta description \u2014 always use a real "&" or rephrase the wording to avoid it completely.
-- The meta description MUST be highly specific to THIS page's actual topic (deduce this logically from the URL path and current title) and NEVER use a generic corporate or agency blurb.
-- The codePatch MUST contain the actual CORRECTED tags containing the new short title or the new meta description, not a copy of the original broken tag.
+METADATA GENERATION RULES:
+1. The title and meta description must accurately represent the visible page content and its primary search intent.
+2. Each title and meta description should be unique to that page.
+3. Use the primary keyword naturally and preferably early in the title, but never damage grammar or readability to force an exact match.
+4. Aim for a concise title that is likely to display well in search results, usually around 50\u201360 characters. This is a guideline, not a strict requirement.
+5. Aim for a concise meta description that is likely to display well, usually around 120\u2013160 characters. This is a guideline, not a strict requirement.
+6. Do not shorten, lengthen or weaken accurate metadata solely to satisfy a character-count tool.
+7. Titles may be concise phrases and do not need to be complete sentences.
+8. Meta descriptions should provide a clear and compelling summary. Include a CTA or value proposition only where it is natural and relevant.
+9. Never use unsupported superlatives (e.g. 'Best', 'Top', 'No.1'), guarantees, prices, locations, credentials or service claims unless explicitly present in the supplied page data.
+10. If the supplied page data is insufficient, do not invent details.
+11. Google may rewrite titles and descriptions in search results, but we should still provide the strongest accurate preferred version.
+12. Return decoded plain text in the JSON 'title' and 'metaDescription' fields (use real '&'). In the HTML 'codePatch' field, use valid HTML escaping, including '&amp;' where technically required.
+13. Continue writing exclusively in British/Australian English ('optimise', 'customised', 'behaviour').
 
-CRITICAL INTEGRITY & SPELLING RULES:
-1. YOU MUST write all JSON values and text exclusively in British / Australian English. You MUST use '-ise' and '-ised' suffixes instead of '-ize' and '-ized' (e.g., 'optimise', 'optimised', 'synthesise', 'synthesised', 'categorise', 'prioritise', 'customised', 'analysed', 'characterise'). Use 'colour' instead of 'color' and 'behaviour' instead of 'behavior'. However, do not modify technical terms, code snippets, or official brand names that naturally use other spelling conventions.
-2. You MUST ensure that the HTML code snippet inside the "codePatch" JSON value DOES NOT contain unescaped raw double quotes ("). Strictly use single quotes (') for all HTML attributes (e.g. <meta name='description' content='value'>).
-3. Do not insert literal unescaped raw newlines inside any string property value; instead, represent newlines using the '\\n' control character.
-4. Make sure the JSON parses perfectly. Do not include any text before or after the JSON structure.`;
+PRIORITY ORDER:
+1. Accuracy
+2. Search intent relevance
+3. Uniqueness
+4. Click appeal
+5. Natural keyword use
+6. Sensible display length
+
+CRITICAL INTEGRITY RULES:
+1. YOU MUST write all JSON values exclusively in British / Australian English.
+2. You MUST ensure that the HTML code snippet inside the "codePatch" JSON value DOES NOT contain unescaped raw double quotes ("). Strictly use single quotes (') for all HTML attributes.
+3. Do not insert literal unescaped raw newlines inside any string property value; represent newlines using the '\\n' control character.
+4. Make sure the JSON parses perfectly. Do not include any markdown format blocks or introductory/concluding text outside the JSON.`;
     let jsonResponse = null;
     if (selectedModel === "gemini") {
       let lastError = null;
