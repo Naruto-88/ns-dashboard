@@ -5420,7 +5420,7 @@ app.post('/api/webhook/receive-lead', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized: Invalid API Key or Bearer Token' });
   }
 
-  const { client_id, domain, genuine_leads_count, total_leads_count, status, action, week_start_date } = req.body || {};
+  const { client_id, domain, genuine_leads_count, total_leads_count, status, action, week_start_date, lead_timestamp } = req.body || {};
 
   if (!client_id && !domain) {
     return res.status(400).json({ error: 'Missing required field: client_id or domain' });
@@ -5445,7 +5445,7 @@ app.post('/api/webhook/receive-lead', async (req, res) => {
     // Determine target Monday week_start_date
     let targetDateStr = week_start_date;
     if (!targetDateStr) {
-      const now = new Date();
+      const now = lead_timestamp ? new Date(lead_timestamp) : new Date();
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(now.setDate(diff));
