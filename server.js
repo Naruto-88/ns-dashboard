@@ -4243,6 +4243,78 @@ app.post("/api/clients/:clientId/sync-ads-growth", async (req, res) => {
           } catch (adsError) {
             console.error("[ADS_SYNC_API] Failed to fetch separate Google Ads report:", adsError.message);
           }
+          if (client.google_ads_customer_id && process.env.GOOGLE_ADS_DEVELOPER_TOKEN) {
+            try {
+              const cleanCustomerId = client.google_ads_customer_id.replace(/-/g, "").trim();
+              const tokens = await currentAuth.getAccessToken();
+              const accessToken = typeof tokens === "string" ? tokens : tokens?.token;
+              if (accessToken) {
+                console.log(`[ADS_SYNC_API] Fetching Direct Google Ads API for customer: "${cleanCustomerId}"...`);
+                const adsUrl = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:searchStream`;
+                const adsQuery = {
+                  query: `SELECT campaign.id, campaign.name, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'`
+                };
+                const adsRes = await fetch(adsUrl, {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${accessToken}`,
+                    "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify(adsQuery)
+                });
+                if (adsRes.ok) {
+                  const adsStreamData = await adsRes.json();
+                  console.log(`[ADS_SYNC_API] Direct Google Ads API response received!`);
+                  let directCost = 0;
+                  let directClicks = 0;
+                  let directImps = 0;
+                  let directConvs = 0;
+                  const directCampaigns = [];
+                  if (Array.isArray(adsStreamData)) {
+                    for (const batch of adsStreamData) {
+                      for (const row of batch.results || []) {
+                        const cName = row.campaign?.name || "Campaign";
+                        const cCost = parseInt(row.metrics?.costMicros || "0") / 1e6;
+                        const cClicks = parseInt(row.metrics?.clicks || "0");
+                        const cImps = parseInt(row.metrics?.impressions || "0");
+                        const cConvs = parseInt(row.metrics?.conversions || "0");
+                        if (cCost > 0 || cClicks > 0 || cImps > 0 || cConvs > 0) {
+                          directCampaigns.push({
+                            campaignName: cName,
+                            cost: parseFloat(cCost.toFixed(2)),
+                            clicks: cClicks,
+                            impressions: cImps,
+                            conversions: cConvs,
+                            ctr: cImps > 0 ? parseFloat((cClicks / cImps * 100).toFixed(2)) : 0,
+                            cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
+                          });
+                        }
+                        directCost += cCost;
+                        directClicks += cClicks;
+                        directImps += cImps;
+                        directConvs += cConvs;
+                      }
+                    }
+                  }
+                  if (directCost > 0 || directClicks > 0 || directImps > 0 || directConvs > 0) {
+                    gSpend = parseFloat(directCost.toFixed(2));
+                    gCtr = directImps > 0 ? parseFloat((directClicks / directImps * 100).toFixed(2)) : 0;
+                    gLeads = directConvs;
+                    gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
+                    gScore = 9;
+                    gCampaigns = directCampaigns;
+                    console.log(`[ADS_SYNC_API] Applied Direct Google Ads API metrics: Spend=$${gSpend}, Clicks=${directClicks}, Conversions=${gLeads}`);
+                  }
+                } else {
+                  const errTxt = await adsRes.text();
+                  console.error(`[ADS_SYNC_API] Direct Google Ads API returned error status ${adsRes.status}:`, errTxt);
+                }
+              }
+            } catch (directAdsErr) {
+              console.error("[ADS_SYNC_API] Failed to fetch Direct Google Ads API:", directAdsErr.message);
+            }
+          }
           try {
             const pagesReport = await analytics.properties.runReport({
               property: `properties/${client.ga4_property_id}`,
