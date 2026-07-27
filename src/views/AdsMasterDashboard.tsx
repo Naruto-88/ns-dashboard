@@ -30,6 +30,22 @@ interface ClientAdsRow {
   webConvRate: string;
 }
 
+function formatWeekPeriod(weekStartStr: string): string {
+  if (!weekStartStr) return '';
+  const parts = weekStartStr.split('-');
+  if (parts.length !== 3) return weekStartStr;
+  
+  const start = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  if (isNaN(start.getTime())) return weekStartStr;
+  
+  const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+  
+  const startFormatted = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const endFormatted = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  
+  return `${startFormatted} – ${endFormatted}`;
+}
+
 export default function AdsMasterDashboard() {
   const { theme } = useTheme();
   const [clients, setClients] = useState<Client[]>([]);
@@ -213,20 +229,32 @@ export default function AdsMasterDashboard() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {selectedWeek && (
+            <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold ${
+              theme === 'white'
+                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+            }`}>
+              <Calendar size={14} />
+              <span>Period: {formatWeekPeriod(selectedWeek)}</span>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
-            <Calendar className={`w-4 h-4 ${theme === 'white' ? 'text-zinc-500' : 'text-emerald-400'}`} />
             <select
               value={selectedWeek}
               onChange={(e) => setSelectedWeek(e.target.value)}
-              className={`px-4 py-2 text-sm rounded-xl border focus:ring-4 outline-none ${
+              className={`px-4 py-2 text-sm rounded-xl border focus:ring-4 outline-none font-medium ${
                 theme === 'white'
                   ? 'bg-white border-zinc-200 text-zinc-800 focus:ring-blue-500/5'
                   : 'bg-zinc-900 border-zinc-800 text-emerald-400 focus:ring-emerald-500/10'
               }`}
             >
               {weekOptions.map(week => (
-                <option key={week} value={week}>Week of {week}</option>
+                <option key={week} value={week}>
+                  {formatWeekPeriod(week)} ({week})
+                </option>
               ))}
             </select>
           </div>
