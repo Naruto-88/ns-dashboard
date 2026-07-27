@@ -5411,6 +5411,111 @@ app.post('/api/ai/revert-metadata', async (req, res) => {
   }
 });
 
+// Lead Shield Inbound Webhook Endpoint
+app.post('/api/webhook/receive-lead', async (req, res) => {
+  const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
+  const expectedSecret = process.env.LEAD_SHIELD_SECRET;
+
+  if (expectedSecret && authHeader !== expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid API Key or Bearer Token' });
+  }
+
+  const { client_id, domain, genuine_leads_count, total_leads_count, status, action, week_start_date } = req.body || {};
+
+  if (!client_id && !domain) {
+    return res.status(400).json({ error: 'Missing required field: client_id or domain' });
+  }
+
+  try {
+    // Resolve Client UUID from Supabase
+    let query = supabase.from('clients').select('id, name, domain');
+    if (client_id) {
+      query = query.or(`id.eq.${client_id},domain.ilike.%${client_id}%`);
+    } else if (domain) {
+      query = query.ilike('domain', `%${domain}%`);
+    }
+
+    const { data: clients, error: clientErr } = await query;
+    if (clientErr || !clients || clients.length === 0) {
+      return res.status(404).json({ error: `Client not found for identifier: ${client_id || domain}` });
+    }
+
+    const targetClient = clients[0];
+
+    // Determine target Monday week_start_date
+    let targetDateStr = week_start_date;
+    if (!targetDateStr) {
+      const now = new Date();
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      targetDateStr = monday.toISOString().split('T')[0];
+    }
+
+    // Fetch existing record for this week
+    const { data: existingRecord } = await supabase
+      .from('weekly_data')
+      .select('id, leads_legit, leads_total')
+      .eq('client_id', targetClient.id)
+      .eq('week_start_date', targetDateStr)
+      .maybeSingle();
+
+    let newLegit = 0;
+    let newTotal = 0;
+
+    if (typeof genuine_leads_count === 'number') {
+      newLegit = genuine_leads_count;
+      newTotal = typeof total_leads_count === 'number' ? total_leads_count : Math.max(newLegit, existingRecord?.leads_total || 0);
+    } else if (action === 'increment' || status === 'GENUINE' || status === 'genuine') {
+      newLegit = (existingRecord?.leads_legit || 0) + 1;
+      newTotal = (existingRecord?.leads_total || 0) + 1;
+    } else {
+      newLegit = (existingRecord?.leads_legit || 0);
+      newTotal = (existingRecord?.leads_total || 0) + (status === 'SPAM' ? 1 : 0);
+    }
+
+    if (existingRecord) {
+      const { error: updateError } = await supabase
+        .from('weekly_data')
+        .update({
+          leads_legit: newLegit,
+          leads_total: newTotal
+        })
+        .eq('id', existingRecord.id);
+
+      if (updateError) throw updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('weekly_data')
+        .insert({
+          client_id: targetClient.id,
+          week_start_date: targetDateStr,
+          leads_legit: newLegit,
+          leads_total: newTotal,
+          technical_score: 90
+        });
+
+      if (insertError) throw insertError;
+    }
+
+    console.log(`[LEAD SHIELD WEBHOOK] Received lead update for ${targetClient.name}: legit=${newLegit}, total=${newTotal}`);
+
+    return res.json({
+      success: true,
+      message: 'Genuine lead count updated successfully',
+      client: targetClient.name,
+      week_start_date: targetDateStr,
+      updated_leads: {
+        leads_legit: newLegit,
+        leads_total: newTotal
+      }
+    });
+  } catch (err: any) {
+    console.error('[LEAD SHIELD WEBHOOK] Error handling webhook:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error processing webhook' });
+  }
+});
+
 // Vite Middleware
 if (process.env.NODE_ENV !== 'production' && !process.env.PASSENGER_APP_ENV) {
   const vite = await createViteServer({
