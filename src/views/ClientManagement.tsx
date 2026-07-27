@@ -42,6 +42,7 @@ export default function ClientManagement() {
     name: '',
     short_code: '',
     ga4_property_id: '',
+    google_ads_customer_id: '',
     gsc_site_url: '',
     lead_event_names: 'generate_lead, form_submission',
     keyword_tracking_enabled: true,
@@ -274,6 +275,9 @@ BEGIN
   -- Fix Clients table columns
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='ga4_property_id') THEN
     ALTER TABLE public.clients ADD COLUMN ga4_property_id TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='google_ads_customer_id') THEN
+    ALTER TABLE public.clients ADD COLUMN google_ads_customer_id TEXT;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='gsc_site_url') THEN
     ALTER TABLE public.clients ADD COLUMN gsc_site_url TEXT;
@@ -631,6 +635,7 @@ NOTIFY pgrst, 'reload schema';
       name: client.name || '',
       short_code: client.short_code || '',
       ga4_property_id: client.ga4_property_id || '',
+      google_ads_customer_id: client.google_ads_customer_id || '',
       gsc_site_url: client.gsc_site_url || '',
       lead_event_names: client.lead_event_names || '',
       keyword_tracking_enabled: client.keyword_tracking_enabled ?? true,
@@ -1178,6 +1183,19 @@ NOTIFY pgrst, 'reload schema';
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`} 
                   placeholder="123456789"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-500   ml-1">Google Ads Customer ID</label>
+                <input 
+                  type="text" 
+                  value={formData.google_ads_customer_id}
+                  onChange={(e) => setFormData({...formData, google_ads_customer_id: e.target.value})}
+                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                    theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                  }`} 
+                  placeholder="123-456-7890"
                 />
               </div>
 
