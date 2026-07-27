@@ -189,7 +189,7 @@ function Login() {
     setError(null);
     setLoading(true);
     try {
-      const team = ['Melaka', 'Amit', 'Sai', 'Vinoj', 'Sash', 'Lidusha'];
+      const team = ['Melaka', 'Amit', 'Sai', 'Vinoj', 'Sash', 'Lidusha', 'Thisura'];
       let targetEmail = email.trim().toLowerCase();
       
       // If user provided just a name from the team, convert to team email
