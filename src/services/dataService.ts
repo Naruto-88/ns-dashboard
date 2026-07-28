@@ -27,6 +27,7 @@ export interface Client {
   wordpress_url?: string;
   seo_webhook_secret?: string;
   google_ads_customer_id?: string;
+  meta_ad_account_id?: string;
 }
 
 export interface WeeklyData {

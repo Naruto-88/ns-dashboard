@@ -5019,12 +5019,12 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
     let gScore = 0;
     let gCampaigns: any[] = [];
 
-    const mSpend = 0;
-    const mReach = 0;
-    const mLeads = 0;
-    const mCtr = 0;
-    const mRoas = 0;
-    const mFreq = 0;
+    let mSpend = 0;
+    let mReach = 0;
+    let mLeads = 0;
+    let mCtr = 0;
+    let mRoas = 0;
+    let mFreq = 0;
 
     // Fetch real weekly_data values if available (GA4 sessions, organic traffic, organic leads)
     let webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : 0;
@@ -5232,6 +5232,54 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
               }
             } catch (directAdsErr: any) {
               console.error('[ADS_SYNC_API] Failed to fetch Direct Google Ads API:', directAdsErr.message);
+            }
+          }
+
+          // Query Meta Marketing API (Facebook / Instagram Ads) if meta_ad_account_id & token are present
+          const metaAccessToken = process.env.META_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+          if (client.meta_ad_account_id && metaAccessToken) {
+            try {
+              let cleanMetaAccountId = client.meta_ad_account_id.trim();
+              if (!cleanMetaAccountId.startsWith('act_')) {
+                cleanMetaAccountId = `act_${cleanMetaAccountId}`;
+              }
+
+              console.log(`[ADS_SYNC_API] Fetching Meta Marketing API for account: "${cleanMetaAccountId}" (${startDate} to ${endDate})...`);
+              const metaUrl = `https://graph.facebook.com/v20.0/${cleanMetaAccountId}/insights?` + new URLSearchParams({
+                access_token: metaAccessToken,
+                time_range: JSON.stringify({ since: startDate, until: endDate }),
+                fields: 'spend,impressions,reach,clicks,ctr,actions,cost_per_action_type,frequency'
+              }).toString();
+
+              const metaRes = await fetch(metaUrl);
+              if (metaRes.ok) {
+                const metaData = await metaRes.json();
+                console.log(`[ADS_SYNC_API] Meta Marketing API response received!`);
+
+                const insights = metaData.data?.[0];
+                if (insights) {
+                  mSpend = parseFloat(parseFloat(insights.spend || '0').toFixed(2));
+                  mReach = parseInt(insights.reach || insights.impressions || '0');
+                  mCtr = parseFloat(parseFloat(insights.ctr || '0').toFixed(2));
+                  mFreq = parseFloat(parseFloat(insights.frequency || '0').toFixed(2));
+
+                  let metaLeadsCount = 0;
+                  if (Array.isArray(insights.actions)) {
+                    for (const act of insights.actions) {
+                      if (act.action_type === 'lead' || act.action_type === 'offsite_conversion.fb_pixel_lead' || act.action_type.includes('lead')) {
+                        metaLeadsCount += parseInt(act.value || '0');
+                      }
+                    }
+                  }
+                  mLeads = metaLeadsCount;
+                  mRoas = mSpend > 0 ? parseFloat((mSpend / Math.max(mLeads, 1)).toFixed(2)) : 0;
+                }
+              } else {
+                const metaErrTxt = await metaRes.text();
+                console.error(`[ADS_SYNC_API] Meta Marketing API error status ${metaRes.status}:`, metaErrTxt);
+              }
+            } catch (metaErr: any) {
+              console.error('[ADS_SYNC_API] Failed to fetch Meta Marketing API:', metaErr.message);
             }
           }
 
