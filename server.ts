@@ -5513,29 +5513,48 @@ app.post('/api/webhook/receive-lead', async (req, res) => {
   }
 
   try {
-    // Resolve Client UUID from Supabase
-    let query = supabase.from('clients').select('id, name, domain');
-    if (client_id) {
-      query = query.or(`id.eq.${client_id},domain.ilike.%${client_id}%`);
-    } else if (domain) {
-      query = query.ilike('domain', `%${domain}%`);
+    // Fetch all clients to perform robust fuzzy/alias matching without depending on non-existent columns
+    const { data: allClients, error: clientErr } = await supabase
+      .from('clients')
+      .select('id, name, short_code, gsc_site_url');
+
+    if (clientErr || !allClients || allClients.length === 0) {
+      console.error('[LEAD_WEBHOOK_ERROR] Failed to query clients table:', clientErr?.message);
+      return res.status(500).json({ error: 'Failed to query clients table' });
     }
 
-    const { data: clients, error: clientErr } = await query;
-    if (clientErr || !clients || clients.length === 0) {
+    const rawInput = (client_id || domain || '').toString().trim().toLowerCase();
+    const cleanInput = rawInput.replace(/https?:\/\//g, '').replace(/www\./g, '').replace(/[^a-z0-9]/g, '');
+
+    const targetClient = allClients.find(c => {
+      if (c.id === rawInput) return true;
+      if (c.short_code && c.short_code.toLowerCase() === rawInput) return true;
+      
+      const cNameClean = (c.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cGscClean = (c.gsc_site_url || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      if (cNameClean && (cNameClean.includes(cleanInput) || cleanInput.includes(cNameClean))) return true;
+      if (cGscClean && (cGscClean.includes(cleanInput) || cleanInput.includes(cGscClean))) return true;
+
+      return false;
+    });
+
+    if (!targetClient) {
+      console.warn(`[LEAD_WEBHOOK_WARN] Client not found for identifier: "${client_id || domain}"`);
       return res.status(404).json({ error: `Client not found for identifier: ${client_id || domain}` });
     }
-
-    const targetClient = clients[0];
 
     // Determine target Monday week_start_date
     let targetDateStr = week_start_date;
     if (!targetDateStr) {
-      const now = leadTimeRaw ? new Date(leadTimeRaw) : new Date();
-      const day = now.getDay();
-      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(now.setDate(diff));
-      targetDateStr = monday.toISOString().split('T')[0];
+      const d = leadTimeRaw ? new Date(leadTimeRaw) : new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      const year = monday.getFullYear();
+      const month = String(monday.getMonth() + 1).padStart(2, '0');
+      const date = String(monday.getDate()).padStart(2, '0');
+      targetDateStr = `${year}-${month}-${date}`;
     }
 
     // Fetch existing record for this week

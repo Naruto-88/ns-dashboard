@@ -4539,24 +4539,36 @@ app.post("/api/webhook/receive-lead", async (req, res) => {
     return res.status(400).json({ error: "Missing required field: client_id or domain" });
   }
   try {
-    let query = supabase.from("clients").select("id, name, domain");
-    if (client_id) {
-      query = query.or(`id.eq.${client_id},domain.ilike.%${client_id}%`);
-    } else if (domain) {
-      query = query.ilike("domain", `%${domain}%`);
+    const { data: allClients, error: clientErr } = await supabase.from("clients").select("id, name, short_code, gsc_site_url");
+    if (clientErr || !allClients || allClients.length === 0) {
+      console.error("[LEAD_WEBHOOK_ERROR] Failed to query clients table:", clientErr?.message);
+      return res.status(500).json({ error: "Failed to query clients table" });
     }
-    const { data: clients, error: clientErr } = await query;
-    if (clientErr || !clients || clients.length === 0) {
+    const rawInput = (client_id || domain || "").toString().trim().toLowerCase();
+    const cleanInput = rawInput.replace(/https?:\/\//g, "").replace(/www\./g, "").replace(/[^a-z0-9]/g, "");
+    const targetClient = allClients.find((c) => {
+      if (c.id === rawInput) return true;
+      if (c.short_code && c.short_code.toLowerCase() === rawInput) return true;
+      const cNameClean = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const cGscClean = (c.gsc_site_url || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (cNameClean && (cNameClean.includes(cleanInput) || cleanInput.includes(cNameClean))) return true;
+      if (cGscClean && (cGscClean.includes(cleanInput) || cleanInput.includes(cGscClean))) return true;
+      return false;
+    });
+    if (!targetClient) {
+      console.warn(`[LEAD_WEBHOOK_WARN] Client not found for identifier: "${client_id || domain}"`);
       return res.status(404).json({ error: `Client not found for identifier: ${client_id || domain}` });
     }
-    const targetClient = clients[0];
     let targetDateStr = week_start_date;
     if (!targetDateStr) {
-      const now = leadTimeRaw ? new Date(leadTimeRaw) : /* @__PURE__ */ new Date();
-      const day = now.getDay();
-      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(now.setDate(diff));
-      targetDateStr = monday.toISOString().split("T")[0];
+      const d = leadTimeRaw ? new Date(leadTimeRaw) : /* @__PURE__ */ new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      const year = monday.getFullYear();
+      const month = String(monday.getMonth() + 1).padStart(2, "0");
+      const date = String(monday.getDate()).padStart(2, "0");
+      targetDateStr = `${year}-${month}-${date}`;
     }
     const { data: existingRecord } = await supabase.from("weekly_data").select("id, leads_legit, leads_total").eq("client_id", targetClient.id).eq("week_start_date", targetDateStr).maybeSingle();
     let newLegit = 0;
