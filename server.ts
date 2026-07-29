@@ -5269,14 +5269,21 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
 
                   let metaLeadsCount = 0;
                   if (Array.isArray(insights.actions)) {
-                    for (const act of insights.actions) {
-                      if (act.action_type === 'lead' || act.action_type === 'offsite_conversion.fb_pixel_lead' || act.action_type.includes('lead')) {
-                        metaLeadsCount += parseInt(act.value || '0');
+                    const primaryLeadAction = insights.actions.find((act: any) => act.action_type === 'lead');
+                    if (primaryLeadAction) {
+                      metaLeadsCount = parseInt(primaryLeadAction.value || '0');
+                    } else {
+                      const fallbackAction = insights.actions.find((act: any) => 
+                        act.action_type === 'offsite_conversion.fb_pixel_lead' || 
+                        act.action_type === 'onsite_conversion.lead_grouped'
+                      );
+                      if (fallbackAction) {
+                        metaLeadsCount = parseInt(fallbackAction.value || '0');
                       }
                     }
                   }
                   mLeads = metaLeadsCount;
-                  mRoas = mSpend > 0 ? parseFloat((mSpend / Math.max(mLeads, 1)).toFixed(2)) : 0;
+                  mRoas = 0;
                 }
               } else {
                 const metaErrTxt = await metaRes.text();
