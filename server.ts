@@ -5236,7 +5236,11 @@ app.post('/api/clients/:clientId/sync-ads-growth', async (req, res) => {
           }
 
           // Query Meta Marketing API (Facebook / Instagram Ads) if meta_ad_account_id & token are present
-          const metaAccessToken = process.env.META_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+          let metaAccessToken = process.env.META_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || '';
+          if (!metaAccessToken) {
+            const { data: mKeyRow } = await supabase.from('api_keys').select('key_value').eq('id', 'meta_access_token').maybeSingle();
+            if (mKeyRow?.key_value) metaAccessToken = mKeyRow.key_value;
+          }
           if (client.meta_ad_account_id && metaAccessToken) {
             try {
               let cleanMetaAccountId = client.meta_ad_account_id.trim();
