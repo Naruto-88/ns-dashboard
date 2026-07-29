@@ -542,6 +542,31 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
         let totalActiveUsers = 0;
         let organicSessions = 0;
 
+function extractPhoneCallsFromEvents(eventRows: any[]): number {
+  let clickToCallCount = 0;
+  let phoneClickCount = 0;
+  let otherPhoneCount = 0;
+
+  for (const r of eventRows || []) {
+    const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
+    const c = parseInt(r.metricValues?.[0]?.value || '0');
+
+    if (ev === 'click_to_call') {
+      clickToCallCount += c;
+    } else if (ev === 'phone_call_click' || ev === 'phone_click') {
+      phoneClickCount += c;
+    } else if (ev.includes('call') || ev.includes('phone')) {
+      otherPhoneCount += c;
+    }
+  }
+
+  if (clickToCallCount > 0 && phoneClickCount > 0) {
+    return Math.max(clickToCallCount, phoneClickCount) + otherPhoneCount;
+  }
+
+  return clickToCallCount + phoneClickCount + otherPhoneCount;
+}
+
         const rows = response.data.rows || [];
         for (const row of rows) {
           const channel = (row.dimensionValues?.[0]?.value || '').toLowerCase();
@@ -575,18 +600,7 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
           });
 
           const eventRows = eventResponse.data.rows || [];
-          for (const erow of eventRows) {
-            const eventName = (erow.dimensionValues?.[0]?.value || '').toLowerCase();
-            const count = parseInt(erow.metricValues?.[0]?.value || '0');
-            if (
-              eventName.includes('call') || 
-              eventName.includes('phone') || 
-              eventName === 'click_to_call' || 
-              eventName === 'phone_click'
-            ) {
-              phoneCallsCount += count;
-            }
-          }
+          phoneCallsCount = extractPhoneCallsFromEvents(eventRows);
         } catch (eventErr) {
           console.error('GA4 Event Sync (phone calls) error:', eventErr);
         }
@@ -4043,11 +4057,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
             metrics: [{ name: 'eventCount' }]
           }
         });
-        for (const r of (eventsRes.data.rows || [])) {
-          const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
-          const c = parseInt(r.metricValues?.[0]?.value || '0');
-          if (ev.includes('call') || ev.includes('phone') || ev === 'click_to_call') ga4.phone_calls += c;
-        }
+        ga4.phone_calls = extractPhoneCallsFromEvents(eventsRes.data.rows || []);
       } catch(e) { console.error("GA4 error for", client.name, e.message); }
       return ga4;
     };
