@@ -71,15 +71,16 @@ export default function AdsDashboard() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const c = await getClients();
-        setClients(c);
+        const c = await getClients({ forAds: true });
+        const adsClients = c.filter(client => client.has_paid_ads === true || client.keyword_tracking_enabled === false);
+        setClients(adsClients);
         
         const params = new URLSearchParams(location.search);
         const clientIdParam = params.get('clientId');
         if (clientIdParam) {
           setSelectedClient(clientIdParam);
-        } else if (c.length > 0) {
-          setSelectedClient(c[0].id);
+        } else if (adsClients.length > 0) {
+          setSelectedClient(adsClients[0].id);
         }
       } catch (err) {
         setError('Failed to load clients list.');

@@ -89,8 +89,8 @@ export default function AdsMasterDashboard() {
       setLoading(true);
       setError(null);
       try {
-        const allClients = await getClients();
-        const adsClients = allClients.filter(c => c.has_paid_ads === true);
+        const allClients = await getClients({ forAds: true });
+        const adsClients = allClients.filter(c => c.has_paid_ads === true || c.keyword_tracking_enabled === false);
         setClients(adsClients);
 
         const adsMap: Record<string, WeeklyAdsGrowth[]> = {};

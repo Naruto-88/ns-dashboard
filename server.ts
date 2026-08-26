@@ -86,6 +86,31 @@ app.get('/api/clients/:clientId/keyword-ranking-details', async (req, res) => {
   }
 });
 
+function extractPhoneCallsFromEvents(eventRows: any[]): number {
+  let clickToCallCount = 0;
+  let phoneClickCount = 0;
+  let otherPhoneCount = 0;
+
+  for (const r of eventRows || []) {
+    const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
+    const c = parseInt(r.metricValues?.[0]?.value || '0');
+
+    if (ev === 'click_to_call') {
+      clickToCallCount += c;
+    } else if (ev === 'phone_call_click' || ev === 'phone_click') {
+      phoneClickCount += c;
+    } else if (ev.includes('call') || ev.includes('phone')) {
+      otherPhoneCount += c;
+    }
+  }
+
+  if (clickToCallCount > 0 && phoneClickCount > 0) {
+    return Math.max(clickToCallCount, phoneClickCount) + otherPhoneCount;
+  }
+
+  return clickToCallCount + phoneClickCount + otherPhoneCount;
+}
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -541,31 +566,6 @@ app.post('/api/clients/:clientId/sync-weekly-data', async (req, res) => {
         let totalNewUsers = 0;
         let totalActiveUsers = 0;
         let organicSessions = 0;
-
-function extractPhoneCallsFromEvents(eventRows: any[]): number {
-  let clickToCallCount = 0;
-  let phoneClickCount = 0;
-  let otherPhoneCount = 0;
-
-  for (const r of eventRows || []) {
-    const ev = (r.dimensionValues?.[0]?.value || '').toLowerCase();
-    const c = parseInt(r.metricValues?.[0]?.value || '0');
-
-    if (ev === 'click_to_call') {
-      clickToCallCount += c;
-    } else if (ev === 'phone_call_click' || ev === 'phone_click') {
-      phoneClickCount += c;
-    } else if (ev.includes('call') || ev.includes('phone')) {
-      otherPhoneCount += c;
-    }
-  }
-
-  if (clickToCallCount > 0 && phoneClickCount > 0) {
-    return Math.max(clickToCallCount, phoneClickCount) + otherPhoneCount;
-  }
-
-  return clickToCallCount + phoneClickCount + otherPhoneCount;
-}
 
         const rows = response.data.rows || [];
         for (const row of rows) {

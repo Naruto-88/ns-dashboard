@@ -58,8 +58,8 @@ export default function AdsWeeklyInputs() {
   useEffect(() => {
     async function loadClients() {
       try {
-        const list = await getClients();
-        const adsClients = list.filter(c => c.has_paid_ads === true);
+        const list = await getClients({ forAds: true });
+        const adsClients = list.filter(c => c.has_paid_ads === true || c.keyword_tracking_enabled === false);
         setClients(adsClients);
         if (adsClients.length > 0) {
           setSelectedClient(adsClients[0].id);

@@ -91,7 +91,7 @@ export default function ClientManagement() {
   const fetchData = () => {
     logDebug('Fetching clients...');
     setLoading(true);
-    getClients().then(async (data) => {
+    getClients(true).then(async (data) => {
       logDebug(`Fetched ${data.length} clients`);
       setClients(data);
       setLoading(false);
@@ -841,7 +841,19 @@ NOTIFY pgrst, 'reload schema';
                         {client.short_code}
                       </div>
                       <div>
-                        <p className={`font-medium font-heading  tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>{client.name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={`font-medium font-heading tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>{client.name}</p>
+                          {client.api_import_enabled === false && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                              Inactive / Churned
+                            </span>
+                          )}
+                          {client.keyword_tracking_enabled === false && client.api_import_enabled !== false && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                              Ads Only (Meta & Google)
+                            </span>
+                          )}
+                        </div>
                         <p className={`text-sm font-medium   mt-0.5 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>{client.timezone}</p>
                       </div>
                     </div>
@@ -1402,17 +1414,52 @@ NOTIFY pgrst, 'reload schema';
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 py-2 ml-1">
-                <input
-                  type="checkbox"
-                  id="has_paid_ads"
-                  checked={formData.has_paid_ads || false}
-                  onChange={(e) => setFormData({...formData, has_paid_ads: e.target.checked})}
-                  className="w-4 h-4 text-blue-650 border-zinc-300 rounded focus:ring-blue-500"
-                />
-                <label htmlFor="has_paid_ads" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                  Paid Ads Active (Show in Ads & Growth Dashboard)
-                </label>
+              <div className="flex flex-col gap-3 py-2 ml-1">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="api_import_enabled"
+                    checked={formData.api_import_enabled ?? true}
+                    onChange={(e) => setFormData({...formData, api_import_enabled: e.target.checked})}
+                    className="w-4 h-4 text-emerald-600 border-zinc-300 rounded focus:ring-emerald-500"
+                  />
+                  <label htmlFor="api_import_enabled" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                    Active Client (Uncheck when client leaves to hide from all dashboards)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="has_paid_ads"
+                    checked={formData.has_paid_ads || false}
+                    onChange={(e) => setFormData({...formData, has_paid_ads: e.target.checked})}
+                    className="w-4 h-4 text-blue-650 border-zinc-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="has_paid_ads" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                    Paid Ads Active (Show in Ads & Growth Dashboard)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="ads_only_client"
+                    checked={formData.keyword_tracking_enabled === false}
+                    onChange={(e) => {
+                      const isAdsOnly = e.target.checked;
+                      setFormData({
+                        ...formData,
+                        keyword_tracking_enabled: !isAdsOnly,
+                        has_paid_ads: isAdsOnly ? true : formData.has_paid_ads
+                      });
+                    }}
+                    className="w-4 h-4 text-purple-600 border-zinc-300 rounded focus:ring-purple-500"
+                  />
+                  <label htmlFor="ads_only_client" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
+                    Only Meta and Google Ads Customer (Hide from SEO Dashboards & Rankings)
+                  </label>
+                </div>
               </div>
             </form>
             <div className={`p-10 flex justify-end gap-4 border-t ${

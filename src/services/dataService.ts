@@ -120,15 +120,36 @@ export const getAiCitations = async (clientId: string, date: string): Promise<Ai
   }
 };
 
-export const getClients = async (): Promise<Client[]> => {
+export interface GetClientsOptions {
+  includeInactive?: boolean;
+  forAds?: boolean;
+}
+
+export const getClients = async (options: GetClientsOptions | boolean = false): Promise<Client[]> => {
   try {
+    const opts: GetClientsOptions = typeof options === 'boolean' 
+      ? { includeInactive: options } 
+      : (options || {});
+
     const { data, error } = await supabase
       .from('clients')
       .select('*')
       .order('name', { ascending: true });
     
     if (error) throw error;
-    return data || [];
+    let list: Client[] = data || [];
+
+    // Filter out inactive/churned clients unless includeInactive is explicitly true
+    if (!opts.includeInactive) {
+      list = list.filter(c => c.api_import_enabled !== false);
+    }
+
+    // If fetching for standard SEO views (forAds not specified), filter out Ads-Only clients
+    if (!opts.forAds && !opts.includeInactive) {
+      list = list.filter(c => c.keyword_tracking_enabled !== false);
+    }
+
+    return list;
   } catch (error) {
     console.error('Error fetching clients:', error);
     return [];

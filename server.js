@@ -67,6 +67,26 @@ app.get("/api/clients/:clientId/keyword-ranking-details", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+function extractPhoneCallsFromEvents(eventRows) {
+  let clickToCallCount = 0;
+  let phoneClickCount = 0;
+  let otherPhoneCount = 0;
+  for (const r of eventRows || []) {
+    const ev = (r.dimensionValues?.[0]?.value || "").toLowerCase();
+    const c = parseInt(r.metricValues?.[0]?.value || "0");
+    if (ev === "click_to_call") {
+      clickToCallCount += c;
+    } else if (ev === "phone_call_click" || ev === "phone_click") {
+      phoneClickCount += c;
+    } else if (ev.includes("call") || ev.includes("phone")) {
+      otherPhoneCount += c;
+    }
+  }
+  if (clickToCallCount > 0 && phoneClickCount > 0) {
+    return Math.max(clickToCallCount, phoneClickCount) + otherPhoneCount;
+  }
+  return clickToCallCount + phoneClickCount + otherPhoneCount;
+}
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
@@ -377,26 +397,6 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
     let phoneCallsCount = 0;
     if (client?.ga4_property_id) {
       try {
-        let extractPhoneCallsFromEvents2 = function(eventRows) {
-          let clickToCallCount = 0;
-          let phoneClickCount = 0;
-          let otherPhoneCount = 0;
-          for (const r of eventRows || []) {
-            const ev = (r.dimensionValues?.[0]?.value || "").toLowerCase();
-            const c = parseInt(r.metricValues?.[0]?.value || "0");
-            if (ev === "click_to_call") {
-              clickToCallCount += c;
-            } else if (ev === "phone_call_click" || ev === "phone_click") {
-              phoneClickCount += c;
-            } else if (ev.includes("call") || ev.includes("phone")) {
-              otherPhoneCount += c;
-            }
-          }
-          if (clickToCallCount > 0 && phoneClickCount > 0) {
-            return Math.max(clickToCallCount, phoneClickCount) + otherPhoneCount;
-          }
-          return clickToCallCount + phoneClickCount + otherPhoneCount;
-        };
         const analytics = google.analyticsdata({ version: "v1beta", auth });
         const response = await analytics.properties.runReport({
           property: `properties/${client.ga4_property_id}`,
@@ -442,7 +442,7 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
             }
           });
           const eventRows = eventResponse.data.rows || [];
-          phoneCallsCount = extractPhoneCallsFromEvents2(eventRows);
+          phoneCallsCount = extractPhoneCallsFromEvents(eventRows);
         } catch (eventErr) {
           console.error("GA4 Event Sync (phone calls) error:", eventErr);
         }
