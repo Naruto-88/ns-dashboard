@@ -42,15 +42,10 @@ export default function ClientManagement() {
     name: '',
     short_code: '',
     ga4_property_id: '',
-    google_ads_customer_id: '',
-    meta_ad_account_id: '',
     gsc_site_url: '',
     lead_event_names: 'generate_lead, form_submission',
     keyword_tracking_enabled: true,
     api_import_enabled: true,
-    has_paid_ads: false,
-    wordpress_url: '',
-    seo_webhook_secret: '',
     notes: '',
     timezone: 'Australia/Sydney',
     initial_keywords: '',
@@ -73,14 +68,12 @@ export default function ClientManagement() {
     { name: 'Sai', code: 'SR' },
     { name: 'Vinoj', code: 'VK' },
     { name: 'Sash', code: 'SP' },
-    { name: 'Lidusha', code: 'LB' },
-    { name: 'Dinesh', code: 'DS' }
+    { name: 'Lidusha', code: 'LB' }
   ];
 
   const [formData, setFormData] = useState(initialFormState);
   const [authorizedSites, setAuthorizedSites] = useState<string[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
-  const [showGscDropdown, setShowGscDropdown] = useState(false);
 
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const logDebug = (msg: string) => {
@@ -91,7 +84,7 @@ export default function ClientManagement() {
   const fetchData = () => {
     logDebug('Fetching clients...');
     setLoading(true);
-    getClients(true).then(async (data) => {
+    getClients().then(async (data) => {
       logDebug(`Fetched ${data.length} clients`);
       setClients(data);
       setLoading(false);
@@ -239,7 +232,7 @@ export default function ClientManagement() {
         <div className="flex flex-col gap-2">
           <div className="flex items-start gap-2">
             <AlertCircle size={10} className="shrink-0 mt-0.5" />
-            <p className="text-sm font-medium italic tracking-tight">
+            <p className="text-[10px] font-black italic tracking-tight">
               {cleanError}
             </p>
           </div>
@@ -247,7 +240,7 @@ export default function ClientManagement() {
             <button
               onClick={() => handleFixGscUrl(clientId, fixMatch[1])}
               disabled={fixingId === clientId}
-              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium   transition-all ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
                 isWhite 
                   ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/10' 
                   : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20'
@@ -276,12 +269,6 @@ BEGIN
   -- Fix Clients table columns
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='ga4_property_id') THEN
     ALTER TABLE public.clients ADD COLUMN ga4_property_id TEXT;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='google_ads_customer_id') THEN
-    ALTER TABLE public.clients ADD COLUMN google_ads_customer_id TEXT;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='meta_ad_account_id') THEN
-    ALTER TABLE public.clients ADD COLUMN meta_ad_account_id TEXT;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='gsc_site_url') THEN
     ALTER TABLE public.clients ADD COLUMN gsc_site_url TEXT;
@@ -493,18 +480,6 @@ CREATE TABLE IF NOT EXISTS public.import_logs (
   message TEXT
 );
 
--- AI Audit History
-CREATE TABLE IF NOT EXISTS public.ai_audit_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
-  model TEXT NOT NULL,
-  analysis_type TEXT NOT NULL,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  result JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
 -- 4. PERMISSIONS (Allow ALL for internal tool)
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.weekly_data ENABLE ROW LEVEL SECURITY;
@@ -512,7 +487,6 @@ ALTER TABLE public.keywords ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.keyword_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.google_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_audit_history ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "public_access" ON public.clients;
 CREATE POLICY "public_access" ON public.clients FOR ALL USING (true);
@@ -531,9 +505,6 @@ CREATE POLICY "public_access" ON public.google_tokens FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "public_access" ON public.import_logs;
 CREATE POLICY "public_access" ON public.import_logs FOR ALL USING (true);
-
-DROP POLICY IF EXISTS "public_access" ON public.ai_audit_history;
-CREATE POLICY "public_access" ON public.ai_audit_history FOR ALL USING (true);
 
 -- 5. REFRESH SCHEMA CACHE
 NOTIFY pgrst, 'reload schema';
@@ -639,15 +610,10 @@ NOTIFY pgrst, 'reload schema';
       name: client.name || '',
       short_code: client.short_code || '',
       ga4_property_id: client.ga4_property_id || '',
-      google_ads_customer_id: client.google_ads_customer_id || '',
-      meta_ad_account_id: client.meta_ad_account_id || '',
       gsc_site_url: client.gsc_site_url || '',
       lead_event_names: client.lead_event_names || '',
       keyword_tracking_enabled: client.keyword_tracking_enabled ?? true,
       api_import_enabled: client.api_import_enabled ?? true,
-      has_paid_ads: client.has_paid_ads ?? false,
-      wordpress_url: client.wordpress_url || '',
-      seo_webhook_secret: client.seo_webhook_secret || '',
       notes: client.notes || '',
       timezone: client.timezone || 'Australia/Sydney',
       lead_target_monthly: client.lead_target_monthly || 0,
@@ -697,17 +663,13 @@ NOTIFY pgrst, 'reload schema';
     );
   });
 
-  const filteredSites = authorizedSites.filter(site =>
-    site.toLowerCase().includes(formData.gsc_site_url.toLowerCase())
-  );
-
   return (
     <div className="space-y-8 pb-12">
       {debugLog.length > 0 && (
-        <div className={`p-4 rounded-2xl font-mono text-sm border shadow-2xl ${
+        <div className={`p-4 rounded-2xl font-mono text-[10px] border shadow-2xl ${
           theme === 'white' ? 'bg-zinc-50 text-zinc-600 border-zinc-200' : 'bg-zinc-950 text-zinc-500 border-white/5'
         }`}>
-          <p className={`${theme === 'white' ? 'text-zinc-400' : 'text-zinc-700'} mb-2  font-medium  text-sm`}>Terminal Output</p>
+          <p className={`${theme === 'white' ? 'text-zinc-400' : 'text-zinc-700'} mb-2 uppercase font-black tracking-widest text-[9px]`}>Terminal Output</p>
           <div className="space-y-1">
             {debugLog.map((log, i) => (
               <div key={i} className="flex gap-3">
@@ -720,8 +682,8 @@ NOTIFY pgrst, 'reload schema';
       )}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className={`text-2xl font-medium font-heading  tracking-tighter italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>Client Management</h2>
-          <p className={`text-sm font-medium   mt-1 italic ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>Configure security and tracking nodes</p>
+          <h2 className={`text-2xl font-black font-heading uppercase tracking-tighter italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>Client Management</h2>
+          <p className={`text-[10px] font-black uppercase tracking-widest mt-1 italic ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>Configure security and tracking nodes</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="relative">
@@ -731,14 +693,14 @@ NOTIFY pgrst, 'reload schema';
               placeholder="Search nodes..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium focus:outline-none transition-all w-64   ${
+              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-xs font-black focus:outline-none transition-all w-64 uppercase tracking-widest ${
                 isWhite ? 'bg-[#76c9be]/5 border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' : 'bg-zinc-900 border-white/5 text-white focus:border-blue-500'
               }`}
             />
           </div>
           <button 
             onClick={checkDbConnection}
-            className={`px-5 py-2.5 border rounded-2xl font-medium text-sm   hover:brightness-110 transition-all ${
+            className={`px-5 py-2.5 border rounded-2xl font-black text-[9px] uppercase tracking-widest hover:brightness-110 transition-all ${
               isWhite ? 'bg-white border-[#163f4d]/10 text-[#607a80]' : 'bg-zinc-900 border-white/5 text-zinc-400'
             }`}
           >
@@ -746,7 +708,7 @@ NOTIFY pgrst, 'reload schema';
           </button>
             <button 
               onClick={handleCopySql}
-              className={`px-5 py-2.5 rounded-2xl font-medium text-sm transition-all border flex items-center gap-2   shadow-lg ${
+              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] transition-all border flex items-center gap-2 uppercase tracking-widest shadow-lg ${
                 isWhite ? 'bg-[#f47b20]/10 text-[#f47b20] border-[#f47b20]/20 shadow-[#f47b20]/5 hover:bg-[#f47b20]/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-amber-500/5 hover:bg-amber-500/20'
               }`}
               title="Fix database columns if you see schema errors"
@@ -756,7 +718,7 @@ NOTIFY pgrst, 'reload schema';
             </button>
             <button 
               onClick={handleBootstrap}
-              className={`px-5 py-2.5 rounded-2xl font-medium text-sm transition-all   border ${
+              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] transition-all uppercase tracking-widest border ${
                 isWhite ? 'bg-[#76c9be]/5 text-[#082a36] border-[#163f4d]/10 hover:bg-[#76c9be]/10' : 'bg-zinc-800 text-white border-white/5 hover:bg-zinc-700'
               }`}
             >
@@ -765,7 +727,7 @@ NOTIFY pgrst, 'reload schema';
             <button 
               onClick={handleScanAllAccess}
               disabled={repairing}
-              className={`px-5 py-2.5 rounded-2xl font-medium text-sm hover:brightness-110 transition-all border flex items-center gap-2   shadow-lg disabled:opacity-50 ${
+              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] hover:brightness-110 transition-all border flex items-center gap-2 uppercase tracking-widest shadow-lg disabled:opacity-50 ${
                 isWhite ? 'bg-[#082a36] text-white border-[#082a36] shadow-[#082a36]/20' : 'bg-blue-500 text-white border-blue-400 shadow-blue-500/20'
               }`}
             >
@@ -775,7 +737,7 @@ NOTIFY pgrst, 'reload schema';
             <button 
               onClick={handleBulkRepairGsc}
               disabled={repairing}
-              className={`px-5 py-2.5 rounded-2xl font-medium text-sm hover:brightness-110 transition-all border flex items-center gap-2   shadow-lg disabled:opacity-50 ${
+              className={`px-5 py-2.5 rounded-2xl font-black text-[9px] hover:brightness-110 transition-all border flex items-center gap-2 uppercase tracking-widest shadow-lg disabled:opacity-50 ${
                 repairsAvailable 
                   ? (isWhite ? 'bg-[#76c9be] text-white border-[#76c9be] shadow-[#76c9be]/20 animate-bounce' : 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20 animate-bounce') 
                   : (isWhite ? 'bg-[#76c9be]/10 text-[#76c9be] border-[#76c9be]/20 shadow-[#76c9be]/5' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-emerald-500/5')
@@ -789,7 +751,7 @@ NOTIFY pgrst, 'reload schema';
                   setFormData(initialFormState);
                   setShowModal('add');
                 }}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm   transition-all shadow-xl active:scale-95 ${
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
                   isWhite ? 'bg-[#f47b20] text-white hover:bg-[#f47b20]/90 shadow-[#f47b20]/20' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/20'
                 }`}
               >
@@ -804,7 +766,7 @@ NOTIFY pgrst, 'reload schema';
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="sticky top-0 z-10">
-              <tr className={`border-b text-sm font-medium   ${
+              <tr className={`border-b text-[10px] font-black uppercase tracking-widest ${
                 isWhite ? 'bg-[#082a36] border-[#163f4d]/20 text-white' : 'bg-zinc-950/50 border-white/5 text-zinc-500'
               }`}>
                 <th className="px-8 py-2 rounded-tl-[20px]">Client Identity</th>
@@ -818,7 +780,7 @@ NOTIFY pgrst, 'reload schema';
                   <tbody className={`divide-y ${isWhite ? 'divide-[#163f4d]/5' : 'divide-white/5'}`}>
               {!loading && filteredClients.length === 0 && (
                 <tr>
-                  <td colSpan={6} className={`px-8 py-20 text-center font-medium   text-sm ${theme === 'white' ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                  <td colSpan={6} className={`px-8 py-20 text-center font-black uppercase tracking-widest text-sm ${theme === 'white' ? 'text-zinc-400' : 'text-zinc-700'}`}>
                     Zero properties identified.
                   </td>
                 </tr>
@@ -833,7 +795,7 @@ NOTIFY pgrst, 'reload schema';
                 <tr key={client.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
                   <td className="px-8 py-2">
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-medium text-sm  border shadow-xl transition-all ${
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs uppercase border shadow-xl transition-all ${
                         isWhite 
                           ? 'bg-[#76c9be]/5 text-[#082a36] border-[#163f4d]/10 group-hover:bg-[#082a36] group-hover:text-white' 
                           : 'bg-zinc-800 text-blue-400 border-white/5 group-hover:bg-blue-600 group-hover:text-white'
@@ -841,35 +803,23 @@ NOTIFY pgrst, 'reload schema';
                         {client.short_code}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`font-medium font-heading tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>{client.name}</p>
-                          {client.api_import_enabled === false && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                              Inactive / Churned
-                            </span>
-                          )}
-                          {client.keyword_tracking_enabled === false && client.api_import_enabled !== false && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                              Ads Only (Meta & Google)
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-sm font-medium   mt-0.5 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>{client.timezone}</p>
+                        <p className={`font-black font-heading uppercase tracking-tight text-sm italic ${isWhite ? 'text-[#082a36]' : 'text-white'}`}>{client.name}</p>
+                        <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${isWhite ? 'text-[#607a80]' : 'text-zinc-500'}`}>{client.timezone}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-2">
-                    <span className={`text-sm font-medium px-3 py-1 rounded-full border   ${
+                    <span className={`text-[10px] font-black px-3 py-1 rounded-full border uppercase tracking-widest ${
                       isWhite ? 'text-[#607a80] bg-[#76c9be]/5 border-[#163f4d]/5' : 'text-zinc-400 bg-zinc-800 border-white/5'
                     }`}>{client.project_owner_code || 'MW'}</span>
                   </td>
-                  <td className={`px-6 py-2 text-sm font-medium  font-mono ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
+                  <td className={`px-6 py-2 text-[11px] font-black uppercase font-mono ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
                     {client.lead_target_monthly} <span className={isWhite ? 'text-[#607a80]' : 'text-zinc-600'}>/ MO</span>
                   </td>
-                  <td className={`px-6 py-2 text-sm font-medium  font-mono ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
+                  <td className={`px-6 py-2 text-[11px] font-black uppercase font-mono ${isWhite ? 'text-[#082a36]' : 'text-zinc-300'}`}>
                     {client.avg_position_target || '-'}
                   </td>
-                  <td className="px-6 py-2 text-sm font-medium   min-w-[200px]">
+                  <td className="px-6 py-2 text-[9px] font-black uppercase tracking-widest min-w-[200px]">
                     {testResults[client.id] ? (
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2">
@@ -989,7 +939,7 @@ NOTIFY pgrst, 'reload schema';
             <div className={`p-10 border-b flex items-center justify-between backdrop-blur-xl ${
               theme === 'white' ? 'bg-zinc-50/80 border-zinc-100' : 'bg-zinc-950/80 border-white/5'
             }`}>
-              <h3 className={`text-2xl font-medium  italic tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
+              <h3 className={`text-2xl font-black uppercase italic tracking-tighter ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
                 {showModal === 'edit' ? 'Edit Surveillance Node' : 'Initialize New Node'}
               </h3>
               <button 
@@ -1006,7 +956,7 @@ NOTIFY pgrst, 'reload schema';
               <div className="grid grid-cols-2 gap-8">
                 <Tooltip content="Select the primary campaign manager owning this client project node" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Assigned Officer</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Assigned Officer</label>
                     <select 
                       value={formData.project_owner_name}
                       onChange={(e) => {
@@ -1017,7 +967,7 @@ NOTIFY pgrst, 'reload schema';
                           project_owner_code: owner?.code || 'MW'
                         });
                       }}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 appearance-none   ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 appearance-none uppercase tracking-widest ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`}
                     >
@@ -1027,12 +977,12 @@ NOTIFY pgrst, 'reload schema';
                 </Tooltip>
                 <Tooltip content="Set the targeted number of qualified organic leads to generate for this client per calendar month" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Monthly Lead Target</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Monthly Lead Target</label>
                     <input 
                       type="number" 
                       value={formData.lead_target_monthly}
                       onChange={(e) => setFormData({...formData, lead_target_monthly: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1043,13 +993,13 @@ NOTIFY pgrst, 'reload schema';
               <div className="grid grid-cols-2 gap-8">
                 <Tooltip content="Target average ranking position across all tracked keywords in Google Search Console" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Rank Benchmark (Avg Pos)</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Rank Benchmark (Avg Pos)</label>
                     <input 
                       type="number" 
                       step="0.1"
                       value={formData.avg_position_target}
                       onChange={(e) => setFormData({...formData, avg_position_target: parseFloat(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1057,12 +1007,12 @@ NOTIFY pgrst, 'reload schema';
                 </Tooltip>
                 <Tooltip content="Desired minimum target percentage score for technical site performance and SEO health checks" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Tech Health Target (%)</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Tech Health Target (%)</label>
                     <input 
                       type="number" 
                       value={formData.technical_score_target}
                       onChange={(e) => setFormData({...formData, technical_score_target: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1072,12 +1022,12 @@ NOTIFY pgrst, 'reload schema';
               <div className="grid grid-cols-2 gap-8">
                 <Tooltip content="Set the targeted number of Google Search Console organic clicks to achieve per calendar month" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Monthly Clicks (GSC)</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Monthly Clicks (GSC)</label>
                     <input 
                       type="number" 
                       value={formData.target_monthly_clicks}
                       onChange={(e) => setFormData({...formData, target_monthly_clicks: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1085,12 +1035,12 @@ NOTIFY pgrst, 'reload schema';
                 </Tooltip>
                 <Tooltip content="Set the targeted number of Google Analytics 4 sessions to achieve per calendar month" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Monthly Sessions (GA4)</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Monthly Sessions (GA4)</label>
                     <input 
                       type="number" 
                       value={formData.target_monthly_sessions}
                       onChange={(e) => setFormData({...formData, target_monthly_sessions: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1101,12 +1051,12 @@ NOTIFY pgrst, 'reload schema';
               <div className="grid grid-cols-2 gap-8">
                 <Tooltip content="Set the monthly content production goal for blogs and article nodes" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-[#607a80]'}`}>Target Blogs Published</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-[#607a80]'}`}>Target Blogs Published</label>
                     <input 
                       type="number" 
                       value={formData.target_monthly_blogs}
                       onChange={(e) => setFormData({...formData, target_monthly_blogs: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1114,12 +1064,12 @@ NOTIFY pgrst, 'reload schema';
                 </Tooltip>
                 <Tooltip content="Target number of keywords to rank in Google's top 10 organic search results" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>T10 Visibility Goal</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>T10 Visibility Goal</label>
                     <input 
                       type="number" 
                       value={formData.top_10_target}
                       onChange={(e) => setFormData({...formData, top_10_target: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1130,12 +1080,12 @@ NOTIFY pgrst, 'reload schema';
               <div className="grid grid-cols-2 gap-8">
                 <Tooltip content="Set the target Ahrefs Domain Rating (DR) to track for this client node" className="w-full">
                   <div className="space-y-2">
-                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Domain Rating (DR)</label>
+                    <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Target Domain Rating (DR)</label>
                     <input 
                       type="number" 
                       value={formData.target_dr}
                       onChange={(e) => setFormData({...formData, target_dr: parseInt(e.target.value) || 0})}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                     />
@@ -1145,13 +1095,13 @@ NOTIFY pgrst, 'reload schema';
 
               <div className="grid grid-cols-1 gap-8">
                 <div className="space-y-2">
-                  <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Property Name</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Property Name</label>
                   <input 
                     required
                     type="text" 
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500  tracking-tight ${
+                    className={`w-full px-5 py-3 border rounded-2xl text-sm font-black outline-none focus:border-blue-500 uppercase tracking-tight ${
                       theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                     }`} 
                     placeholder="e.g. Acme Corp"
@@ -1161,24 +1111,24 @@ NOTIFY pgrst, 'reload schema';
 
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Strategic Short Code</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Strategic Short Code</label>
                   <input 
                     required
                     type="text" 
                     value={formData.short_code}
                     onChange={(e) => setFormData({...formData, short_code: e.target.value.toUpperCase()})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500   ${
+                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 uppercase tracking-widest ${
                       theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                     }`} 
                     placeholder="e.g. ACME"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Node Timezone</label>
+                  <label className={`text-[9px] font-black uppercase tracking-widest ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Node Timezone</label>
                   <select 
                     value={formData.timezone}
                     onChange={(e) => setFormData({...formData, timezone: e.target.value})}
-                    className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 appearance-none  ${
+                    className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 appearance-none uppercase ${
                       theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                     }`}
                   >
@@ -1190,13 +1140,13 @@ NOTIFY pgrst, 'reload schema';
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">GA4 Property ID (Precise)</label>
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">GA4 Property ID (Precise)</label>
                 <input 
                   required
                   type="text" 
                   value={formData.ga4_property_id}
                   onChange={(e) => setFormData({...formData, ga4_property_id: e.target.value})}
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                  className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`} 
                   placeholder="123456789"
@@ -1204,40 +1154,14 @@ NOTIFY pgrst, 'reload schema';
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">Google Ads Customer ID</label>
-                <input 
-                  type="text" 
-                  value={formData.google_ads_customer_id}
-                  onChange={(e) => setFormData({...formData, google_ads_customer_id: e.target.value})}
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
-                    theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                  }`} 
-                  placeholder="123-456-7890"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">Meta Ad Account ID (Facebook / Instagram)</label>
-                <input 
-                  type="text" 
-                  value={formData.meta_ad_account_id}
-                  onChange={(e) => setFormData({...formData, meta_ad_account_id: e.target.value})}
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
-                    theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                  }`} 
-                  placeholder="act_123456789012345"
-                />
-              </div>
-
-              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-zinc-500   ml-1">GSC Site URL (Verification Path)</label>
+                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">GSC Site URL (Verification Path)</label>
                   {authorizedSites.length === 0 ? (
                     <button 
                       type="button"
                       onClick={fetchAuthorizedSites}
                       disabled={loadingSites}
-                      className="text-sm font-medium text-blue-500   hover:underline flex items-center gap-1"
+                      className="text-[8px] font-black text-blue-500 uppercase tracking-widest hover:underline flex items-center gap-1"
                     >
                       {loadingSites ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
                       Scan Authorised properties
@@ -1246,7 +1170,7 @@ NOTIFY pgrst, 'reload schema';
                     <button 
                       type="button"
                       onClick={fetchAuthorizedSites}
-                      className="text-sm font-medium text-zinc-500   hover:text-blue-500 transition-colors"
+                      className="text-[8px] font-black text-zinc-500 uppercase tracking-widest hover:text-blue-500 transition-colors"
                     >
                       Refresh List
                     </button>
@@ -1258,13 +1182,8 @@ NOTIFY pgrst, 'reload schema';
                       required
                       type="text" 
                       value={formData.gsc_site_url}
-                      onChange={(e) => {
-                        setFormData({...formData, gsc_site_url: e.target.value});
-                        setShowGscDropdown(true);
-                      }}
-                      onFocus={() => setShowGscDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowGscDropdown(false), 200)}
-                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                      onChange={(e) => setFormData({...formData, gsc_site_url: e.target.value})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                         theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                       }`} 
                       placeholder="https://example.com/ or sc-domain:example.com"
@@ -1273,212 +1192,83 @@ NOTIFY pgrst, 'reload schema';
                       {loadingSites && <RefreshCw className="animate-spin text-zinc-600" size={14} />}
                       {!loadingSites && authorizedSites.length > 0 && <Shield className="text-blue-500/50" size={14} />}
                     </div>
-
-                    {showGscDropdown && authorizedSites.length > 0 && (
-                      <div className={`absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-xl border shadow-xl z-50 transition-all font-mono text-sm ${
-                        theme === 'white' 
-                          ? 'bg-white border-zinc-200 text-zinc-900 shadow-zinc-200/50' 
-                          : 'bg-zinc-900 border-white/10 text-white shadow-black/80'
-                      }`}>
-                        {filteredSites.length === 0 ? (
-                          <div className="px-4 py-3 text-zinc-500 italic">No matching verified properties found</div>
-                        ) : (
-                          filteredSites.map(site => (
-                            <button
-                              key={site}
-                              type="button"
-                              onClick={() => {
-                                setFormData({...formData, gsc_site_url: site});
-                                setShowGscDropdown(false);
-                              }}
-                              className={`w-full text-left px-4 py-2.5 transition-colors border-b last:border-0 flex items-center justify-between ${
-                                theme === 'white'
-                                  ? 'border-zinc-100 hover:bg-zinc-50'
-                                  : 'border-white/5 hover:bg-white/5'
-                              } ${formData.gsc_site_url === site ? 'bg-blue-600/10 text-blue-500 font-medium' : ''}`}
-                            >
-                              <span className="truncate">{site}</span>
-                              {formData.gsc_site_url === site && <CheckCircle2 size={12} className="text-blue-500 flex-shrink-0 ml-2" />}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
                   </div>
                   
                   {authorizedSites.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-sm text-blue-600 font-medium   flex items-center gap-1.5 ml-1">
+                      <p className="text-[9px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1.5 ml-1">
                         <CheckCircle2 size={10} />
-                        {filteredSites.length < authorizedSites.length ? 'Filtered matching properties' : 'Verified properties found'} (Click to apply):
+                        Verified properties found (Click to apply):
                       </p>
                       <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
-                        {filteredSites.length === 0 ? (
-                          <p className="text-sm text-zinc-500 italic ml-1">No matching properties found. Type to search or refresh list.</p>
-                        ) : (
-                          filteredSites.map(site => (
-                            <button
-                              key={site}
-                              type="button"
-                              onClick={() => setFormData({...formData, gsc_site_url: site})}
-                              className={`px-3 py-1.5 rounded-xl text-sm font-mono transition-all border shadow-sm ${
-                                formData.gsc_site_url === site 
-                                  ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' 
-                                  : isWhite 
-                                    ? 'bg-white border-zinc-200 text-zinc-600 hover:border-blue-400 hover:text-blue-600'
-                                    : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              {site}
-                            </button>
-                          ))
-                        )}
-                      </div>
+                        {authorizedSites.map(site => (
+                        <button
+                          key={site}
+                          type="button"
+                          onClick={() => setFormData({...formData, gsc_site_url: site})}
+                          className={`px-3 py-1.5 rounded-xl text-[9px] font-mono transition-all border shadow-sm ${
+                            formData.gsc_site_url === site 
+                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                              : isWhite 
+                                ? 'bg-white border-zinc-200 text-zinc-600 hover:border-blue-400 hover:text-blue-600'
+                                : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {site}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
             </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">Target Lead Events (CSV)</label>
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Target Lead Events (CSV)</label>
                 <input 
                   type="text" 
                   value={formData.lead_event_names}
                   onChange={(e) => setFormData({...formData, lead_event_names: e.target.value})}
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                  className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`} 
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">Genuine Leads Filtering API URL (Optional)</label>
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Genuine Leads Filtering API URL (Optional)</label>
                 <input 
                   type="text" 
                   value={formData.lead_api_url}
                   onChange={(e) => setFormData({...formData, lead_api_url: e.target.value})}
                   placeholder="https://your-custom-app.com/api/genuine-leads"
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                  className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`} 
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">Pre-Seed Keywords (Optional CSV)</label>
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Pre-Seed Keywords (Optional CSV)</label>
                 <textarea 
                   value={(formData as any).initial_keywords}
                   onChange={(e) => setFormData({...formData, initial_keywords: e.target.value} as any)}
                   placeholder="keyword, https://landingpage.com..."
-                  className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 h-28 font-mono resize-none ${
+                  className={`w-full px-5 py-4 border rounded-2xl text-[10px] font-black outline-none focus:border-blue-500 h-28 font-mono resize-none ${
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-500   ml-1">Internal Strategic Notes</label>
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Internal Strategic Notes</label>
                 <textarea 
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 h-28   resize-none ${
+                  className={`w-full px-5 py-4 border rounded-2xl text-[10px] font-black outline-none focus:border-blue-500 h-28 uppercase tracking-widest resize-none ${
                     theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                   }`}
                 />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-500 ml-1">WordPress Website URL</label>
-                  <input
-                    type="url"
-                    value={formData.wordpress_url || ''}
-                    onChange={(e) => setFormData({...formData, wordpress_url: e.target.value})}
-                    placeholder="https://client-site.com"
-                    className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-500 ml-1">SEO Webhook Secret Key</label>
-                  <input
-                    type="text"
-                    value={formData.seo_webhook_secret || ''}
-                    onChange={(e) => setFormData({...formData, seo_webhook_secret: e.target.value})}
-                    placeholder="Enter webhook secret token"
-                    className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 py-2 ml-1">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="api_import_enabled"
-                    checked={formData.api_import_enabled ?? true}
-                    onChange={(e) => setFormData({...formData, api_import_enabled: e.target.checked})}
-                    className="w-4 h-4 text-emerald-600 border-zinc-300 rounded focus:ring-emerald-500"
-                  />
-                  <label htmlFor="api_import_enabled" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                    Active Client (Uncheck when client leaves to hide from all dashboards)
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="has_paid_ads"
-                    checked={formData.has_paid_ads || false}
-                    onChange={(e) => setFormData({...formData, has_paid_ads: e.target.checked})}
-                    className="w-4 h-4 text-blue-650 border-zinc-300 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="has_paid_ads" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                    Paid Ads Active (Show in Ads & Growth Dashboard)
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="ads_only_client"
-                    checked={formData.keyword_tracking_enabled === false}
-                    onChange={(e) => {
-                      const isAdsOnly = e.target.checked;
-                      setFormData({
-                        ...formData,
-                        keyword_tracking_enabled: !isAdsOnly,
-                        has_paid_ads: isAdsOnly ? true : formData.has_paid_ads
-                      });
-                    }}
-                    className="w-4 h-4 text-purple-600 border-zinc-300 rounded focus:ring-purple-500"
-                  />
-                  <label htmlFor="ads_only_client" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                    Only Meta and Google Ads Customer (Hide from SEO Dashboards & Rankings)
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="lead_auto_sync_enabled"
-                    checked={!!formData.lead_api_url && formData.lead_api_url.trim() !== ''}
-                    onChange={(e) => {
-                      const isAuto = e.target.checked;
-                      setFormData({
-                        ...formData,
-                        lead_api_url: isAuto ? (formData.lead_api_url || 'lead-shield') : ''
-                      });
-                    }}
-                    className="w-4 h-4 text-indigo-600 border-zinc-300 rounded focus:ring-indigo-500"
-                  />
-                  <label htmlFor="lead_auto_sync_enabled" className={`text-sm font-medium select-none cursor-pointer ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}`}>
-                    Enable Automatic Lead Webhook & Shield Sync (Active for Sydney Decking, Goldspar, Multipole)
-                  </label>
-                </div>
               </div>
             </form>
             <div className={`p-10 flex justify-end gap-4 border-t ${
@@ -1486,7 +1276,7 @@ NOTIFY pgrst, 'reload schema';
             }`}>
               <button 
                 onClick={() => setShowModal(null)}
-                className={`px-8 py-3 font-medium  text-sm  transition-colors ${
+                className={`px-8 py-3 font-black uppercase text-[10px] tracking-widest transition-colors ${
                   theme === 'white' ? 'text-zinc-400 hover:text-zinc-900' : 'text-zinc-500 hover:text-white'
                 }`}
               >
@@ -1494,7 +1284,7 @@ NOTIFY pgrst, 'reload schema';
               </button>
               <button 
                 onClick={handleSaveClient}
-                className="px-10 py-3 bg-blue-600 text-white rounded-2xl font-medium text-sm   hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20"
+                className="px-10 py-3 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20"
               >
                 Deploy Node
               </button>
@@ -1563,8 +1353,8 @@ function KeywordsModal({ client, onClose }: { client: Client; onClose: () => voi
           isWhite ? 'bg-zinc-50 border-zinc-100' : 'bg-zinc-950 border-white/5'
         }`}>
           <div>
-            <h3 className={`text-2xl font-medium  italic tracking-tighter ${isWhite ? 'text-zinc-900' : 'text-white'}`}>Keyword Assets</h3>
-            <p className="text-zinc-500 text-sm font-medium   mt-1">Satellite target configuration for {client.name}</p>
+            <h3 className={`text-2xl font-black uppercase italic tracking-tighter ${isWhite ? 'text-zinc-900' : 'text-white'}`}>Keyword Assets</h3>
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">Satellite target configuration for {client.name}</p>
           </div>
           <button 
             onClick={onClose}
@@ -1581,30 +1371,30 @@ function KeywordsModal({ client, onClose }: { client: Client; onClose: () => voi
             isWhite ? 'bg-zinc-50 border-zinc-100' : 'bg-blue-500/5 border-blue-500/10'
           }`}>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-500   ml-1">Keyphrase Target</label>
+              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Keyphrase Target</label>
               <input 
                 value={newKeyword}
                 onChange={(e) => setNewKeyword(e.target.value)}
                 placeholder="e.g. SEO services sydney"
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500  ${
+                className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 uppercase ${
                   isWhite ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                 }`}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-500   ml-1">Landing Node (URL)</label>
+              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Landing Node (URL)</label>
               <input 
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
                 placeholder="https://..."
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                className={`w-full px-5 py-3 border rounded-2xl text-xs font-black outline-none focus:border-blue-500 font-mono ${
                   isWhite ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
                 }`}
               />
             </div>
             <button 
               type="submit"
-              className={`md:col-span-2 py-3 text-white rounded-2xl font-medium text-sm   shadow-xl transition-all font-mono ${
+              className={`md:col-span-2 py-3 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl transition-all font-mono ${
                 isWhite ? 'bg-zinc-900 hover:bg-zinc-800 shadow-zinc-900/10' : 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-500'
               }`}
             >
@@ -1613,14 +1403,14 @@ function KeywordsModal({ client, onClose }: { client: Client; onClose: () => voi
           </form>
 
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-zinc-500   ml-1">Active Tracking Nodes</h4>
+            <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Active Tracking Nodes</h4>
             {loading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map(i => <div key={i} className={`h-12 rounded-2xl animate-pulse ${isWhite ? 'bg-zinc-100' : 'bg-white/5'}`} />)}
               </div>
             ) : keywords.length === 0 ? (
               <div className={`p-10 text-center rounded-[32px] border border-dashed ${isWhite ? 'border-zinc-200 text-zinc-400' : 'border-white/5 text-zinc-700'}`}>
-                <p className="text-sm font-medium   italic">No tracking nodes active for this property.</p>
+                <p className="text-[10px] font-black uppercase tracking-widest italic">No tracking nodes active for this property.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1629,8 +1419,8 @@ function KeywordsModal({ client, onClose }: { client: Client; onClose: () => voi
                     isWhite ? 'bg-white border-zinc-100 hover:bg-zinc-50' : 'bg-zinc-900 border-white/5 hover:bg-zinc-800'
                   }`}>
                     <div className="overflow-hidden">
-                      <p className={`text-sm font-medium  tracking-tight truncate ${isWhite ? 'text-zinc-900' : 'text-white'}`}>{k.query}</p>
-                      <p className="text-sm text-zinc-500 font-mono italic truncate">{k.landing_page_url || 'No URL mapped'}</p>
+                      <p className={`text-[11px] font-black uppercase tracking-tight truncate ${isWhite ? 'text-zinc-900' : 'text-white'}`}>{k.query}</p>
+                      <p className="text-[9px] text-zinc-500 font-mono italic truncate">{k.landing_page_url || 'No URL mapped'}</p>
                     </div>
                     <button 
                       onClick={() => handleDelete(k.id)}
@@ -1650,7 +1440,7 @@ function KeywordsModal({ client, onClose }: { client: Client; onClose: () => voi
         }`}>
           <button 
             onClick={onClose}
-            className={`px-8 py-3 rounded-2xl font-medium text-sm   transition-all font-mono ${
+            className={`px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all font-mono ${
                 isWhite ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'
             }`}
           >

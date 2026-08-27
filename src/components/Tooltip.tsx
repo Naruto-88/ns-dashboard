@@ -7,10 +7,18 @@ interface TooltipProps {
   position?: 'top' | 'bottom' | 'left' | 'right';
   align?: 'start' | 'center' | 'end';
   className?: string;
+  widthClass?: string;
   key?: React.Key;
 }
 
-export default function Tooltip({ content, children, position = 'top', align = 'center', className = '' }: TooltipProps) {
+export default function Tooltip({ 
+  content, 
+  children, 
+  position = 'top', 
+  align = 'center', 
+  className = '',
+  widthClass = 'w-max min-w-[14rem] max-w-sm'
+}: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const { theme } = useTheme();
 
@@ -48,8 +56,8 @@ export default function Tooltip({ content, children, position = 'top', align = '
     >
       {children}
       {isVisible && (
-        <div className={`absolute ${getPositionClasses()} w-56 p-3 rounded-3xl font-medium z-[9999] shadow-[0_30px_60px_rgba(0,0,0,0.6)] border backdrop-blur-3xl animate-in fade-in ${animationClasses[position]} duration-200 text-left pointer-events-none tooltip-override ${
-          theme === 'white' ? 'bg-white/100 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/10 text-white'
+        <div className={`absolute ${getPositionClasses()} ${widthClass} p-3 rounded-2xl font-medium z-[9999] shadow-[0_20px_40px_rgba(0,0,0,0.5)] border backdrop-blur-3xl animate-in fade-in ${animationClasses[position]} duration-200 text-left pointer-events-none tooltip-override ${
+          theme === 'white' ? 'bg-white/100 border-zinc-200 text-zinc-900 shadow-xl' : 'bg-zinc-900/95 border-white/10 text-white'
         }`}>
           {typeof content === 'string' ? (
             <div className="text-[12px] leading-relaxed font-medium text-center tooltip-override">

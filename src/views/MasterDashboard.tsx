@@ -22,10 +22,16 @@ import {
   TrendingUp,
   TrendingDown,
   FileSpreadsheet,
-  Link
+  Link,
+  ShieldCheck,
+  User,
+  Mail,
+  Phone,
+  Clock
 } from 'lucide-react';
-import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData, getCitations, CitationData, getAiCitations, AiCitationData } from '../services/dataService';
+import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData, getCitations, CitationData, getAiCitations, AiCitationData, syncLeadShieldLeads, getLeadStatsByRange } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
+import LeadNotificationCenter from '../components/LeadNotificationCenter';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays, addDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -98,6 +104,15 @@ export default function MasterDashboard() {
     type: 'top3' | 'top10';
     startDate: string;
     endDate: string;
+  } | null>(null);
+
+  const [selectedLeadsModal, setSelectedLeadsModal] = useState<{
+    client: Client;
+    legit: number;
+    total: number;
+    prevLegit: number;
+    currentRangeStr: string;
+    leads: any[];
   } | null>(null);
 
   const [viewingPeriod, setViewingPeriod] = useState<{ start: Date; end: Date } | null>(null);
@@ -228,6 +243,23 @@ export default function MasterDashboard() {
       const currentRangeStr = `${format(currentStart, 'MMM dd')} - ${format(currentEnd, 'MMM dd')}`;
       const prevRangeStr = `${format(prevStart, 'MMM dd')} - ${format(prevEnd, 'MMM dd')}`;
 
+      const currentStartStr = format(currentStart, 'yyyy-MM-dd');
+      const currentEndStr = format(currentEnd, 'yyyy-MM-dd');
+      const prevStartStr = format(prevStart, 'yyyy-MM-dd');
+      const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
+
+      // Fetch date-precise leads from Lead Shield API for both current and previous periods
+      let currentRangeLeads: any = { clients: {} };
+      let prevRangeLeads: any = { clients: {} };
+      try {
+        [currentRangeLeads, prevRangeLeads] = await Promise.all([
+          getLeadStatsByRange(currentStartStr, currentEndStr),
+          getLeadStatsByRange(prevStartStr, prevEndStr)
+        ]);
+      } catch (leadErr) {
+        console.warn('[LEAD SHIELD] Range query fallback:', leadErr);
+      }
+
       const dashboardCache = await getDashboardCache(viewMode);
       const allWeeklyData = await getAllWeeklyData({
         startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
@@ -253,17 +285,33 @@ export default function MasterDashboard() {
            previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
         }
         
-        // Sum manual metrics from weekly_data because dashboard_cache might zero them out
+        // Sum manual metrics from weekly_data
         const sumWeeklyMetric = (dataArray: any[], start: Date, end: Date, metric: string) => {
             return dataArray.filter(d => {
                 const wDate = new Date(d.week_start_date);
                 return wDate >= start && wDate <= end;
             }).reduce((sum, d) => sum + (Number(d[metric]) || 0), 0);
         };
-        const resolvedCurrentLeadsTotal = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_total');
-        const resolvedCurrentLeadsLegit = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_legit');
-        const resolvedPrevLeadsTotal = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_total');
-        const resolvedPrevLeadsLegit = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_legit');
+
+        const isLeadAutoSync = !!client.lead_api_url && client.lead_api_url.trim() !== '';
+        const leadShieldCurrent = isLeadAutoSync ? currentRangeLeads.clients?.[client.id] : null;
+        const leadShieldPrev = isLeadAutoSync ? prevRangeLeads.clients?.[client.id] : null;
+
+        const resolvedCurrentLeadsTotal = (leadShieldCurrent && leadShieldCurrent.total > 0)
+          ? leadShieldCurrent.total
+          : (sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_total') || currentWeekData?.leads_total || 0);
+
+        const resolvedCurrentLeadsLegit = (leadShieldCurrent && leadShieldCurrent.total > 0)
+          ? leadShieldCurrent.genuine
+          : (sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_legit') || currentWeekData?.leads_legit || 0);
+
+        const resolvedPrevLeadsTotal = (leadShieldPrev && leadShieldPrev.total > 0)
+          ? leadShieldPrev.total
+          : (sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_total') || previousWeekData?.leads_total || 0);
+
+        const resolvedPrevLeadsLegit = (leadShieldPrev && leadShieldPrev.total > 0)
+          ? leadShieldPrev.genuine
+          : (sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_legit') || previousWeekData?.leads_legit || 0);
         
         const resolvedCurrentPhoneCalls = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'phone_calls') || currentWeekData?.phone_calls || 0;
         const resolvedPreviousPhoneCalls = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'phone_calls') || previousWeekData?.phone_calls || 0;
@@ -290,19 +338,33 @@ export default function MasterDashboard() {
         const resolvedCurrentOrganic = currentWeekData?.ga4_organic_traffic ?? 0;
         const resolvedPreviousOrganic = previousWeekData?.ga4_organic_traffic ?? 0;
 
+        const currentOrganicPct = resolvedCurrentTraffic > 0 
+          ? (resolvedCurrentOrganic / resolvedCurrentTraffic) * 100 
+          : 0;
+        const prevOrganicPct = resolvedPreviousTraffic > 0 
+          ? (resolvedPreviousOrganic / resolvedPreviousTraffic) * 100 
+          : 0;
+        const organicShareDiff = currentOrganicPct - prevOrganicPct;
+        const organicChange = calculateChange(resolvedCurrentOrganic, resolvedPreviousOrganic);
+
         const ga4Traffic = {
           current: resolvedCurrentTraffic,
           previous: resolvedPreviousTraffic,
           change: calculateChange(resolvedCurrentTraffic, resolvedPreviousTraffic),
           organic: resolvedCurrentOrganic,
-          prevOrganic: resolvedPreviousOrganic
+          prevOrganic: resolvedPreviousOrganic,
+          organicChange,
+          currentOrganicPct,
+          prevOrganicPct,
+          organicShareDiff
         };
 
         const leads = {
-          current: resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0,
-          legit: resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0,
-          prevLegit: resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0,
-          change: calculateChange(resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0, resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0)
+          current: resolvedCurrentLeadsTotal,
+          legit: resolvedCurrentLeadsLegit,
+          prevLegit: resolvedPrevLeadsLegit,
+          change: calculateChange(resolvedCurrentLeadsLegit, resolvedPrevLeadsLegit),
+          details: leadShieldCurrent?.leads || []
         };
 
         const phoneCalls = {
@@ -311,29 +373,21 @@ export default function MasterDashboard() {
           change: calculateChange(resolvedCurrentPhoneCalls, resolvedPreviousPhoneCalls)
         };
 
-        // Calculate historical previous data for Ahrefs comparison
-        let historicalPrev = sortedWeekly.find(d => d.week_start_date === format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
-        if (!historicalPrev && sortedWeekly.length > 1) {
-          if (currentWeekData?.id === sortedWeekly[0].id) {
-            historicalPrev = sortedWeekly[1];
-          } else {
-            const currentIndex = sortedWeekly.findIndex(d => d.id === currentWeekData?.id);
-            if (currentIndex !== -1 && currentIndex + 1 < sortedWeekly.length) {
-              historicalPrev = sortedWeekly[currentIndex + 1];
-            }
-          }
-        }
+        // Resolve latest saved Ahrefs metrics from live weeklyData
+        const sortedWithAhrefs = sortedWeekly.filter(d => ((d.ahrefs_dr || 0) > 0) || ((d.ahrefs_backlinks || 0) > 0) || ((d.ahrefs_ref_domains || 0) > 0));
+        const resolvedAhrefsCurrent = sortedWithAhrefs[0] || currentWeekData || latestData;
+        const historicalPrev = sortedWithAhrefs.length > 1 ? sortedWithAhrefs[1] : null;
 
-        const isSameAsCurrent = historicalPrev?.week_start_date === (currentWeekData?.week_start_date || latestData?.week_start_date);
+        const isSameAsCurrent = !historicalPrev || historicalPrev?.id === resolvedAhrefsCurrent?.id || (historicalPrev?.week_start_date === resolvedAhrefsCurrent?.week_start_date);
         const ahrefs = {
-          dr: currentWeekData?.ahrefs_dr || latestData?.ahrefs_dr || 0,
-          backlinks: currentWeekData?.ahrefs_backlinks || latestData?.ahrefs_backlinks || 0,
-          refDomains: currentWeekData?.ahrefs_ref_domains || latestData?.ahrefs_ref_domains || 0,
-          targetDr: client.target_dr || 0,
-          prevDr: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_dr || 0),
-          prevBacklinks: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_backlinks || 0),
-          prevRefDomains: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_ref_domains || 0),
-          hasPrev: true
+          dr: Number(resolvedAhrefsCurrent?.ahrefs_dr) || 0,
+          backlinks: Number(resolvedAhrefsCurrent?.ahrefs_backlinks) || 0,
+          refDomains: Number(resolvedAhrefsCurrent?.ahrefs_ref_domains) || 0,
+          targetDr: Number(client.target_dr) || 0,
+          prevDr: isSameAsCurrent ? 0 : (Number(historicalPrev?.ahrefs_dr) || 0),
+          prevBacklinks: isSameAsCurrent ? 0 : (Number(historicalPrev?.ahrefs_backlinks) || 0),
+          prevRefDomains: isSameAsCurrent ? 0 : (Number(historicalPrev?.ahrefs_ref_domains) || 0),
+          hasPrev: !isSameAsCurrent && !!historicalPrev
         };
 
         // Calculate duration of selected timeframe in days
@@ -672,6 +726,7 @@ export default function MasterDashboard() {
                 } w-48`}
             />
           </div>
+
           <button
             onClick={handleLiveSync}
             className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
@@ -696,6 +751,8 @@ export default function MasterDashboard() {
             <FileSpreadsheet size={14} className={isSyncingSheets ? 'animate-pulse' : ''} />
             {isSyncingSheets ? 'Syncing...' : 'Sync to Sheets'}
           </button>
+
+          <LeadNotificationCenter />
         </div>
       </div>
 
@@ -839,19 +896,55 @@ export default function MasterDashboard() {
                         />
                       </div>
                     ) : (
-                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                        <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
-                          {row.leads.legit === 0 && row.leads.prevLegit === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
-                          <div className="flex justify-between gap-4"><span>CURRENT LEGIT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.leads.legit})</span></div>
-                          <div className="flex justify-between gap-4"><span>PREVIOUS LEGIT:</span> <span className="opacity-80">{row.prevRangeStr} ({row.leads.prevLegit})</span></div>
+                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[260px]" content={
+                        <div className="space-y-1.5 p-1 text-left text-xs">
+                          <div className={`font-semibold border-b pb-1 flex justify-between items-center ${theme === 'white' ? 'border-zinc-200 text-zinc-700' : 'border-zinc-800 text-zinc-300'}`}>
+                            <span className="font-bold">Leads Breakdown</span>
+                            <span className="text-[10px] opacity-70">Genuine / Total</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Current Genuine:</span>
+                            <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Previous Genuine:</span>
+                            <span className="font-medium text-zinc-400 font-mono">{row.leads.prevLegit}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Growth:</span>
+                            <span className={`font-bold font-mono ${row.leads.change > 0 ? 'text-emerald-500' : row.leads.change < 0 ? 'text-red-500' : 'text-zinc-500'}`}>
+                              {row.leads.change > 0 ? `▲ +${row.leads.change.toFixed(1)}%` : row.leads.change < 0 ? `▼ ${row.leads.change.toFixed(1)}%` : '• 0%'}
+                            </span>
+                          </div>
+                          <div className={`border-t pt-1 text-[10px] text-zinc-500 text-center italic ${theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'}`}>
+                            <span>Click to view inquiry details • Double-click to edit</span>
+                          </div>
                         </div>
                       }>
                         <div
-                          className="space-y-1 cursor-pointer select-none"
-                          onDoubleClick={() => setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() })}
+                          className="space-y-1 cursor-pointer select-none group/lead"
+                          onClick={() => setSelectedLeadsModal({
+                            client: row.client,
+                            legit: row.leads.legit,
+                            total: row.leads.current,
+                            prevLegit: row.leads.prevLegit,
+                            currentRangeStr: row.currentRangeStr,
+                            leads: (row.leads as any).details || []
+                          })}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() });
+                          }}
                         >
-                          <div className="flex flex-col items-center">
-                            <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.leads.legit}</span>
+                          <div className="flex flex-col items-center group-hover/lead:scale-110 transition-transform">
+                            <span className={`font-semibold font-heading text-sm tracking-tight flex items-center gap-1 ${
+                              theme === 'white' ? 'text-[#082a36] group-hover/lead:text-[#76c9be]' : 'text-white group-hover/lead:text-blue-400'
+                            }`}>
+                              {row.leads.legit}
+                              {(row.leads as any).details?.length > 0 && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" title="View individual customer inquiries" />
+                              )}
+                            </span>
                             <TrendIndicator value={row.leads.change} theme={theme} />
                           </div>
                         </div>
@@ -990,37 +1083,95 @@ export default function MasterDashboard() {
                     </Tooltip>
                   </td>
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
-                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1.5 p-1 min-w-[200px] text-left">
-                        <div className={`font-medium border-b pb-1.5   text-sm text-center ${
-                          theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[310px]" content={
+                      <div className="space-y-2 p-1 text-left">
+                        <div className={`font-semibold border-b pb-1.5 text-xs flex justify-between items-center ${
+                          theme === 'white' ? 'border-zinc-200 text-zinc-600' : 'border-zinc-700/50 text-zinc-300'
                         }`}>
-                          GA4 Traffic Breakdown
+                          <span className="font-bold">GA4 Traffic Breakdown</span>
+                          <span className="text-[10px] font-normal opacity-70">vs previous period</span>
                         </div>
-                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 && <div className="text-red-500 text-sm font-medium text-center mb-1">NO DATA</div>}
-                        <div className="space-y-1.5 text-sm font-medium  tracking-[0.05em]">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[#607a80]">Total Sessions:</span>
-                            <span className={theme === 'white' ? 'text-zinc-900' : 'text-white'}>{row.ga4Traffic.current.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-emerald-500 font-medium">Organic Search:</span>
-                            <div className="flex gap-1.5 items-center">
-                              <span className="text-emerald-400 font-heading tracking-tighter">{row.ga4Traffic.organic.toLocaleString()}</span>
-                              <span className="text-sm opacity-70">
-                                ({row.ga4Traffic.current > 0 ? ((row.ga4Traffic.organic / row.ga4Traffic.current) * 100).toFixed(0) : 0}%)
+                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 ? (
+                          <div className="text-red-500 text-xs font-medium text-center py-1">NO DATA RECORDED</div>
+                        ) : (
+                          <div className="space-y-2 text-xs">
+                            {/* Total Sessions */}
+                            <div className="flex justify-between items-center">
+                              <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Total Sessions:</span>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
+                                  {row.ga4Traffic.current.toLocaleString()}
+                                </span>
+                                <span className="text-[11px] text-zinc-500 font-normal">/ {row.ga4Traffic.previous.toLocaleString()}</span>
+                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                  row.ga4Traffic.change > 0 
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                    : row.ga4Traffic.change < 0 
+                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                      : 'bg-zinc-500/10 text-zinc-500'
+                                }`}>
+                                  {row.ga4Traffic.change > 0 ? `▲ +${row.ga4Traffic.change.toFixed(1)}%` : row.ga4Traffic.change < 0 ? `▼ ${row.ga4Traffic.change.toFixed(1)}%` : '• 0%'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Organic Search */}
+                            <div className={`flex justify-between items-center border-t pt-1.5 ${
+                              theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                            }`}>
+                              <span className="text-emerald-500 font-semibold">Organic Search:</span>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="text-emerald-400 font-bold">
+                                  {row.ga4Traffic.organic.toLocaleString()}
+                                </span>
+                                <span className="text-[11px] text-zinc-500 font-normal">/ {row.ga4Traffic.prevOrganic.toLocaleString()}</span>
+                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                  row.ga4Traffic.organicChange > 0 
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                    : row.ga4Traffic.organicChange < 0 
+                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                      : 'bg-zinc-500/10 text-zinc-500'
+                                }`}>
+                                  {row.ga4Traffic.organicChange > 0 ? `▲ +${row.ga4Traffic.organicChange.toFixed(1)}%` : row.ga4Traffic.organicChange < 0 ? `▼ ${row.ga4Traffic.organicChange.toFixed(1)}%` : '• 0%'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Organic Share (%) */}
+                            <div className="flex justify-between items-center pl-2">
+                              <span className="text-[11px] text-zinc-500">Organic Share (%):</span>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className={`font-semibold text-[11px] ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                  {row.ga4Traffic.currentOrganicPct.toFixed(1)}%
+                                </span>
+                                <span className="text-[10px] text-zinc-500">
+                                  (prev {row.ga4Traffic.prevOrganicPct.toFixed(1)}%)
+                                </span>
+                                <span className={`text-[10px] font-bold ${
+                                  row.ga4Traffic.organicShareDiff > 0 
+                                    ? 'text-emerald-500' 
+                                    : row.ga4Traffic.organicShareDiff < 0 
+                                      ? 'text-red-500' 
+                                      : 'text-zinc-500'
+                                }`}>
+                                  {row.ga4Traffic.organicShareDiff > 0 ? `+${row.ga4Traffic.organicShareDiff.toFixed(1)}%` : `${row.ga4Traffic.organicShareDiff.toFixed(1)}%`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Other Channels */}
+                            <div className={`flex justify-between items-center border-t pt-1.5 ${
+                              theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                            }`}>
+                              <span className="text-zinc-500">Other Channels:</span>
+                              <span className="opacity-80 text-zinc-400 font-medium font-mono">
+                                {Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}
                               </span>
                             </div>
                           </div>
-                          <div className={`flex justify-between items-center border-t pt-1 ${
-                            theme === 'white' ? 'border-zinc-200' : 'border-white/5'
-                          }`}>
-                            <span className="text-zinc-500">Other Channels:</span>
-                            <span className="opacity-80 text-zinc-400">{Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}</span>
-                          </div>
-                        </div>
-                        <div className={`border-t pt-1 text-sm text-zinc-500 text-center   italic ${
-                          theme === 'white' ? 'border-zinc-200' : 'border-white/5'
+                        )}
+                        <div className={`border-t pt-1 text-[11px] text-zinc-500 text-center italic ${
+                          theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'
                         }`}>
                           <span>Period: {row.currentRangeStr}</span>
                         </div>
@@ -1035,111 +1186,165 @@ export default function MasterDashboard() {
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-4 py-2 text-center relative hover:z-[50]">
-                    <Tooltip content={
-                      <div className="space-y-1.5 p-0.5">
-                        <div className={`font-medium border-b pb-1.5   text-sm flex justify-between items-center gap-4 ${
-                          theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
+                  <td className="px-4 py-2 text-center relative hover:z-[50] min-w-[130px]">
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[330px]" content={
+                      <div className="space-y-2.5 p-1 text-left">
+                        {/* Popover Header */}
+                        <div className={`font-semibold border-b pb-2 text-xs flex justify-between items-center ${
+                          theme === 'white' ? 'border-zinc-200 text-zinc-700' : 'border-zinc-700/50 text-zinc-200'
                         }`}>
-                          <span>Ahrefs Comparison</span>
-                          <span className="text-sm font-normal lowercase tracking-normal opacity-80">
-                            ({row.ahrefs.hasPrev ? 'vs previous period' : 'no previous data'})
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                            <span className="font-bold">Ahrefs Domain Authority</span>
+                          </div>
+                          <span className="text-[10px] font-normal opacity-70">
+                            {row.ahrefs.hasPrev ? 'vs previous period' : 'no previous record'}
                           </span>
                         </div>
-                        <div className="space-y-1 text-left min-w-[180px]">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating:</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
-                              {row.ahrefs.hasPrev && (
-                                <span className={`text-sm font-medium ${
-                                  row.ahrefs.dr - row.ahrefs.prevDr > 0 
-                                    ? 'text-emerald-500' 
-                                    : row.ahrefs.dr - row.ahrefs.prevDr < 0 
-                                      ? 'text-red-500' 
-                                      : 'text-zinc-500'
-                                }`}>
-                                  {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
-                                </span>
-                              )}
+
+                        {/* Target Progress Card */}
+                        {row.ahrefs.targetDr > 0 ? (
+                          <div className={`p-2.5 rounded-xl border ${
+                            theme === 'white' ? 'bg-purple-50/50 border-purple-100' : 'bg-purple-950/20 border-purple-500/20'
+                          }`}>
+                            <div className="flex justify-between items-center text-xs mb-1.5">
+                              <span className="text-purple-600 dark:text-purple-400 font-semibold">Target Domain Rating</span>
+                              <span className="font-bold font-mono">
+                                {row.ahrefs.dr} <span className="text-zinc-400 font-normal">/ {row.ahrefs.targetDr}</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${Math.min(100, Math.max(0, (row.ahrefs.dr / row.ahrefs.targetDr) * 100))}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mt-1">
+                              <span>Progress</span>
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                {((row.ahrefs.dr / row.ahrefs.targetDr) * 100).toFixed(0)}% Achieved
+                              </span>
                             </div>
                           </div>
-                          
-                          <div className="flex justify-between items-center text-sm">
-                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Backlinks:</span>
+                        ) : null}
+
+                        {/* 3-Metric Comparison Grid */}
+                        <div className="space-y-1.5 text-xs font-mono">
+                          {/* Domain Rating */}
+                          <div className="flex justify-between items-center py-1">
+                            <span className={`font-sans font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating (DR):</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
+                              <span className={`font-bold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-sm font-medium ${
-                                  row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
-                                    ? 'text-emerald-500' 
-                                    : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
-                                      ? 'text-red-500' 
-                                      : 'text-zinc-500'
-                                }`}>
-                                  {row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
-                                    ? `▲ +${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` 
-                                    : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
-                                      ? `▼ ${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` 
-                                      : '• 0'}
-                                </span>
+                                <>
+                                  <span className="text-[11px] text-zinc-500 font-normal">/ {row.ahrefs.prevDr || '-'}</span>
+                                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                    row.ahrefs.dr - row.ahrefs.prevDr > 0 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                      : row.ahrefs.dr - row.ahrefs.prevDr < 0 
+                                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                        : 'bg-zinc-500/10 text-zinc-500'
+                                  }`}>
+                                    {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
+                                  </span>
+                                </>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex justify-between items-center text-sm">
-                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Referring Domains:</span>
+                          {/* Referring Domains */}
+                          <div className={`flex justify-between items-center py-1 border-t ${
+                            theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                          }`}>
+                            <span className={`font-sans font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Ref Domains:</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
+                              <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-sm font-medium ${
-                                  row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
-                                    ? 'text-emerald-500' 
-                                    : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
-                                      ? 'text-red-500' 
-                                      : 'text-zinc-500'
-                                }`}>
-                                  {row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
-                                    ? `▲ +${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` 
-                                    : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
-                                      ? `▼ ${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` 
-                                      : '• 0'}
-                                </span>
+                                <>
+                                  <span className="text-[11px] text-zinc-500 font-normal">/ {row.ahrefs.prevRefDomains.toLocaleString()}</span>
+                                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                    row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                      : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
+                                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                        : 'bg-zinc-500/10 text-zinc-500'
+                                  }`}>
+                                    {row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 ? `▲ +${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 ? `▼ ${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` : '• 0'}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Backlinks */}
+                          <div className={`flex justify-between items-center py-1 border-t ${
+                            theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                          }`}>
+                            <span className={`font-sans font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Total Backlinks:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
+                              {row.ahrefs.hasPrev && (
+                                <>
+                                  <span className="text-[11px] text-zinc-500 font-normal">/ {row.ahrefs.prevBacklinks.toLocaleString()}</span>
+                                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                    row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                      : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
+                                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                        : 'bg-zinc-500/10 text-zinc-500'
+                                  }`}>
+                                    {row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 ? `▲ +${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 ? `▼ ${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` : '• 0'}
+                                  </span>
+                                </>
                               )}
                             </div>
                           </div>
                         </div>
+
                         {row.ahrefs.hasPrev && (
-                          <div className={`text-sm pt-1.5 border-t flex flex-col gap-0.5 ${
-                            theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-500'
+                          <div className={`border-t pt-1.5 text-[11px] text-zinc-500 text-center italic ${
+                            theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'
                           }`}>
-                            <div className="flex justify-between"><span>Current:</span> <span className={`font-medium ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.currentRangeStr}</span></div>
-                            <div className="flex justify-between"><span>Previous:</span> <span className={`font-medium ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.prevRangeStr}</span></div>
+                            <span>Period: {row.currentRangeStr}</span>
                           </div>
                         )}
                       </div>
-                    } position={rowIndex < 2 ? 'bottom' : 'top'}>
-                      <div className="flex flex-col items-center gap-0.5">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className={`font-medium text-sm tracking-tighter ${theme === 'white' ? 'text-purple-600' : 'text-purple-400'}`}>
+                    }>
+                      {/* In-Cell Display (Option A) */}
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-bold text-sm tracking-tight font-heading ${theme === 'white' ? 'text-purple-700' : 'text-purple-400'}`}>
                             DR: {row.ahrefs.dr || '-'}
-                            {row.ahrefs.hasPrev && row.ahrefs.dr - row.ahrefs.prevDr !== 0 && (
-                              <span className={`text-sm font-medium ml-1 select-none ${
-                                row.ahrefs.dr - row.ahrefs.prevDr > 0 
-                                  ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') 
-                                  : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')
-                              }`}>
-                                {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? '▲' : '▼'}
-                              </span>
-                            )}
                           </span>
                           {row.ahrefs.targetDr > 0 && (
-                            <span className="text-sm font-medium text-zinc-500   opacity-80">
-                              / {row.ahrefs.targetDr}
+                            <span className="text-[11px] font-medium text-zinc-500 opacity-80">
+                              /{row.ahrefs.targetDr}
+                            </span>
+                          )}
+                          {row.ahrefs.hasPrev && (
+                            <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                              row.ahrefs.dr - row.ahrefs.prevDr > 0 
+                                ? (theme === 'white' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20') 
+                                : row.ahrefs.dr - row.ahrefs.prevDr < 0 
+                                  ? (theme === 'white' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-red-500/10 text-red-400 border border-red-500/20')
+                                  : (theme === 'white' ? 'text-zinc-400' : 'text-zinc-500')
+                            }`}>
+                              {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
                             </span>
                           )}
                         </div>
-                        <div className={`flex items-center gap-1.5 text-sm font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+                        
+                        {/* Mini Progress Bar if Target DR is set */}
+                        {row.ahrefs.targetDr > 0 ? (
+                          <div className="w-16 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-purple-500 rounded-full transition-all duration-300"
+                              style={{ width: `${Math.min(100, Math.max(0, (row.ahrefs.dr / row.ahrefs.targetDr) * 100))}%` }}
+                            />
+                          </div>
+                        ) : null}
+
+                        <div className={`flex items-center gap-1.5 text-[11px] font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                           <span>BL: {row.ahrefs.backlinks >= 1000 ? `${(row.ahrefs.backlinks / 1000).toFixed(1)}K` : row.ahrefs.backlinks}</span>
                           <span className="opacity-30">|</span>
                           <span>RD: {row.ahrefs.refDomains}</span>
@@ -2066,6 +2271,13 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
           </div>
         </div>
       </div>
+      {selectedLeadsModal && (
+        <LeadsDetailModal
+          modalData={selectedLeadsModal}
+          onClose={() => setSelectedLeadsModal(null)}
+          theme={theme}
+        />
+      )}
     </div>
   );
 }
@@ -2209,6 +2421,138 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeadsDetailModal({ modalData, onClose, theme }: { modalData: any; onClose: () => void; theme: string }) {
+  const { client, legit, total, prevLegit, currentRangeStr, leads } = modalData;
+
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 md:p-12 animate-in fade-in duration-200">
+      <div 
+        className="absolute inset-0 bg-zinc-950/80 backdrop-blur-md"
+        onClick={onClose}
+      />
+      
+      <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-[36px] border shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 ${
+        theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900 border-white/10'
+      }`}>
+        <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm ${
+              theme === 'white' ? 'bg-[#76c9be]/10 text-[#082a36]' : 'bg-blue-600/20 text-blue-400'
+            }`}>
+              {client.short_code || client.name.substring(0, 3)}
+            </div>
+            <div>
+              <h2 className={`text-xl font-bold font-heading tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                {client.name}
+              </h2>
+              <p className={`text-xs font-medium ${theme === 'white' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                Inbound Genuine Leads • {currentRangeStr}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              {legit} Legit / {total} Total
+            </span>
+            <button 
+              onClick={onClose}
+              className={`p-2.5 rounded-2xl transition-colors ${theme === 'white' ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          {(!leads || leads.length === 0) ? (
+            <div className="text-center py-12 space-y-3">
+              <ShieldCheck size={40} className="mx-auto text-emerald-500 opacity-60" />
+              <div>
+                <p className={`font-bold text-base ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                  {legit} Verified Legit Leads
+                </p>
+                <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                  Leads recorded for {currentRangeStr}. (Detailed customer inquiries appear automatically when received via live webhooks).
+                </p>
+              </div>
+            </div>
+          ) : (
+            leads.map((lead: any, idx: number) => {
+              const formData = lead.form_data?.body || lead.form_data || {};
+              const name = formData['your-name'] || formData['name'] || formData['first-name'] || formData['fist-name'] || 'Customer';
+              const email = formData['your-email'] || formData['email'] || '';
+              const phone = formData['contact-number'] || formData['phone'] || '';
+              const message = formData['your-comments'] || formData['your-message'] || formData['message'] || formData['your-size'] || '';
+              
+              let dateFormatted = '';
+              try {
+                const d = new Date(lead.created_at || lead.lead_date);
+                if (!isNaN(d.getTime())) {
+                  dateFormatted = format(d, 'dd MMM yyyy, h:mm a');
+                } else {
+                  dateFormatted = lead.created_at || 'Recent';
+                }
+              } catch (e) {
+                dateFormatted = lead.created_at || 'Recent';
+              }
+
+              return (
+                <div 
+                  key={lead.id || idx} 
+                  className={`p-5 rounded-2xl border transition-all space-y-2.5 ${
+                    theme === 'white' ? 'bg-zinc-50/70 border-zinc-200 hover:bg-zinc-50' : 'bg-zinc-800/40 border-white/5 hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-slate-800 dark:text-zinc-100 flex items-center gap-1.5">
+                      <User size={15} className="text-emerald-500" />
+                      {name}
+                    </span>
+                    <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                      {lead.status || 'GENUINE'}
+                    </span>
+                  </div>
+
+                  {(email || phone) && (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600 dark:text-zinc-400 font-mono">
+                      {email && (
+                        <span className="flex items-center gap-1">
+                          <Mail size={12} className="text-zinc-400" />
+                          {email}
+                        </span>
+                      )}
+                      {phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone size={12} className="text-zinc-400" />
+                          {phone}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {message && (
+                    <div className="text-xs text-zinc-600 dark:text-zinc-300 italic bg-white dark:bg-zinc-900/80 p-3 rounded-xl border border-zinc-200/60 dark:border-white/5 max-h-32 overflow-y-auto custom-scrollbar leading-relaxed whitespace-pre-wrap">
+                      "{message}"
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Clock size={11} />
+                      {dateFormatted}
+                    </span>
+                    <span className="capitalize">{lead.channel || 'website form'}</span>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

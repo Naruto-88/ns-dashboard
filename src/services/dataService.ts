@@ -999,3 +999,43 @@ export const saveSeoPageOptimization = async (params: {
     return { success: false, error: error.message };
   }
 };
+
+export const syncLeadShieldLeads = async (): Promise<{ success: boolean; totalLeads?: number; updatedWeeklyRecords?: number; error?: string }> => {
+  try {
+    const res = await fetch('/api/leads/sync-lead-shield', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Failed to sync Lead Shield leads' };
+    }
+    return data;
+  } catch (err: any) {
+    console.error('Error syncing Lead Shield leads:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+export const getLeadStatsByRange = async (startDate?: string, endDate?: string, clientId?: string): Promise<{
+  success: boolean;
+  clients: Record<string, { genuine: number; spam: number; total: number }>;
+  error?: string;
+}> => {
+  try {
+    let url = '/api/leads/stats-by-range';
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    if (clientId) params.append('clientId', clientId);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, clients: {}, error: data.error };
+    }
+    return data;
+  } catch (err: any) {
+    console.error('Error getting lead stats by range:', err);
+    return { success: false, clients: {}, error: err.message };
+  }
+};
+

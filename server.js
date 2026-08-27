@@ -3858,8 +3858,10 @@ app.post("/api/admin/seed", async (req, res) => {
 });
 const getDomain = (url) => {
   if (!url) return "";
-  let domain = url.replace(/^(https?:\/\/)?(www\.)?/, "");
-  domain = domain.split("/")[0];
+  let domain = url.trim();
+  domain = domain.replace(/^sc-domain:\s*/i, "");
+  domain = domain.replace(/^(https?:\/\/)?(www\.)?/i, "");
+  domain = domain.split("/")[0].split("?")[0].split("#")[0].split(":")[0];
   return domain.toLowerCase().trim();
 };
 async function fetchWithAhrefsRetry(url, headers, maxAttempts = 4) {
@@ -3910,7 +3912,7 @@ app.get("/api/clients/:clientId/sync-ahrefs-data", async (req, res) => {
     if (!ahrefsKey) {
       ahrefsKey = process.env.AHREFS_API_KEY || "";
     }
-    const targetUrl = client.gsc_site_url || "";
+    const targetUrl = client.gsc_site_url || client.wordpress_url || "";
     const domain = getDomain(targetUrl);
     const isValidDomain = domain && domain.includes(".") && !domain.includes(" ");
     const { data: cachedCits } = await supabase.from("ahrefs_citations").select("*").eq("client_id", clientId).eq("week_start_date", dateStr);
@@ -4589,41 +4591,268 @@ app.post("/api/ai/revert-metadata", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-app.post("/api/webhook/receive-lead", async (req, res) => {
+const LEAD_SHIELD_CLIENT_MAP = {
+  "gold_spar": "2fed0918-c029-4ba1-aaee-511a2aa68273",
+  "goldspar": "2fed0918-c029-4ba1-aaee-511a2aa68273",
+  "multipole": "ec64c5bc-57df-4c99-a07f-f5f9e243fcfe",
+  "sydney_decking_solutions": "77d52cff-404f-44bd-a861-76d981f4e01b",
+  "sydney_decking": "77d52cff-404f-44bd-a861-76d981f4e01b"
+};
+const REVERSE_LEAD_SHIELD_MAP = {
+  "2fed0918-c029-4ba1-aaee-511a2aa68273": "gold_spar",
+  "ec64c5bc-57df-4c99-a07f-f5f9e243fcfe": "multipole",
+  "77d52cff-404f-44bd-a861-76d981f4e01b": "sydney_decking_solutions"
+};
+async function fetchLeadShieldStats(startDate, endDate, clientIdFilter) {
+  let url = "https://lead-shield.vercel.app/api/leads/stats?api_key=shield_lead_key_2026_secure";
+  let targetSlug = clientIdFilter;
+  if (clientIdFilter && REVERSE_LEAD_SHIELD_MAP[clientIdFilter]) {
+    targetSlug = REVERSE_LEAD_SHIELD_MAP[clientIdFilter];
+  }
+  if (targetSlug) url += `&client_id=${encodeURIComponent(targetSlug)}`;
+  if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
+  if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!res.ok) {
+    throw new Error(`Lead Shield API error: status ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data.leads) ? data.leads : [];
+}
+const leadSseClients = /* @__PURE__ */ new Set();
+const recentLeadsNotificationBuffer = [];
+function broadcastLeadNotification(leadData) {
+  recentLeadsNotificationBuffer.unshift(leadData);
+  if (recentLeadsNotificationBuffer.length > 50) recentLeadsNotificationBuffer.pop();
+  const payload = `data: ${JSON.stringify(leadData)}
+
+`;
+  for (const client of leadSseClients) {
+    try {
+      client.write(payload);
+    } catch (e) {
+      leadSseClients.delete(client);
+    }
+  }
+}
+app.get("/api/leads/stream", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Access-Control-Allow-Origin": "*"
+  });
+  res.write(": connected\n\n");
+  leadSseClients.add(res);
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch (e) {
+      clearInterval(heartbeat);
+      leadSseClients.delete(res);
+    }
+  }, 25e3);
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    leadSseClients.delete(res);
+  });
+});
+app.get("/api/leads/recent", async (req, res) => {
+  try {
+    const rawLeads = await fetchLeadShieldStats();
+    const { data: activeLeadClients } = await supabase.from("clients").select("id, name, lead_api_url").not("lead_api_url", "is", null);
+    const activeMap = new Map((activeLeadClients || []).map((c) => [c.id, c.name]));
+    const formatted = rawLeads.filter((l) => {
+      const shieldId = (l.client_id || "").toLowerCase().trim();
+      const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
+      return mappedId && activeMap.has(mappedId) && (l.status || "").toUpperCase() === "GENUINE";
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20).map((l) => {
+      const shieldId = (l.client_id || "").toLowerCase().trim();
+      const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
+      const formData = l.form_data?.body || l.form_data || {};
+      return {
+        id: String(l.id || Math.random()),
+        clientId: mappedId,
+        clientName: activeMap.get(mappedId) || shieldId,
+        customerName: formData["your-name"] || formData["name"] || formData["first-name"] || formData["fist-name"] || "Customer",
+        email: formData["your-email"] || formData["email"] || "",
+        phone: formData["contact-number"] || formData["phone"] || "",
+        message: formData["your-comments"] || formData["your-message"] || formData["message"] || formData["your-size"] || "",
+        status: (l.status || "GENUINE").toUpperCase(),
+        channel: l.channel || "website",
+        createdAt: l.created_at || (/* @__PURE__ */ new Date()).toISOString()
+      };
+    });
+    res.json({ success: true, leads: formatted });
+  } catch (err) {
+    console.error("Error fetching recent leads:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/api/leads/stats-by-range", async (req, res) => {
+  const { startDate, endDate, clientId } = req.query;
+  try {
+    const rawLeads = await fetchLeadShieldStats(startDate, endDate, clientId);
+    const { data: activeLeadClients } = await supabase.from("clients").select("id, lead_api_url").not("lead_api_url", "is", null);
+    const activeClientIds = new Set((activeLeadClients || []).map((c) => c.id));
+    const statsByClient = {};
+    for (const lead of rawLeads) {
+      const shieldId = (lead.client_id || "").toLowerCase().trim();
+      const mappedClientId = LEAD_SHIELD_CLIENT_MAP[shieldId] || shieldId;
+      if (!clientId && !activeClientIds.has(mappedClientId)) {
+        continue;
+      }
+      if (!statsByClient[mappedClientId]) {
+        statsByClient[mappedClientId] = { genuine: 0, spam: 0, total: 0, leads: [] };
+      }
+      statsByClient[mappedClientId].total += 1;
+      const isGenuine = (lead.status || "").toUpperCase() === "GENUINE";
+      if (isGenuine) {
+        statsByClient[mappedClientId].genuine += 1;
+      } else {
+        statsByClient[mappedClientId].spam += 1;
+      }
+      statsByClient[mappedClientId].leads.push(lead);
+    }
+    res.json({
+      success: true,
+      startDate: startDate || "all",
+      endDate: endDate || "all",
+      totalLeadsCount: rawLeads.length,
+      clients: statsByClient
+    });
+  } catch (error) {
+    console.error("[LEAD SHIELD] Error in /api/leads/stats-by-range:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch lead stats by range" });
+  }
+});
+app.post("/api/leads/sync-lead-shield", async (req, res) => {
+  try {
+    const rawLeads = await fetchLeadShieldStats();
+    console.log(`[LEAD SHIELD] Fetched ${rawLeads.length} total leads from Lead Shield API.`);
+    const { data: activeLeadClients } = await supabase.from("clients").select("id, lead_api_url").not("lead_api_url", "is", null);
+    const activeClientIds = new Set((activeLeadClients || []).map((c) => c.id));
+    const clientWeekRollup = {};
+    const alignToMonday = (d) => {
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      const year = monday.getFullYear();
+      const month = String(monday.getMonth() + 1).padStart(2, "0");
+      const date = String(monday.getDate()).padStart(2, "0");
+      return `${year}-${month}-${date}`;
+    };
+    for (const lead of rawLeads) {
+      const shieldId = (lead.client_id || "").toLowerCase().trim();
+      const mappedClientId = LEAD_SHIELD_CLIENT_MAP[shieldId];
+      if (!mappedClientId) continue;
+      const leadDate = lead.created_at ? new Date(lead.created_at) : /* @__PURE__ */ new Date();
+      const mondayDateStr = alignToMonday(new Date(leadDate));
+      if (!clientWeekRollup[mappedClientId]) clientWeekRollup[mappedClientId] = {};
+      if (!clientWeekRollup[mappedClientId][mondayDateStr]) {
+        clientWeekRollup[mappedClientId][mondayDateStr] = { genuine: 0, spam: 0, total: 0 };
+      }
+      clientWeekRollup[mappedClientId][mondayDateStr].total += 1;
+      if ((lead.status || "").toUpperCase() === "GENUINE") {
+        clientWeekRollup[mappedClientId][mondayDateStr].genuine += 1;
+      } else {
+        clientWeekRollup[mappedClientId][mondayDateStr].spam += 1;
+      }
+    }
+    let updatedWeeksCount = 0;
+    for (const [clientId, weeks] of Object.entries(clientWeekRollup)) {
+      if (!activeClientIds.has(clientId)) continue;
+      for (const [weekDateStr, counts] of Object.entries(weeks)) {
+        const { data: existing } = await supabase.from("weekly_data").select("id, leads_legit, leads_total").eq("client_id", clientId).eq("week_start_date", weekDateStr).maybeSingle();
+        if (existing) {
+          await supabase.from("weekly_data").update({
+            leads_legit: counts.genuine,
+            leads_total: counts.total
+          }).eq("id", existing.id);
+        } else {
+          await supabase.from("weekly_data").insert({
+            client_id: clientId,
+            week_start_date: weekDateStr,
+            leads_legit: counts.genuine,
+            leads_total: counts.total,
+            technical_score: 90
+          });
+        }
+        updatedWeeksCount++;
+      }
+    }
+    try {
+      const clientLeadsRows = rawLeads.map((l) => {
+        const shieldId = (l.client_id || "").toLowerCase().trim();
+        const mappedClientId = LEAD_SHIELD_CLIENT_MAP[shieldId] || null;
+        const createdDate = l.created_at ? new Date(l.created_at) : /* @__PURE__ */ new Date();
+        const dateStr = createdDate.toISOString().split("T")[0];
+        return {
+          client_id: mappedClientId,
+          lead_shield_id: shieldId,
+          lead_shield_lead_id: l.id,
+          status: l.status,
+          lead_date: dateStr,
+          created_at: l.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+          form_data: l.form_data || {},
+          channel: l.channel || "website"
+        };
+      });
+      await supabase.from("client_leads").upsert(clientLeadsRows, { onConflict: "lead_shield_id,lead_shield_lead_id" });
+    } catch (e) {
+    }
+    console.log(`[LEAD SHIELD] Full sync completed: updated ${updatedWeeksCount} weekly records across active clients.`);
+    res.json({
+      success: true,
+      message: "Lead Shield leads synced successfully",
+      totalLeads: rawLeads.length,
+      updatedWeeklyRecords: updatedWeeksCount,
+      clientsSynced: Object.keys(clientWeekRollup).filter((cId) => activeClientIds.has(cId)).length
+    });
+  } catch (error) {
+    console.error("[LEAD SHIELD] Sync failed:", error);
+    res.status(500).json({ error: error.message || "Failed to sync Lead Shield leads" });
+  }
+});
+const handleLeadShieldWebhook = async (req, res) => {
   const authHeader = req.headers["authorization"] || req.headers["x-api-key"];
   const expectedSecret = process.env.LEAD_SHIELD_SECRET;
   if (expectedSecret && authHeader !== expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
     return res.status(401).json({ error: "Unauthorized: Invalid API Key or Bearer Token" });
   }
-  const { client_id, domain, genuine_leads_count, total_leads_count, status, action, week_start_date, lead_timestamp, created_at, timestamp } = req.body || {};
+  const { client_id, domain, genuine_leads_count, total_leads_count, status, action, week_start_date, lead_timestamp, created_at, timestamp, form_data, channel } = req.body || {};
   const leadTimeRaw = lead_timestamp || created_at || timestamp;
   if (!client_id && !domain) {
     return res.status(400).json({ error: "Missing required field: client_id or domain" });
   }
   try {
-    const { data: allClients, error: clientErr } = await supabase.from("clients").select("id, name, short_code, gsc_site_url");
-    if (clientErr || !allClients || allClients.length === 0) {
-      console.error("[LEAD_WEBHOOK_ERROR] Failed to query clients table:", clientErr?.message);
-      return res.status(500).json({ error: "Failed to query clients table" });
-    }
     const rawInput = (client_id || domain || "").toString().trim().toLowerCase();
-    const cleanInput = rawInput.replace(/https?:\/\//g, "").replace(/www\./g, "").replace(/[^a-z0-9]/g, "");
-    const targetClient = allClients.find((c) => {
-      if (c.id === rawInput) return true;
-      if (c.short_code && c.short_code.toLowerCase() === rawInput) return true;
-      const cNameClean = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const cGscClean = (c.gsc_site_url || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (cNameClean && (cNameClean.includes(cleanInput) || cleanInput.includes(cNameClean))) return true;
-      if (cGscClean && (cGscClean.includes(cleanInput) || cleanInput.includes(cGscClean))) return true;
-      return false;
-    });
-    if (!targetClient) {
+    let targetClientId = LEAD_SHIELD_CLIENT_MAP[rawInput];
+    if (!targetClientId) {
+      const { data: allClients } = await supabase.from("clients").select("id, name, short_code, gsc_site_url");
+      const cleanInput = rawInput.replace(/https?:\/\//g, "").replace(/www\./g, "").replace(/[^a-z0-9]/g, "");
+      const found = (allClients || []).find((c) => {
+        if (c.id === rawInput) return true;
+        if (c.short_code && c.short_code.toLowerCase() === rawInput) return true;
+        const cNameClean = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const cGscClean = (c.gsc_site_url || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return cNameClean.includes(cleanInput) || cleanInput.includes(cNameClean) || cGscClean.includes(cleanInput);
+      });
+      if (found) targetClientId = found.id;
+    }
+    if (!targetClientId) {
       console.warn(`[LEAD_WEBHOOK_WARN] Client not found for identifier: "${client_id || domain}"`);
       return res.status(404).json({ error: `Client not found for identifier: ${client_id || domain}` });
     }
+    const { data: clientObj } = await supabase.from("clients").select("id, name, lead_api_url").eq("id", targetClientId).maybeSingle();
+    if (!clientObj || !clientObj.lead_api_url) {
+      console.log(`[LEAD_WEBHOOK_INFO] Lead received for client "${clientObj?.name || targetClientId}", but auto lead sync is not activated. Ignoring auto-write.`);
+      return res.json({ success: true, message: "Auto-sync is disabled for this client. Lead ignored." });
+    }
     let targetDateStr = week_start_date;
+    const leadDateObj = leadTimeRaw ? new Date(leadTimeRaw) : /* @__PURE__ */ new Date();
     if (!targetDateStr) {
-      const d = leadTimeRaw ? new Date(leadTimeRaw) : /* @__PURE__ */ new Date();
+      const d = new Date(leadDateObj);
       const day = d.getDay();
       const diff = d.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(d.setDate(diff));
@@ -4632,7 +4861,7 @@ app.post("/api/webhook/receive-lead", async (req, res) => {
       const date = String(monday.getDate()).padStart(2, "0");
       targetDateStr = `${year}-${month}-${date}`;
     }
-    const { data: existingRecord } = await supabase.from("weekly_data").select("id, leads_legit, leads_total").eq("client_id", targetClient.id).eq("week_start_date", targetDateStr).maybeSingle();
+    const { data: existingRecord } = await supabase.from("weekly_data").select("id, leads_legit, leads_total").eq("client_id", targetClientId).eq("week_start_date", targetDateStr).maybeSingle();
     let newLegit = 0;
     let newTotal = 0;
     if (typeof genuine_leads_count === "number") {
@@ -4646,26 +4875,50 @@ app.post("/api/webhook/receive-lead", async (req, res) => {
       newTotal = (existingRecord?.leads_total || 0) + (status === "SPAM" ? 1 : 0);
     }
     if (existingRecord) {
-      const { error: updateError } = await supabase.from("weekly_data").update({
+      await supabase.from("weekly_data").update({
         leads_legit: newLegit,
         leads_total: newTotal
       }).eq("id", existingRecord.id);
-      if (updateError) throw updateError;
     } else {
-      const { error: insertError } = await supabase.from("weekly_data").insert({
-        client_id: targetClient.id,
+      await supabase.from("weekly_data").insert({
+        client_id: targetClientId,
         week_start_date: targetDateStr,
         leads_legit: newLegit,
         leads_total: newTotal,
         technical_score: 90
       });
-      if (insertError) throw insertError;
     }
-    console.log(`[LEAD SHIELD WEBHOOK] Received lead update for ${targetClient.name}: legit=${newLegit}, total=${newTotal}`);
+    try {
+      await supabase.from("client_leads").insert({
+        client_id: targetClientId,
+        lead_shield_id: rawInput,
+        status: status || (action === "increment" ? "GENUINE" : "UNCLASSIFIED"),
+        lead_date: leadDateObj.toISOString().split("T")[0],
+        created_at: leadDateObj.toISOString(),
+        form_data: form_data || {},
+        channel: channel || "website"
+      });
+    } catch (e) {
+    }
+    const formData = form_data?.body || form_data || {};
+    const leadNotification = {
+      id: String(req.body.id || Date.now()),
+      clientId: targetClientId,
+      clientName: clientObj?.name || "Client",
+      customerName: formData["your-name"] || formData["name"] || formData["first-name"] || formData["fist-name"] || "Genuine Prospect",
+      email: formData["your-email"] || formData["email"] || "",
+      phone: formData["contact-number"] || formData["phone"] || "",
+      message: formData["your-comments"] || formData["your-message"] || formData["message"] || formData["your-size"] || "",
+      status: (status || "GENUINE").toUpperCase(),
+      channel: channel || "website",
+      createdAt: leadTimeRaw || (/* @__PURE__ */ new Date()).toISOString()
+    };
+    broadcastLeadNotification(leadNotification);
+    console.log(`[LEAD SHIELD REALTIME WEBHOOK] Lead logged & broadcasted for client ${targetClientId}: legit=${newLegit}, total=${newTotal}`);
     return res.json({
       success: true,
-      message: "Genuine lead count updated successfully",
-      client: targetClient.name,
+      message: "Genuine lead logged in real-time",
+      client_id: targetClientId,
       week_start_date: targetDateStr,
       updated_leads: {
         leads_legit: newLegit,
@@ -4673,10 +4926,12 @@ app.post("/api/webhook/receive-lead", async (req, res) => {
       }
     });
   } catch (err) {
-    console.error("[LEAD SHIELD WEBHOOK] Error handling webhook:", err);
-    return res.status(500).json({ error: err.message || "Internal server error processing webhook" });
+    console.error("[LEAD SHIELD WEBHOOK] Error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error processing lead webhook" });
   }
-});
+};
+app.post("/api/webhook/receive-lead", handleLeadShieldWebhook);
+app.post("/api/webhooks/lead-shield", handleLeadShieldWebhook);
 if (process.env.NODE_ENV !== "production" && !process.env.PASSENGER_APP_ENV) {
   const vite = await createViteServer({
     server: { middlewareMode: true },

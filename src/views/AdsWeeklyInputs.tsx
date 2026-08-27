@@ -241,276 +241,288 @@ export default function AdsWeeklyInputs() {
         <div className="py-20 text-center opacity-60 text-sm">Loading selected record...</div>
       ) : (
         <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Google Ads */}
-            <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-150 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
-              <h3 className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                <Globe className="w-4 h-4" /> Google Paid Campaigns
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Spend ($)</label>
-                  <input
-                    type="number" step="any"
-                    value={formState.google_ads_spend ?? ''}
-                    onChange={(e) => setFormState({ ...formState, google_ads_spend: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">ROAS (x)</label>
-                  <input
-                    type="number" step="any"
-                    value={formState.google_ads_roas ?? ''}
-                    onChange={(e) => setFormState({ ...formState, google_ads_roas: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">CTR (%)</label>
-                  <input
-                    type="number" step="any"
-                    value={formState.google_ads_ctr ?? ''}
-                    onChange={(e) => setFormState({ ...formState, google_ads_ctr: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Quality Score (1-10)</label>
-                  <input
-                    type="number" max="10" min="0"
-                    value={formState.google_ads_quality_score ?? ''}
-                    onChange={(e) => setFormState({ ...formState, google_ads_quality_score: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-              </div>
-            </div>
+          {(() => {
+            const inputClass = `w-full px-3.5 py-2.5 text-sm rounded-xl outline-none font-mono font-medium transition-all ${
+              theme === 'white' 
+                ? 'bg-zinc-50 border border-zinc-200 text-[#082a36] focus:border-[#76c9be] focus:bg-white focus:ring-2 focus:ring-[#76c9be]/20' 
+                : 'bg-zinc-900 border border-zinc-800 text-white focus:border-blue-500'
+            }`;
 
-            {/* Meta Ads */}
-            <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-150 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
-              <h3 className="text-sm font-bold text-purple-400 flex items-center gap-2">
-                <Share2 className="w-4 h-4" /> Meta (Facebook) Campaigns
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Spend ($)</label>
-                  <input
-                    type="number" step="any"
-                    value={formState.meta_spend ?? ''}
-                    onChange={(e) => setFormState({ ...formState, meta_spend: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Reach</label>
-                  <input
-                    type="number"
-                    value={formState.meta_reach ?? ''}
-                    onChange={(e) => setFormState({ ...formState, meta_reach: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Leads</label>
-                  <input
-                    type="number"
-                    value={formState.meta_leads ?? ''}
-                    onChange={(e) => setFormState({ ...formState, meta_leads: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs opacity-70 block mb-1">ROAS (x)</label>
-                    <input
-                      type="number" step="any"
-                      value={formState.meta_roas ?? ''}
-                      onChange={(e) => setFormState({ ...formState, meta_roas: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                    />
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  
+                  {/* Google Ads */}
+                  <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${theme === 'white' ? 'text-blue-600' : 'text-blue-400'}`}>
+                      <Globe className="w-4 h-4" /> Google Paid Campaigns
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Spend ($)</label>
+                        <input
+                          type="number" step="any"
+                          value={formState.google_ads_spend ?? ''}
+                          onChange={(e) => setFormState({ ...formState, google_ads_spend: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>ROAS (x)</label>
+                        <input
+                          type="number" step="any"
+                          value={formState.google_ads_roas ?? ''}
+                          onChange={(e) => setFormState({ ...formState, google_ads_roas: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>CTR (%)</label>
+                        <input
+                          type="number" step="any"
+                          value={formState.google_ads_ctr ?? ''}
+                          onChange={(e) => setFormState({ ...formState, google_ads_ctr: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Quality Score (1-10)</label>
+                        <input
+                          type="number" max="10" min="0"
+                          value={formState.google_ads_quality_score ?? ''}
+                          onChange={(e) => setFormState({ ...formState, google_ads_quality_score: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs opacity-70 block mb-1">Frequency</label>
-                    <input
-                      type="number" step="any"
-                      value={formState.meta_frequency ?? ''}
-                      onChange={(e) => setFormState({ ...formState, meta_frequency: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                    />
+
+                  {/* Meta Ads */}
+                  <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${theme === 'white' ? 'text-purple-600' : 'text-purple-400'}`}>
+                      <Share2 className="w-4 h-4" /> Meta (Facebook) Campaigns
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Spend ($)</label>
+                        <input
+                          type="number" step="any"
+                          value={formState.meta_spend ?? ''}
+                          onChange={(e) => setFormState({ ...formState, meta_spend: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Reach</label>
+                        <input
+                          type="number"
+                          value={formState.meta_reach ?? ''}
+                          onChange={(e) => setFormState({ ...formState, meta_reach: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Leads</label>
+                        <input
+                          type="number"
+                          value={formState.meta_leads ?? ''}
+                          onChange={(e) => setFormState({ ...formState, meta_leads: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>ROAS (x)</label>
+                          <input
+                            type="number" step="any"
+                            value={formState.meta_roas ?? ''}
+                            onChange={(e) => setFormState({ ...formState, meta_roas: parseFloat(e.target.value) || 0 })}
+                            className={inputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Frequency</label>
+                          <input
+                            type="number" step="any"
+                            value={formState.meta_frequency ?? ''}
+                            onChange={(e) => setFormState({ ...formState, meta_frequency: parseFloat(e.target.value) || 0 })}
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Web Analytics */}
+                  <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-200 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${theme === 'white' ? 'text-amber-600' : 'text-amber-400'}`}>
+                      <Globe className="w-4 h-4" /> Web Analytics & SEO Leads
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Sessions</label>
+                        <input
+                          type="number"
+                          value={formState.website_sessions ?? ''}
+                          onChange={(e) => setFormState({ ...formState, website_sessions: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Bounce Rate (%)</label>
+                        <input
+                          type="number" step="any"
+                          value={formState.bounce_rate ?? ''}
+                          onChange={(e) => setFormState({ ...formState, bounce_rate: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>SEO Organic Leads</label>
+                        <input
+                          type="number"
+                          value={formState.seo_organic_leads ?? ''}
+                          onChange={(e) => setFormState({ ...formState, seo_organic_leads: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Top Converting Page</label>
+                        <input
+                          type="text"
+                          value={formState.top_converting_page ?? ''}
+                          onChange={(e) => setFormState({ ...formState, top_converting_page: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Web Analytics */}
-            <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-150 shadow-sm' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
-              <h3 className="text-sm font-bold text-amber-400 flex items-center gap-2">
-                <Globe className="w-4 h-4" /> Web Analytics & SEO Leads
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Sessions</label>
-                  <input
-                    type="number"
-                    value={formState.website_sessions ?? ''}
-                    onChange={(e) => setFormState({ ...formState, website_sessions: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Bounce Rate (%)</label>
-                  <input
-                    type="number" step="any"
-                    value={formState.bounce_rate ?? ''}
-                    onChange={(e) => setFormState({ ...formState, bounce_rate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">SEO Organic Leads</label>
-                  <input
-                    type="number"
-                    value={formState.seo_organic_leads ?? ''}
-                    onChange={(e) => setFormState({ ...formState, seo_organic_leads: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Top Converting Page</label>
-                  <input
-                    type="text"
-                    value={formState.top_converting_page ?? ''}
-                    onChange={(e) => setFormState({ ...formState, top_converting_page: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Social Metrics */}
+                  <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
+                    <h3 className={`text-sm font-bold ${theme === 'white' ? 'text-sky-600' : 'text-sky-400'}`}>Social KPIs</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Followers (Total)</label>
+                        <input
+                          type="number"
+                          value={formState.followers_total ?? ''}
+                          onChange={(e) => setFormState({ ...formState, followers_total: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Engagement (%)</label>
+                        <input
+                          type="number" step="any"
+                          value={formState.engagement_rate ?? ''}
+                          onChange={(e) => setFormState({ ...formState, engagement_rate: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Impressions</label>
+                        <input
+                          type="number"
+                          value={formState.social_impressions ?? ''}
+                          onChange={(e) => setFormState({ ...formState, social_impressions: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Reach (Organic)</label>
+                        <input
+                          type="number"
+                          value={formState.organic_social_reach ?? ''}
+                          onChange={(e) => setFormState({ ...formState, organic_social_reach: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Social Metrics */}
-            <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-150' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
-              <h3 className="text-sm font-bold text-sky-400">Social KPIs</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Followers (Total)</label>
-                  <input
-                    type="number"
-                    value={formState.followers_total ?? ''}
-                    onChange={(e) => setFormState({ ...formState, followers_total: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
+                  {/* Agency Deliverables */}
+                  <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
+                    <h3 className={`text-sm font-bold ${theme === 'white' ? 'text-emerald-600' : 'text-emerald-400'}`}>Agency Output Activities</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Blogs Written</label>
+                        <input
+                          type="number"
+                          value={formState.blogs_written ?? ''}
+                          onChange={(e) => setFormState({ ...formState, blogs_written: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Blog Quality (1-5)</label>
+                        <input
+                          type="number" max="5" min="0" step="any"
+                          value={formState.avg_blog_quality ?? ''}
+                          onChange={(e) => setFormState({ ...formState, avg_blog_quality: parseFloat(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Backlinks Built</label>
+                        <input
+                          type="number"
+                          value={formState.backlinks_created ?? ''}
+                          onChange={(e) => setFormState({ ...formState, backlinks_created: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Creatives Made</label>
+                        <input
+                          type="number"
+                          value={formState.creatives_produced ?? ''}
+                          onChange={(e) => setFormState({ ...formState, creatives_produced: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Emails Sent</label>
+                        <input
+                          type="number"
+                          value={formState.emails_automation ?? ''}
+                          onChange={(e) => setFormState({ ...formState, emails_automation: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs block mb-1 font-medium ${theme === 'white' ? 'text-zinc-600' : 'opacity-70'}`}>Social Content Total</label>
+                        <input
+                          type="number"
+                          value={formState.social_posts_content_total ?? ''}
+                          onChange={(e) => setFormState({ ...formState, social_posts_content_total: parseInt(e.target.value) || 0 })}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Engagement (%)</label>
-                  <input
-                    type="number" step="any"
-                    value={formState.engagement_rate ?? ''}
-                    onChange={(e) => setFormState({ ...formState, engagement_rate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Impressions</label>
-                  <input
-                    type="number"
-                    value={formState.social_impressions ?? ''}
-                    onChange={(e) => setFormState({ ...formState, social_impressions: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Reach (Organic)</label>
-                  <input
-                    type="number"
-                    value={formState.organic_social_reach ?? ''}
-                    onChange={(e) => setFormState({ ...formState, organic_social_reach: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* Agency Deliverables */}
-            <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-white border-zinc-150' : 'bg-zinc-950/40 border-zinc-900/60'} space-y-4`}>
-              <h3 className="text-sm font-bold text-emerald-400">Agency Output Activities</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Blogs Written</label>
-                  <input
-                    type="number"
-                    value={formState.blogs_written ?? ''}
-                    onChange={(e) => setFormState({ ...formState, blogs_written: parseInt(e.target.value) || 0 })}
-                    className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
+                <div className="flex justify-end pt-4">
+                  <button
+                    type="submit"
+                    disabled={saving || !selectedClient}
+                    className={`flex items-center gap-2 px-8 py-3.5 rounded-2xl text-sm font-bold transition shadow-xl ${
+                      theme === 'white'
+                        ? 'bg-[#082a36] hover:bg-[#082a36]/90 text-white disabled:bg-zinc-300'
+                        : 'bg-emerald-500 hover:bg-emerald-600 text-slate-900 disabled:bg-zinc-800'
+                    }`}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? 'Saving...' : 'Save Weekly Metrics'}
+                  </button>
                 </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Blog Quality (1-5)</label>
-                  <input
-                    type="number" max="5" min="0" step="any"
-                    value={formState.avg_blog_quality ?? ''}
-                    onChange={(e) => setFormState({ ...formState, avg_blog_quality: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Backlinks Built</label>
-                  <input
-                    type="number"
-                    value={formState.backlinks_created ?? ''}
-                    onChange={(e) => setFormState({ ...formState, backlinks_created: parseInt(e.target.value) || 0 })}
-                    className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Creatives Made</label>
-                  <input
-                    type="number"
-                    value={formState.creatives_produced ?? ''}
-                    onChange={(e) => setFormState({ ...formState, creatives_produced: parseInt(e.target.value) || 0 })}
-                    className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Emails Sent</label>
-                  <input
-                    type="number"
-                    value={formState.emails_automation ?? ''}
-                    onChange={(e) => setFormState({ ...formState, emails_automation: parseInt(e.target.value) || 0 })}
-                    className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70 block mb-1">Social Content Total</label>
-                  <input
-                    type="number"
-                    value={formState.social_posts_content_total ?? ''}
-                    onChange={(e) => setFormState({ ...formState, social_posts_content_total: parseInt(e.target.value) || 0 })}
-                    className="w-full px-2 py-2 text-sm bg-zinc-900 border border-zinc-800 text-white rounded-lg outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <button
-              type="submit"
-              disabled={saving || !selectedClient}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition shadow-lg ${
-                theme === 'white'
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-zinc-300'
-                  : 'bg-emerald-500 hover:bg-emerald-600 text-slate-900 disabled:bg-zinc-800'
-              }`}
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'Saving...' : 'Save Weekly Metrics'}
-            </button>
-          </div>
+              </>
+            );
+          })()}
         </form>
       )}
     </div>
