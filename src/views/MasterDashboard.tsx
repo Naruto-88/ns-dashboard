@@ -248,13 +248,50 @@ export default function MasterDashboard() {
       const prevStartStr = format(prevStart, 'yyyy-MM-dd');
       const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
 
-      // Fetch date-precise leads from Lead Shield API for both current and previous periods
+      // 2. Real-Time Leads Dates (Friday to Thursday / Up-to-Date right now, no Google API lag)
+      let leadCurrentStart: Date, leadCurrentEnd: Date, leadPrevStart: Date, leadPrevEnd: Date;
+      if (viewMode === 'rolling') {
+        leadCurrentEnd = new Date(today);
+        leadCurrentEnd.setHours(23, 59, 59, 999);
+        leadCurrentStart = subDays(leadCurrentEnd, 6); // 7 continuous days ending today (e.g. Fri Aug 21 - Thu Aug 27)
+        leadCurrentStart.setHours(0, 0, 0, 0);
+
+        leadPrevEnd = subDays(leadCurrentStart, 1); // Thu Aug 20
+        leadPrevEnd.setHours(23, 59, 59, 999);
+        leadPrevStart = subDays(leadPrevEnd, 6); // Fri Aug 14
+        leadPrevStart.setHours(0, 0, 0, 0);
+      } else if (viewMode === '28days') {
+        leadCurrentEnd = new Date(today);
+        leadCurrentEnd.setHours(23, 59, 59, 999);
+        leadCurrentStart = subDays(leadCurrentEnd, 27);
+        leadCurrentStart.setHours(0, 0, 0, 0);
+
+        leadPrevEnd = subDays(leadCurrentStart, 1);
+        leadPrevEnd.setHours(23, 59, 59, 999);
+        leadPrevStart = subDays(leadPrevEnd, 27);
+        leadPrevStart.setHours(0, 0, 0, 0);
+      } else {
+        leadCurrentStart = new Date(currentStart);
+        leadCurrentEnd = new Date(currentEnd);
+        leadPrevStart = new Date(prevStart);
+        leadPrevEnd = new Date(prevEnd);
+      }
+
+      const leadCurrentStartStr = format(leadCurrentStart, 'yyyy-MM-dd');
+      const leadCurrentEndStr = format(leadCurrentEnd, 'yyyy-MM-dd');
+      const leadPrevStartStr = format(leadPrevStart, 'yyyy-MM-dd');
+      const leadPrevEndStr = format(leadPrevEnd, 'yyyy-MM-dd');
+
+      const leadRangeStr = `${format(leadCurrentStart, 'MMM dd')} - ${format(leadCurrentEnd, 'MMM dd')}`;
+      const leadPrevRangeStr = `${format(leadPrevStart, 'MMM dd')} - ${format(leadPrevEnd, 'MMM dd')}`;
+
+      // Fetch date-precise leads from Lead Shield API for real-time lead periods
       let currentRangeLeads: any = { clients: {} };
       let prevRangeLeads: any = { clients: {} };
       try {
         [currentRangeLeads, prevRangeLeads] = await Promise.all([
-          getLeadStatsByRange(currentStartStr, currentEndStr),
-          getLeadStatsByRange(prevStartStr, prevEndStr)
+          getLeadStatsByRange(leadCurrentStartStr, leadCurrentEndStr),
+          getLeadStatsByRange(leadPrevStartStr, leadPrevEndStr)
         ]);
       } catch (leadErr) {
         console.warn('[LEAD SHIELD] Range query fallback:', leadErr);
@@ -299,19 +336,19 @@ export default function MasterDashboard() {
 
         const resolvedCurrentLeadsTotal = (leadShieldCurrent && leadShieldCurrent.total > 0)
           ? leadShieldCurrent.total
-          : (sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_total') || currentWeekData?.leads_total || 0);
+          : (sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_total') || currentWeekData?.leads_total || 0);
 
         const resolvedCurrentLeadsLegit = (leadShieldCurrent && leadShieldCurrent.total > 0)
           ? leadShieldCurrent.genuine
-          : (sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_legit') || currentWeekData?.leads_legit || 0);
+          : (sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_legit') || currentWeekData?.leads_legit || 0);
 
         const resolvedPrevLeadsTotal = (leadShieldPrev && leadShieldPrev.total > 0)
           ? leadShieldPrev.total
-          : (sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_total') || previousWeekData?.leads_total || 0);
+          : (sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_total') || previousWeekData?.leads_total || 0);
 
         const resolvedPrevLeadsLegit = (leadShieldPrev && leadShieldPrev.total > 0)
           ? leadShieldPrev.genuine
-          : (sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_legit') || previousWeekData?.leads_legit || 0);
+          : (sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_legit') || previousWeekData?.leads_legit || 0);
         
         const resolvedCurrentPhoneCalls = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'phone_calls') || currentWeekData?.phone_calls || 0;
         const resolvedPreviousPhoneCalls = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'phone_calls') || previousWeekData?.phone_calls || 0;
@@ -364,7 +401,9 @@ export default function MasterDashboard() {
           legit: resolvedCurrentLeadsLegit,
           prevLegit: resolvedPrevLeadsLegit,
           change: calculateChange(resolvedCurrentLeadsLegit, resolvedPrevLeadsLegit),
-          details: leadShieldCurrent?.leads || []
+          details: leadShieldCurrent?.leads || [],
+          rangeStr: leadRangeStr,
+          prevRangeStr: leadPrevRangeStr
         };
 
         const phoneCalls = {
@@ -917,7 +956,7 @@ export default function MasterDashboard() {
                             </span>
                           </div>
                           <div className={`border-t pt-1 text-[10px] text-zinc-500 text-center italic ${theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'}`}>
-                            <span>Click to view inquiry details • Double-click to edit</span>
+                            <span>Period: {(row.leads as any).rangeStr || row.currentRangeStr} (Real-Time)</span>
                           </div>
                         </div>
                       }>
@@ -928,7 +967,7 @@ export default function MasterDashboard() {
                             legit: row.leads.legit,
                             total: row.leads.current,
                             prevLegit: row.leads.prevLegit,
-                            currentRangeStr: row.currentRangeStr,
+                            currentRangeStr: (row.leads as any).rangeStr || row.currentRangeStr,
                             leads: (row.leads as any).details || []
                           })}
                           onDoubleClick={(e) => {
@@ -1421,6 +1460,14 @@ export default function MasterDashboard() {
           endDate={keywordModal.endDate}
           theme={theme}
           onClose={() => setKeywordModal(null)}
+        />
+      )}
+
+      {selectedLeadsModal && (
+        <LeadsDetailModal
+          modalData={selectedLeadsModal}
+          onClose={() => setSelectedLeadsModal(null)}
+          theme={theme}
         />
       )}
 
@@ -2271,13 +2318,6 @@ function IntelligenceModal({ data, theme, onClose }: { data: { client: Client, c
           </div>
         </div>
       </div>
-      {selectedLeadsModal && (
-        <LeadsDetailModal
-          modalData={selectedLeadsModal}
-          onClose={() => setSelectedLeadsModal(null)}
-          theme={theme}
-        />
-      )}
     </div>
   );
 }
