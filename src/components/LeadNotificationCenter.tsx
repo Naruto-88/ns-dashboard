@@ -259,22 +259,23 @@ export const LeadNotificationCenter: React.FC = () => {
       )}
 
       {/* 2. NOTIFICATION BELL BUTTON WITH UNREAD BADGE */}
-      <div className="relative" ref={dropdownRef}>
+      <div className="relative shrink-0" ref={dropdownRef}>
         <button
           onClick={handleToggleDropdown}
           aria-label="Lead Notifications"
-          className={`relative p-2.5 rounded-2xl border transition-all flex items-center justify-center ${
+          title="Lead Inbound Notifications"
+          className={`relative p-2 rounded-xl border transition-all flex items-center justify-center ${
             isOpen
-              ? theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] shadow-lg' : 'bg-blue-600 text-white border-blue-600 shadow-lg'
+              ? theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] shadow-md' : 'bg-blue-600 text-white border-blue-600 shadow-md'
               : theme === 'white'
                 ? 'bg-white border-[#163f4d]/10 text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
                 : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-700'
           }`}
         >
-          <Bell size={18} className={unreadCount > 0 ? 'animate-bounce text-emerald-500' : ''} />
+          <Bell size={15} className={unreadCount > 0 ? 'animate-bounce text-emerald-500' : ''} />
           
           {unreadCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center px-1.5 rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-lg shadow-emerald-500/50 animate-pulse">
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center px-1 rounded-full bg-emerald-500 text-[9px] font-bold text-white shadow-md shadow-emerald-500/50 animate-pulse">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}

@@ -637,39 +637,40 @@ export default function MasterDashboard() {
 
   return (
     <div className="space-y-8 pb-12">
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 rounded-[40px] border relative z-50 ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/40 border-white/5 backdrop-blur-2xl'
-        }`}>
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${theme === 'white' ? 'bg-[#76c9be] shadow-[#76c9be]/20' : 'bg-blue-600 shadow-blue-600/20'}`}>
-              <LayoutDashboard className="text-white" size={24} />
-            </div>
-            <div>
-              <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Master Dashboard</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-zinc-500 text-sm font-medium   leading-none">Cross-Property Intelligence</p>
-                {viewingPeriod && (
-                  <span className={`px-2 py-0.5 rounded-full text-sm font-medium   ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-blue-600/10 text-blue-600'}`}>
-                    {format(viewingPeriod.start, 'MMM dd')} - {format(viewingPeriod.end, 'MMM dd, yyyy')}
-                  </span>
-                )}
-              </div>
+      <div className={`flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-5 md:p-6 rounded-[32px] border relative z-50 ${
+        theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/40 border-white/5 backdrop-blur-2xl'
+      }`}>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${theme === 'white' ? 'bg-[#76c9be] shadow-[#76c9be]/20' : 'bg-blue-600 shadow-blue-600/20'}`}>
+            <LayoutDashboard className="text-white" size={20} />
+          </div>
+          <div>
+            <h2 className={`text-2xl font-bold font-heading tracking-tight italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Master Dashboard</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-zinc-500 text-xs font-medium leading-none">Cross-Property Intelligence</p>
+              {viewingPeriod && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-blue-600/10 text-blue-400'}`}>
+                  {format(viewingPeriod.start, 'MMM dd')} - {format(viewingPeriod.end, 'MMM dd, yyyy')}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className={`p-1.5 rounded-2xl flex gap-1 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'
-            }`}>
+        <div className="flex flex-wrap xl:flex-nowrap items-center gap-2.5">
+          <div className={`p-1 rounded-xl flex items-center gap-0.5 border shrink-0 ${
+            theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800/80 border-white/5'
+          }`}>
             <Tooltip content="Rolling Last 7 Days vs Previous 7 Days">
               <button
                 onClick={() => setViewMode('rolling')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === 'rolling'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === 'rolling'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 Rolling 7D
               </button>
@@ -677,12 +678,13 @@ export default function MasterDashboard() {
             <Tooltip content="Last 28 Days vs Previous 28 Days">
               <button
                 onClick={() => setViewMode('28days')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === '28days'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === '28days'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 28 Days
               </button>
@@ -690,12 +692,13 @@ export default function MasterDashboard() {
             <Tooltip content="Month over Month Performance">
               <button
                 onClick={() => setViewMode('monthly')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === 'monthly'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === 'monthly'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 Monthly (MoM)
               </button>
@@ -703,12 +706,13 @@ export default function MasterDashboard() {
             <Tooltip content="3 Months Performance vs Previous 3 Months">
               <button
                 onClick={() => setViewMode('3months')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === '3months'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === '3months'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 3 Months
               </button>
@@ -716,78 +720,79 @@ export default function MasterDashboard() {
           </div>
 
           {viewMode === 'custom' && (
-            <div className={`p-1.5 rounded-2xl flex items-center gap-2 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'}`}>
+            <div className={`p-1 rounded-xl flex items-center gap-1 border shrink-0 ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'}`}>
               <input 
                 type="date" 
                 value={dateRange.start} 
                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className={`bg-transparent text-sm font-medium  outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
+                className={`bg-transparent text-xs font-medium outline-none px-1.5 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
-              <Minus size={12} className="text-zinc-500" />
+              <Minus size={10} className="text-zinc-500" />
               <input 
                 type="date" 
                 value={dateRange.end} 
                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className={`bg-transparent text-sm font-medium  outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
+                className={`bg-transparent text-xs font-medium outline-none px-1.5 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
               <button 
                 onClick={() => setViewMode('rolling')}
-                className="p-1 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
+                className="p-0.5 hover:bg-red-500/10 text-red-500 rounded transition-colors"
               >
-                <X size={14} />
+                <X size={12} />
               </button>
             </div>
           )}
 
           <button 
             onClick={() => setViewMode('custom')}
-            className={`p-2.5 rounded-xl border transition-all ${
+            title="Custom Date Range"
+            className={`p-2 rounded-xl border transition-all shrink-0 ${
               viewMode === 'custom'
-                ? theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] shadow-lg' : 'bg-blue-600 text-white border-blue-600 shadow-lg'
+                ? theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] shadow-md' : 'bg-blue-600 text-white border-blue-600 shadow-md'
                 : theme === 'white'
                   ? 'bg-white border-[#163f4d]/10 text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                  : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-white hover:bg-zinc-700'
+                  : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-700'
             }`}
           >
-            <Calendar size={18} />
+            <Calendar size={15} />
           </button>
 
-          <div className="relative group">
-            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${theme === 'white' ? 'text-[#607a80] group-focus-within:text-[#76c9be]' : 'text-zinc-500 group-focus-within:text-blue-500'}`} size={18} />
+          <div className="relative group shrink-0">
+            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${theme === 'white' ? 'text-[#607a80] group-focus-within:text-[#76c9be]' : 'text-zinc-500 group-focus-within:text-blue-500'}`} size={14} />
             <input
               type="text"
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium outline-none transition-all ${theme === 'white' 
+              className={`pl-8 pr-3 py-1.5 border rounded-xl text-xs font-medium outline-none transition-all ${theme === 'white' 
                 ? 'bg-white border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' 
                 : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500'
-                } w-48`}
+                } w-36 lg:w-40`}
             />
           </div>
 
           <button
             onClick={handleLiveSync}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${
               theme === 'white' 
-                ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20' 
-                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20'
+                ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-md shadow-[#76c9be]/20' 
+                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-md shadow-emerald-600/20'
             }`}
           >
-            <RefreshCcw size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
+            <RefreshCcw size={12} className={isLiveSyncing ? 'animate-spin' : ''} />
             Live Sync
           </button>
 
           <button
             onClick={handleSyncToSheets}
             disabled={isSyncingSheets}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${
               theme === 'white' 
-                ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 shadow-lg border border-[#082a36]' 
-                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg border border-blue-500 shadow-blue-600/20'
+                ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 shadow-md border border-[#082a36]' 
+                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-md border border-blue-500 shadow-blue-600/20'
             } disabled:opacity-50`}
           >
-            <FileSpreadsheet size={14} className={isSyncingSheets ? 'animate-pulse' : ''} />
+            <FileSpreadsheet size={12} className={isSyncingSheets ? 'animate-pulse' : ''} />
             {isSyncingSheets ? 'Syncing...' : 'Sync to Sheets'}
           </button>
 
@@ -1241,31 +1246,7 @@ export default function MasterDashboard() {
                           </span>
                         </div>
 
-                        {/* Target Progress Card */}
-                        {row.ahrefs.targetDr > 0 ? (
-                          <div className={`p-2.5 rounded-xl border ${
-                            theme === 'white' ? 'bg-purple-50/50 border-purple-100' : 'bg-purple-950/20 border-purple-500/20'
-                          }`}>
-                            <div className="flex justify-between items-center text-xs mb-1.5">
-                              <span className="text-purple-600 dark:text-purple-400 font-semibold">Target Domain Rating</span>
-                              <span className="font-bold font-mono">
-                                {row.ahrefs.dr} <span className="text-zinc-400 font-normal">/ {row.ahrefs.targetDr}</span>
-                              </span>
-                            </div>
-                            <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
-                              <div 
-                                className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(100, Math.max(0, (row.ahrefs.dr / row.ahrefs.targetDr) * 100))}%` }}
-                              />
-                            </div>
-                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mt-1">
-                              <span>Progress</span>
-                              <span className="font-semibold text-purple-600 dark:text-purple-400">
-                                {((row.ahrefs.dr / row.ahrefs.targetDr) * 100).toFixed(0)}% Achieved
-                              </span>
-                            </div>
-                          </div>
-                        ) : null}
+
 
                         {/* 3-Metric Comparison Grid */}
                         <div className="space-y-1.5 text-xs font-mono">
@@ -1349,17 +1330,12 @@ export default function MasterDashboard() {
                         )}
                       </div>
                     }>
-                      {/* In-Cell Display (Option A) */}
-                      <div className="flex flex-col items-center gap-1">
+                      {/* In-Cell Display */}
+                      <div className="flex flex-col items-center gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className={`font-bold text-sm tracking-tight font-heading ${theme === 'white' ? 'text-purple-700' : 'text-purple-400'}`}>
                             DR: {row.ahrefs.dr || '-'}
                           </span>
-                          {row.ahrefs.targetDr > 0 && (
-                            <span className="text-[11px] font-medium text-zinc-500 opacity-80">
-                              /{row.ahrefs.targetDr}
-                            </span>
-                          )}
                           {row.ahrefs.hasPrev && (
                             <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded font-mono ${
                               row.ahrefs.dr - row.ahrefs.prevDr > 0 
@@ -1372,16 +1348,6 @@ export default function MasterDashboard() {
                             </span>
                           )}
                         </div>
-                        
-                        {/* Mini Progress Bar if Target DR is set */}
-                        {row.ahrefs.targetDr > 0 ? (
-                          <div className="w-16 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-purple-500 rounded-full transition-all duration-300"
-                              style={{ width: `${Math.min(100, Math.max(0, (row.ahrefs.dr / row.ahrefs.targetDr) * 100))}%` }}
-                            />
-                          </div>
-                        ) : null}
 
                         <div className={`flex items-center gap-1.5 text-[11px] font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                           <span>BL: {row.ahrefs.backlinks >= 1000 ? `${(row.ahrefs.backlinks / 1000).toFixed(1)}K` : row.ahrefs.backlinks}</span>
