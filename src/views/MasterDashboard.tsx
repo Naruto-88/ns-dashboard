@@ -119,6 +119,15 @@ export default function MasterDashboard() {
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 80);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSyncToSheets = async () => {
     if (rows.length === 0) {
@@ -800,14 +809,31 @@ export default function MasterDashboard() {
         </div>
       </div>
 
-      <div className={`rounded-[20px] border backdrop-blur-xl shadow-2xl overflow-hidden ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
-        }`}>
-        <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
+      <div className={`rounded-[20px] border backdrop-blur-xl shadow-2xl overflow-hidden ${
+        theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
+      }`}>
+        <div 
+          onScroll={(e) => {
+            const target = e.currentTarget;
+            setIsScrolled(target.scrollTop > 40 || window.scrollY > 80);
+          }}
+          className="overflow-x-auto max-h-[calc(100vh-100px)] overflow-y-auto custom-scrollbar"
+        >
           <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-[30]">
-              <tr className={`border-b ${theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl'}`}>
+            <thead className={`sticky top-0 z-[45] transition-all duration-200 ${
+              isScrolled 
+                ? 'shadow-lg backdrop-blur-xl border-b' 
+                : 'border-b'
+            }`}>
+              <tr className={`transition-all duration-200 ${
+                theme === 'white' 
+                  ? isScrolled ? 'bg-[#082a36]/95 border-[#163f4d]/30 text-white backdrop-blur-md' : 'bg-[#082a36] border-[#163f4d]/20 text-white' 
+                  : isScrolled ? 'bg-zinc-950/95 border-white/10 text-[#607a80] backdrop-blur-md shadow-md' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl text-[#607a80]'
+              }`}>
                 <th
-                  className={`px-6 py-2 text-sm font-medium   sticky left-0 z-[40] border-r cursor-pointer transition-colors rounded-tl-[20px] ${
+                  className={`px-6 text-sm font-medium sticky left-0 z-[46] border-r cursor-pointer transition-all duration-200 rounded-tl-[20px] ${
+                    isScrolled ? 'py-1.5' : 'py-2'
+                  } ${
                     theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white hover:text-[#76c9be]' : 'bg-zinc-950 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)] text-[#607a80] hover:text-[#76c9be]'
                   }`}
                   onClick={() => handleSort('client')}
@@ -818,75 +844,103 @@ export default function MasterDashboard() {
                     {sortConfig?.key === 'client' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-2 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('pm')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-2'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('pm')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Project Manager Code" position="bottom">PM</Tooltip>
                     {sortConfig?.key === 'pm' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('leads')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('leads')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Verified high-quality leads" position="bottom">Legit Leads</Tooltip>
                     {sortConfig?.key === 'leads' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GA4 Phone Calls" position="bottom">Phone Calls (C/P)</Tooltip>
                     {sortConfig?.key === 'phone_calls' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Keywords in top 3 positions" position="bottom">Top 3</Tooltip>
                     {sortConfig?.key === 'top3' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top10')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top10')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Actual vs Target keywords in top 10" position="bottom">Top 10 (A/T)</Tooltip>
                     {sortConfig?.key === 'top10' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('ctr')}>
+                <th className={`px-4 text-center text-sm font-medium cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-4'
+                } ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('ctr')}>
                   <div className="flex items-center justify-center gap-1">
                     Avg CTR {sortConfig?.key === 'ctr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('impressions')}>
+                <th className={`px-4 text-center text-sm font-medium cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-4'
+                } ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('impressions')}>
                   <div className="flex items-center justify-center gap-1">
                     Impressions {sortConfig?.key === 'impressions' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('position')}>
+                <th className={`px-4 text-center text-sm font-medium cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-4'
+                } ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('position')}>
                   <div className="flex items-center justify-center gap-1">
                     Avg Pos {sortConfig?.key === 'position' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('gsc')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('gsc')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GSC Clicks" position="bottom">GSC Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'gsc' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GA4 Users" position="bottom">GA4 Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'ga4' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Ahrefs Domain Rating & Backlinks" position="bottom">Ahrefs DR & BL</Tooltip>
                     {sortConfig?.key === 'dr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
+                <th className={`px-4 text-sm font-medium text-center transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
                   <Tooltip content="Weekly production activities" position="bottom">Activity</Tooltip>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Intelligence</th>
-                <th className={`px-8 py-2 text-sm font-medium   text-center sticky right-0 z-[40] border-l cursor-pointer hover:text-[#76c9be] transition-colors rounded-tr-[20px] ${
-                  theme === 'white' ? 'bg-[#082a36] text-white border-[#163f4d]/20' : 'bg-inherit text-[#607a80] shadow-[-2px_0_10px_rgba(3,7,18,0.5)]'
+                <th className={`px-4 text-sm font-medium text-center transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Intelligence</th>
+                <th className={`px-8 text-sm font-medium text-center sticky right-0 z-[46] border-l cursor-pointer hover:text-[#76c9be] transition-all duration-200 rounded-tr-[20px] ${
+                  isScrolled ? 'py-1.5' : 'py-2'
+                } ${
+                  theme === 'white' ? 'bg-[#082a36] text-white border-[#163f4d]/20' : 'bg-zinc-950 text-[#607a80] border-white/5 shadow-[-2px_0_10px_rgba(3,7,18,0.5)]'
                 }`} onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">
                     Status

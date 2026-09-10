@@ -151,7 +151,7 @@ function Layout({ children, user }: { children: React.ReactNode; user: any }) {
       'bg-black'
     } ${theme === 'white' ? 'text-slate-900' : 'text-white'}`}>
       <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} user={user} />
-      <main className="flex-1 p-8 overflow-x-hidden">
+      <main className="flex-1 p-8 overflow-x-clip">
         <AnimatePresence mode="wait">
           <motion.div
             key={useLocation().pathname}
