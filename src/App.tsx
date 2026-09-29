@@ -20,7 +20,9 @@ import {
   Lock,
   BrainCircuit,
   Target,
-  Megaphone
+  Megaphone,
+  ShieldCheck,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Dashboard from './views/Dashboard';
@@ -37,6 +39,11 @@ import Tooltip from './components/Tooltip';
 import AdsDashboard from './views/AdsDashboard';
 import AdsMasterDashboard from './views/AdsMasterDashboard';
 import AdsWeeklyInputs from './views/AdsWeeklyInputs';
+import SiteHealth from './views/SiteHealth';
+import StrategicReviewHub from './views/StrategicReviewHub';
+import OnPageSeoAutopilot from './views/OnPageSeoAutopilot';
+import AiBlogStudio from './views/AiBlogStudio';
+import { PenTool, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import React from 'react';
 import { auth, supabase } from './lib/supabase';
@@ -59,6 +66,10 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Keyword Tracking', icon: Key, path: '/keywords' },
     { name: 'Weekly Data', icon: Calendar, path: '/weekly' },
     { name: 'Weekly Ads Entry', icon: Calendar, path: '/ads-inputs' },
+    { name: 'Site Health & Plugins', icon: ShieldCheck, path: '/site-health' },
+    { name: 'Strategic Review Hub', icon: Compass, path: '/strategic-review' },
+    { name: 'On-Page SEO Autopilot', icon: Sparkles, path: '/seo-autopilot' },
+    { name: 'AI Blog Studio', icon: PenTool, path: '/blog-studio' },
   ];
 
   const adminNavItems = [
@@ -66,9 +77,16 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Google Settings', icon: Settings, path: '/settings' },
   ];
 
+  const isWriter = user?.email?.includes('writer') || user?.email?.includes('editor');
   const isAdmin = user?.email === 'weerasinghemelaka1@gmail.com' || user?.email === 'melaka@team.com';
 
-  const visibleItems = isAdmin ? [...navItems, ...adminNavItems] : navItems;
+  // If Content Writer, only show AI Blog Studio & On-Page SEO
+  const writerNavItems = [
+    { name: 'AI Blog Studio', icon: PenTool, path: '/blog-studio' },
+    { name: 'On-Page SEO Autopilot', icon: Sparkles, path: '/seo-autopilot' },
+  ];
+
+  const visibleItems = isWriter ? writerNavItems : (isAdmin ? [...navItems, ...adminNavItems] : navItems);
 
   return (
     <aside className={`${isCollapsed ? 'w-20' : 'w-64'} ${
@@ -189,7 +207,7 @@ function Login() {
     setError(null);
     setLoading(true);
     try {
-      const team = ['Melaka', 'Amit', 'Sai', 'Vinoj', 'Sash', 'Lidusha', 'Thisura'];
+      const team = ['Melaka', 'Amit', 'Sai', 'Vinoj', 'Sash', 'Lidusha', 'Thisura', 'Writer', 'Editor'];
       let targetEmail = email.trim().toLowerCase();
       
       // If user provided just a name from the team, convert to team email
@@ -359,6 +377,10 @@ export default function App() {
           <Route path="/ads-master" element={<AdsMasterDashboard />} />
           <Route path="/ads-growth" element={<AdsDashboard />} />
           <Route path="/ads-inputs" element={<AdsWeeklyInputs />} />
+          <Route path="/site-health" element={<SiteHealth />} />
+          <Route path="/strategic-review" element={<StrategicReviewHub />} />
+          <Route path="/seo-autopilot" element={<OnPageSeoAutopilot />} />
+          <Route path="/blog-studio" element={<AiBlogStudio />} />
           {isAdmin && (
             <>
               <Route path="/clients" element={<ClientManagement />} />

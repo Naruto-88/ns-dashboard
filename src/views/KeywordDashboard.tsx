@@ -41,6 +41,8 @@ export default function KeywordDashboard() {
   const [history, setHistory] = useState<KeywordHistory[]>([]);
   const [prevHistory, setPrevHistory] = useState<KeywordHistory[]>([]);
   const [gscData, setGscData] = useState<any>(null);
+  const [ahrefsMetrics, setAhrefsMetrics] = useState<Record<string, { volume: number; difficulty?: number; cpc?: number }>>({});
+  const [syncingAhrefs, setSyncingAhrefs] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [bulkInput, setBulkInput] = useState('');
@@ -87,6 +89,7 @@ export default function KeywordDashboard() {
   const fetchData = async (forceLive = false) => {
     if (!selectedClient) return;
 
+    setAhrefsMetrics({});
     const cacheKey = `gsc_insights_${selectedClient}_${range.startDate}_${range.endDate}`;
 
     // 1. Check browser Session Storage cache first (if not a manual forced live refresh)
@@ -101,7 +104,14 @@ export default function KeywordDashboard() {
           setGscData(parsed);
           setHistory([]);
           setPrevHistory([]);
-          setLoading(false);
+          // Still fetch stored Ahrefs KD and Search Volume metrics
+          fetch(`/api/keywords/metrics?clientId=${selectedClient}`)
+            .then(r => r.json())
+            .then(d => {
+              if (d.metrics) setAhrefsMetrics(d.metrics);
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
           return;
         } catch (e) {
           console.error("Failed to parse cached GSC insights:", e);
@@ -113,32 +123,75 @@ export default function KeywordDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [k, h, ph, gsc] = await Promise.all([
+      // 1. Fetch internal keywords and history first (guaranteed to succeed even if Google Search Console OAuth token is expired)
+      const [k, h, ph] = await Promise.all([
         getKeywords(selectedClient),
         getKeywordHistory(selectedClient, range),
-        getKeywordHistory(selectedClient, getPreviousPeriod(range)),
-        getInsights(selectedClient, range)
+        getKeywordHistory(selectedClient, getPreviousPeriod(range))
       ]);
       setKeywords(k);
       setHistory(h);
       setPrevHistory(ph);
-      setGscData(gsc);
 
-      // 2. Cache the loaded GSC results in browser storage to prevent repeat API calls
-      if (gsc) {
-        sessionStorage.setItem(cacheKey, JSON.stringify(gsc));
+      // 2. Fetch GSC Insights separately so a Google OAuth token issue won't block keywords from displaying
+      let gsc: any = null;
+      try {
+        gsc = await getInsights(selectedClient, range);
+        setGscData(gsc);
+        if (gsc) {
+          sessionStorage.setItem(cacheKey, JSON.stringify(gsc));
+        }
+      } catch (gscErr: any) {
+        console.warn("GSC Insights sync warning (Google token/API):", gscErr);
+        // Show soft warning without breaking keywords table
+        if (forceLive) {
+          setError(gscErr.message || 'Search Console token expired. Please re-authenticate in Google Settings.');
+        }
       }
 
-      if (forceLive) {
+      // 3. Fetch cached Ahrefs metrics for keywords
+      fetch(`/api/keywords/metrics?clientId=${selectedClient}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.metrics) setAhrefsMetrics(d.metrics);
+        })
+        .catch(() => {});
+
+      if (forceLive && gsc) {
         setSuccessMsg('Satellite keyword metrics successfully synced from Search Console!');
         setTimeout(() => setSuccessMsg(null), 5000);
       }
     } catch (err: any) {
       console.error("Failed to fetch keyword intelligence:", err);
-      setError(err.message || 'Live keyword sync failed.');
+      setError(err.message || 'Failed to load keywords.');
     } finally {
       setLoading(false);
       setIsLiveSyncing(false);
+    }
+  };
+
+  const handleAhrefsSync = async () => {
+    if (!selectedClient || keywords.length === 0) return;
+    setSyncingAhrefs(true);
+    try {
+      const res = await fetch('/api/keywords/ahrefs-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: selectedClient,
+          queries: keywords.map(k => k.query)
+        })
+      });
+      const data = await res.json();
+      if (data.metrics) {
+        setAhrefsMetrics(data.metrics);
+        setSuccessMsg(`Successfully synced search volumes for ${data.count || keywords.length} keywords!`);
+        setTimeout(() => setSuccessMsg(null), 5000);
+      }
+    } catch (e: any) {
+      setError('Ahrefs volume sync failed: ' + e.message);
+    } finally {
+      setSyncingAhrefs(false);
     }
   };
 
@@ -159,13 +212,23 @@ export default function KeywordDashboard() {
       const currPos = avg(h, 'position');
       const prevPos = avg(ph, 'position');
 
-      // Match with Live GSC Data
-      const gscMatch = gscData?.queries?.find((q: any) => q.keys[0].toLowerCase() === kw.query.toLowerCase());
-      const prevGscMatch = gscData?.prevQueries?.find((q: any) => q.keys[0].toLowerCase() === kw.query.toLowerCase());
+      // Match with Live GSC Data (handles both query string and keys[0] array)
+      const cleanKw = kw.query.toLowerCase().trim();
+      const gscMatch = gscData?.queries?.find((q: any) => {
+        const qName = (q.keys?.[0] || q.query || '').toLowerCase().trim();
+        return qName === cleanKw;
+      });
+      const prevGscMatch = gscData?.prevQueries?.find((q: any) => {
+        const qName = (q.keys?.[0] || q.query || '').toLowerCase().trim();
+        return qName === cleanKw;
+      });
 
       const resolvedCurrentPos = currPos || gscMatch?.position || null;
       const resolvedPreviousPos = prevPos || prevGscMatch?.position || null;
       const comp = calculatePositionComparison(resolvedCurrentPos || 0, resolvedPreviousPos);
+
+      const cleanQuery = kw.query.toLowerCase().trim();
+      const ahrefsInfo = ahrefsMetrics[cleanQuery] || null;
 
       return {
         ...kw,
@@ -177,7 +240,10 @@ export default function KeywordDashboard() {
         gscImpressions: gscMatch?.impressions || 0,
         gscPosition: gscMatch?.position || 0,
         prevGscClicks: prevGscMatch?.clicks || 0,
-        prevGscPosition: prevGscMatch?.position || 0
+        prevGscPosition: prevGscMatch?.position || 0,
+        volume: ahrefsInfo?.volume || 0,
+        difficulty: ahrefsInfo?.difficulty || null,
+        cpc: ahrefsInfo?.cpc || null
       };
     });
 
@@ -220,7 +286,7 @@ export default function KeywordDashboard() {
     }
 
     return result;
-  }, [keywords, history, prevHistory, gscData, sortConfig]);
+  }, [keywords, history, prevHistory, gscData, ahrefsMetrics, sortConfig]);
 
   const handleSort = (key: string) => {
     setSortConfig(current => ({
@@ -297,12 +363,21 @@ export default function KeywordDashboard() {
           </button>
           <button 
             onClick={() => fetchData(true)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm   transition-all shadow-xl active:scale-95 ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm transition-all shadow-xl active:scale-95 ${
               theme === 'white' ? 'bg-zinc-800 text-white shadow-zinc-800/20 hover:bg-zinc-700' : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
             <Search size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
             Live Sync
+          </button>
+          <button 
+            onClick={handleAhrefsSync}
+            disabled={syncingAhrefs || keywords.length === 0}
+            title="One-time sync search volume and keyword difficulty from Ahrefs API"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-2xl font-medium text-sm transition-all shadow-xl active:scale-95 bg-gradient-to-r from-amber-600 to-orange-500 hover:brightness-110 text-white shadow-orange-500/20 disabled:opacity-50"
+          >
+            <TrendingUp size={14} className={syncingAhrefs ? 'animate-spin' : ''} />
+            {syncingAhrefs ? 'Fetching Volume...' : 'Ahrefs Volume'}
           </button>
         </div>
       </div>
@@ -341,6 +416,16 @@ export default function KeywordDashboard() {
                     </Tooltip>
                     {sortConfig?.key === 'query' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
+                </th>
+                <th className="px-5 py-2 text-center">
+                  <Tooltip content="Monthly organic search volume (Ahrefs API)">
+                    Search Vol
+                  </Tooltip>
+                </th>
+                <th className="px-5 py-2 text-center">
+                  <Tooltip content="Keyword Difficulty KD (0-100)">
+                    KD
+                  </Tooltip>
                 </th>
                 <th className="px-6 py-2 cursor-pointer hover:text-blue-500 transition-colors" onClick={() => handleSort('gscClicks')}>
                   <div className="flex items-center gap-2 justify-center">
@@ -386,11 +471,35 @@ export default function KeywordDashboard() {
                     <div className="space-y-1">
                       <p className={`font-medium font-heading  tracking-tight text-sm italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{kw.query}</p>
                       {kw.landing_page_url && (
-                        <a href={kw.landing_page_url} target="_blank" className={`text-sm font-medium flex items-center gap-1   transition-all ${theme === 'white' ? 'text-[#607a80] hover:text-[#76c9be]' : 'text-zinc-500 hover:text-blue-500'}`}>
+                        <a href={kw.landing_page_url} target="_blank" className={`text-sm font-medium flex items-center gap-1 transition-all ${theme === 'white' ? 'text-[#607a80] hover:text-[#76c9be]' : 'text-zinc-500 hover:text-blue-500'}`}>
                           Target <ExternalLink size={10} />
                         </a>
                       )}
                     </div>
+                  </td>
+                  <td className="px-5 py-2 text-center">
+                    <span className={`text-xs font-mono font-bold ${
+                      kw.volume > 0 
+                        ? (theme === 'white' ? 'text-zinc-800' : 'text-zinc-200') 
+                        : 'text-zinc-400 italic'
+                    }`}>
+                      {kw.volume > 0 ? kw.volume.toLocaleString() : '-'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-2 text-center">
+                    {kw.difficulty !== null && kw.difficulty !== undefined ? (
+                      <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                        kw.difficulty < 30 
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
+                          : kw.difficulty < 60 
+                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' 
+                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                      }`}>
+                        {kw.difficulty}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 italic text-xs">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-2 text-center">
                     <div className="flex flex-col items-center">
@@ -475,6 +584,20 @@ export default function KeywordDashboard() {
                   </td>
                 </tr>
               ))}
+              {!loading && keywordMetrics.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-8 py-12 text-center">
+                    <div className="max-w-sm mx-auto space-y-2">
+                      <p className={`text-sm font-semibold ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+                        No tracked keywords for this client yet.
+                      </p>
+                      <p className={`text-xs ${theme === 'white' ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                        Click "Bulk Inject" above to add keywords or import your strategy target keywords.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

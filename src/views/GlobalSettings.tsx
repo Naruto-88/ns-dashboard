@@ -66,6 +66,7 @@ export default function GlobalSettings() {
   const [gptKey, setGptKey] = useState('');
   const [ahrefsKey, setAhrefsKey] = useState('');
   const [googleSheetId, setGoogleSheetId] = useState('');
+  const [defaultAiProvider, setDefaultAiProvider] = useState<'claude' | 'gpt' | 'gemini'>('gemini');
 
   const fetchKeys = async () => {
     try {
@@ -89,6 +90,7 @@ export default function GlobalSettings() {
         const gpt = data.keys.find((k: any) => k.id === 'gpt');
         const ahrefs = data.keys.find((k: any) => k.id === 'ahrefs');
         const sheet = data.keys.find((k: any) => k.id === 'google_sheet_id');
+        const aiProvider = data.keys.find((k: any) => k.id === 'default_ai_provider');
         
         if (gemini) setGeminiKey(gemini.key_value);
         if (gemini2) setGeminiKey2(gemini2.key_value);
@@ -98,6 +100,9 @@ export default function GlobalSettings() {
         if (gpt) setGptKey(gpt.key_value);
         if (ahrefs) setAhrefsKey(ahrefs.key_value);
         if (sheet) setGoogleSheetId(sheet.key_value);
+        if (aiProvider && (aiProvider.key_value === 'claude' || aiProvider.key_value === 'gpt' || aiProvider.key_value === 'gemini')) {
+          setDefaultAiProvider(aiProvider.key_value);
+        }
       }
     } catch (e) {
       console.error('Error fetching API keys:', e);
@@ -259,6 +264,45 @@ export default function GlobalSettings() {
               </div>
 
               <div className="space-y-6">
+                {/* PRIMARY STRATEGIC AI ENGINE SELECTION */}
+                <div className={`p-6 rounded-2xl border ${theme === 'white' ? 'bg-[#76c9be]/5 border-[#163f4d]/20' : 'bg-zinc-950 border-blue-500/20 shadow-lg shadow-blue-500/5'}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <label className={`text-sm font-bold flex items-center gap-2 ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                        <Zap size={16} className="text-amber-500" />
+                        Primary AI Model for Strategic Review & Analysis
+                      </label>
+                      <p className={`text-xs mt-1 ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                        Select which high-intelligence LLM to use by default for Weekly Strategic Reviews, Executive Action generation & technical audits.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={defaultAiProvider}
+                        onChange={async (e) => {
+                          const val = e.target.value as any;
+                          setDefaultAiProvider(val);
+                          await handleSaveKey('default_ai_provider', val);
+                        }}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border outline-none cursor-pointer shadow-sm ${
+                          theme === 'white' 
+                            ? 'bg-white border-[#163f4d]/20 text-[#082a36] focus:border-[#76c9be]' 
+                            : 'bg-zinc-900 border-white/10 text-white focus:border-blue-500'
+                        }`}
+                      >
+                        <option value="claude">Anthropic Claude (Sonnet 3.5 / 4.6) - Recommended</option>
+                        <option value="gpt">OpenAI ChatGPT (GPT-4o / GPT-4o-mini)</option>
+                        <option value="gemini">Google Gemini (Gemini 1.5 Pro / Flash)</option>
+                      </select>
+
+                      {savingKeyId === 'default_ai_provider' && (
+                        <RefreshCw size={14} className="animate-spin text-blue-500" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Gemini Key */}
                 <div className={`p-5 rounded-2xl border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/5'}`}>
                   <label className="text-sm font-medium   text-zinc-500">Google Gemini API Key</label>

@@ -483,6 +483,36 @@ CREATE TABLE IF NOT EXISTS public.google_tokens (
   last_connected TIMESTAMPTZ
 );
 
+-- Site Health & Remote WordPress Bridge
+CREATE TABLE IF NOT EXISTS public.site_health_checks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  last_scanned_at TIMESTAMPTZ DEFAULT now(),
+  site_url TEXT,
+  http_status INTEGER,
+  response_time_ms INTEGER,
+  is_online BOOLEAN DEFAULT true,
+  ssl_valid BOOLEAN DEFAULT false,
+  ssl_days_left INTEGER DEFAULT 0,
+  ssl_issuer TEXT,
+  sitemap_status TEXT,
+  sitemap_url TEXT,
+  sitemap_count INTEGER DEFAULT 0,
+  robots_status TEXT,
+  has_noindex BOOLEAN DEFAULT false,
+  wp_connected BOOLEAN DEFAULT false,
+  wp_version TEXT,
+  php_version TEXT,
+  plugins_total INTEGER DEFAULT 0,
+  plugins_outdated INTEGER DEFAULT 0,
+  plugins_data JSONB DEFAULT '[]'::jsonb,
+  issues_summary JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT uq_site_health_client UNIQUE (client_id)
+);
+
+
 -- Import Logs
 CREATE TABLE IF NOT EXISTS public.import_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1387,30 +1417,54 @@ NOTIFY pgrst, 'reload schema';
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-500 ml-1">WordPress Website URL</label>
-                  <input
-                    type="url"
-                    value={formData.wordpress_url || ''}
-                    onChange={(e) => setFormData({...formData, wordpress_url: e.target.value})}
-                    placeholder="https://client-site.com"
-                    className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`}
-                  />
+              {/* WordPress Bridge & Secret Key Card */}
+              <div className={`p-5 rounded-2xl border space-y-4 ${
+                theme === 'white' ? 'bg-blue-50/50 border-blue-200' : 'bg-blue-950/20 border-blue-500/20'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
+                      <Zap size={16} />
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                        WordPress Bridge & Remote MCP Connection
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase">
+                          No Application Password Needed
+                        </span>
+                      </h4>
+                      <p className="text-xs text-zinc-400">
+                        Install <strong>"MC Site Bridge"</strong> plugin on the client's WordPress site, then paste the Authorization Key generated there below.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-500 ml-1">SEO Webhook Secret Key</label>
-                  <input
-                    type="text"
-                    value={formData.seo_webhook_secret || ''}
-                    onChange={(e) => setFormData({...formData, seo_webhook_secret: e.target.value})}
-                    placeholder="Enter webhook secret token"
-                    className={`w-full px-5 py-4 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 ${
-                      theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
-                    }`}
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-400 ml-1">WordPress Website URL</label>
+                    <input
+                      type="url"
+                      value={formData.wordpress_url || ''}
+                      onChange={(e) => setFormData({...formData, wordpress_url: e.target.value})}
+                      placeholder="https://client-site.com"
+                      className={`w-full px-4 py-3 border rounded-xl text-xs font-medium outline-none focus:border-blue-500 ${
+                        theme === 'white' ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/10 text-white'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-400 ml-1">MC Site Bridge Authorization Key</label>
+                    <input
+                      type="text"
+                      value={formData.seo_webhook_secret || ''}
+                      onChange={(e) => setFormData({...formData, seo_webhook_secret: e.target.value})}
+                      placeholder="e.g. ns_49b9170e..."
+                      className={`w-full px-4 py-3 border rounded-xl text-xs font-mono outline-none focus:border-blue-500 ${
+                        theme === 'white' ? 'bg-white border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/10 text-emerald-400 font-bold'
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
 
