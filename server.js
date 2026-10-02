@@ -6065,6 +6065,244 @@ app.get("/api/site-health/all", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+app.get("/api/site-health/plugin-updates-report", async (req, res) => {
+  try {
+    const { data: clients } = await supabase2.from("clients").select("id, name, short_code, gsc_site_url, wordpress_url, seo_webhook_secret, api_import_enabled").order("name");
+    let cachedRows = [];
+    try {
+      const { data } = await supabase2.from("site_health_checks").select("*");
+      if (data) cachedRows = data;
+    } catch {
+    }
+    const localStoreMap = await getSiteHealthStoreAll().catch(() => ({}));
+    const activeClients = (clients || []).filter((c) => c.api_import_enabled !== false);
+    const siteAudits = activeClients.map((c) => {
+      const dbRecord = cachedRows.find((r) => r.client_id === c.id);
+      const memRecord = siteHealthMemoryCache.get(c.id);
+      const localRecord = localStoreMap[c.id];
+      const candidates = [
+        dbRecord ? { ...dbRecord, time: new Date(dbRecord.last_scanned_at || dbRecord.updated_at || 0).getTime() } : null,
+        memRecord ? { ...memRecord, time: new Date(memRecord.scannedAt || 0).getTime() } : null,
+        localRecord ? { ...localRecord, time: new Date(localRecord.lastScannedAt || localRecord.scannedAt || 0).getTime() } : null
+      ].filter(Boolean);
+      candidates.sort((a, b) => b.time - a.time);
+      const record = candidates[0] || null;
+      if (!record) return null;
+      const plugins = (record.plugins_data || record.pluginsData || []).filter((p) => p && p.has_update);
+      if (plugins.length === 0) return null;
+      return {
+        clientId: c.id,
+        clientName: c.name,
+        siteUrl: record.site_url || record.siteUrl || extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
+        wpVersion: record.wp_version || record.wpVersion || "Detected",
+        phpVersion: record.php_version || record.phpVersion || "Detected",
+        totalPlugins: record.plugins_total ?? record.pluginsTotal ?? 0,
+        outdatedCount: plugins.length,
+        plugins: plugins.map((p) => {
+          const safety = checkPluginSafety(p.slug, p.name);
+          return {
+            name: p.name || p.slug,
+            slug: p.slug,
+            currentVersion: p.current_version,
+            newVersion: p.new_version || "Latest",
+            isRestricted: safety.isRestricted,
+            category: safety.category,
+            riskLevel: safety.riskLevel
+          };
+        })
+      };
+    }).filter(Boolean);
+    let totalUpdates = 0;
+    let safeCount = 0;
+    let criticalCount = 0;
+    siteAudits.forEach((site) => {
+      totalUpdates += site.plugins.length;
+      site.plugins.forEach((p) => {
+        if (p.isRestricted) criticalCount++;
+        else safeCount++;
+      });
+    });
+    const currentDateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    let cardsHtml = "";
+    siteAudits.forEach((site) => {
+      const hasCritical = site.plugins.some((p) => p.isRestricted);
+      const criticalPlugins = site.plugins.filter((p) => p.isRestricted);
+      let rowsHtml = "";
+      site.plugins.forEach((p) => {
+        const badge = p.isRestricted ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">\u{1F512} Staging Required (${p.riskLevel})</span>` : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">\u2713 1-Click Safe Update</span>`;
+        rowsHtml += `
+          <tr class="hover:bg-slate-800/40 transition-colors">
+            <td class="py-3 px-5 font-medium text-white">
+              <div class="flex flex-col">
+                <span class="text-sm font-semibold text-slate-100">${p.name}</span>
+                <span class="text-[11px] text-slate-500 font-mono">${p.slug}</span>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-slate-300">${p.category}</td>
+            <td class="py-3 px-4 font-mono text-slate-400">${p.currentVersion}</td>
+            <td class="py-3 px-4 font-mono font-bold text-amber-400">${p.newVersion}</td>
+            <td class="py-3 px-5 text-right">${badge}</td>
+          </tr>
+        `;
+      });
+      cardsHtml += `
+        <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="${hasCritical}" data-safe-only="${criticalPlugins.length === 0}">
+          <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+            <div>
+              <div class="flex items-center gap-2.5 flex-wrap">
+                <h2 class="text-lg font-bold text-white tracking-wide">${site.clientName}</h2>
+                <a href="${site.siteUrl}" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+                  ${site.siteUrl.replace("https://", "").replace("http://", "")}
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+              </div>
+              <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                <span>WP: <b class="text-slate-200">${site.wpVersion}</b></span>
+                <span>\u2022</span>
+                <span>PHP: <b class="text-slate-200">${site.phpVersion}</b></span>
+                <span>\u2022</span>
+                <span>Total Installed: <b class="text-slate-200">${site.totalPlugins} plugins</b></span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                ${site.outdatedCount} Pending Update${site.outdatedCount > 1 ? "s" : ""}
+              </span>
+              ${hasCritical ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>' : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">100% Safe to Update</span>'}
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-5">Plugin Name</th>
+                  <th class="py-3 px-4">Category</th>
+                  <th class="py-3 px-4">Current Version</th>
+                  <th class="py-3 px-4">Available Version</th>
+                  <th class="py-3 px-5 text-right">Safety Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80">
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    });
+    const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordPress Plugin Updates Audit Report - NetStripes</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; color: black !important; padding: 0 !important; }
+      .site-card { break-inside: avoid; border: 1px solid #ddd !important; box-shadow: none !important; margin-bottom: 24px; color: black !important; }
+      .site-header { background: #f8fafc !important; color: black !important; border-bottom: 1px solid #eee !important; }
+      th { background: #f1f5f9 !important; color: #475569 !important; }
+      td { color: #1e293b !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased p-4 sm:p-8 font-sans min-h-screen">
+  <div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+      <div>
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Live System Audit</span>
+          <span class="text-xs text-slate-400">Generated on ${currentDateStr}</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">WordPress Plugin Updates Audit Report</h1>
+        <p class="text-sm text-slate-400 mt-1">Site-by-site status, 1-click safe update eligibility, and staging-required plugins.</p>
+      </div>
+      <div class="flex items-center gap-3 no-print">
+        <button onclick="window.print()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Print or Save as PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Audited Sites</div>
+        <div class="text-2xl font-black text-white mt-1">${activeClients.length}</div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-amber-400 uppercase tracking-wider font-semibold">Sites Requiring Updates</div>
+        <div class="text-2xl font-black text-amber-400 mt-1">${siteAudits.length}</div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-emerald-400 uppercase tracking-wider font-semibold">Safe 1-Click Updates</div>
+        <div class="text-2xl font-black text-emerald-400 mt-1">${safeCount}</div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-rose-400 uppercase tracking-wider font-semibold">Staging / Tech Review</div>
+        <div class="text-2xl font-black text-rose-400 mt-1">${criticalCount}</div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 no-print pb-2">
+      <button onclick="filterCards('all')" id="btn-all" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white border border-slate-700 hover:bg-slate-700 cursor-pointer ring-2 ring-indigo-500">All Sites (${siteAudits.length})</button>
+      <button onclick="filterCards('critical')" id="btn-critical" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/80 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 cursor-pointer">Has Staging Required Only</button>
+      <button onclick="filterCards('safe-only')" id="btn-safe" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/80 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 cursor-pointer">Safe Updates Only</button>
+    </div>
+
+    <div class="space-y-6" id="sites-container">
+      ${cardsHtml}
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+      <div>
+        <p class="font-semibold text-slate-300">NetStripes SEO & Mission Control Safety Engine</p>
+        <p class="text-slate-500 mt-0.5">Critical and High-Risk plugins (Page Builders, WooCommerce, Caching, Firewalls) require staging environment verification before updates.</p>
+      </div>
+      <div class="text-slate-500 font-mono text-[11px]">
+        Source: WordPress Remote Bridge System
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function filterCards(type) {
+      const cards = document.querySelectorAll('.site-card');
+      cards.forEach(card => {
+        if (type === 'all') {
+          card.style.display = 'block';
+        } else if (type === 'critical') {
+          card.style.display = card.dataset.hasCritical === 'true' ? 'block' : 'none';
+        } else if (type === 'safe-only') {
+          card.style.display = card.dataset.safeOnly === 'true' ? 'block' : 'none';
+        }
+      });
+
+      ['all', 'critical', 'safe'].forEach(k => {
+        const btn = document.getElementById('btn-' + k);
+        if (btn) {
+          if ((k === 'all' && type === 'all') || (k === 'critical' && type === 'critical') || (k === 'safe' && type === 'safe-only')) {
+            btn.classList.add('ring-2', 'ring-indigo-500');
+            btn.classList.add('bg-slate-800');
+          } else {
+            btn.classList.remove('ring-2', 'ring-indigo-500');
+            btn.classList.remove('bg-slate-800');
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>`;
+    res.setHeader("Content-Type", "text/html");
+    res.send(fullHtml);
+  } catch (err) {
+    console.error("Error generating plugin update report:", err);
+    res.status(500).send(`<h3>Error generating plugin update report: ${err.message}</h3>`);
+  }
+});
 app.post("/api/site-health/scan/:clientId", async (req, res) => {
   const { clientId } = req.params;
   try {

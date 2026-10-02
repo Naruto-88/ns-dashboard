@@ -19,7 +19,8 @@ import {
   Download,
   ShieldAlert,
   Send,
-  MessageSquare
+  MessageSquare,
+  FileText
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
@@ -419,6 +420,19 @@ export default function SiteHealth() {
             <option value="sitemap-issues">Sitemap Errors</option>
             <option value="wp-connected">WP Bridge Connected ({wpConnectedSites})</option>
           </select>
+
+          <button
+            onClick={() => window.open('/api/site-health/plugin-updates-report', '_blank')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer border ${
+              theme === 'white'
+                ? 'bg-white border-zinc-200 text-[#082a36] hover:bg-zinc-50'
+                : 'bg-zinc-900 border-white/10 text-white hover:bg-zinc-800'
+            }`}
+            title="Open printable HTML audit report of all sites with pending updates in a new tab"
+          >
+            <FileText size={13} className="text-indigo-400" />
+            <span>Updates Report (PDF)</span>
+          </button>
 
           <button
             onClick={handleScanAll}
