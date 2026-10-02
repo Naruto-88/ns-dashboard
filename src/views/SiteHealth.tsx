@@ -16,11 +16,15 @@ import {
   ArrowUpRight,
   ChevronDown,
   Info,
-  Download
+  Download,
+  ShieldAlert,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
 import { format } from 'date-fns';
+import { checkPluginSafety } from '../config/pluginSafety';
 
 interface SiteHealthItem {
   clientId: string;
@@ -223,6 +227,68 @@ export default function SiteHealth() {
     } finally {
       setUpdatingPlugin(null);
       setUpdateProgressStep(null);
+    }
+  };
+
+  const [notifyingPlugin, setNotifyingPlugin] = useState<string | null>(null);
+
+  const handleNotifyTechTeam = async (plugin: any) => {
+    if (!activePluginModal) return;
+    setNotifyingPlugin(plugin.slug);
+    try {
+      const safety = checkPluginSafety(plugin.slug, plugin.name);
+      const res = await fetch('/api/site-health/notify-tech-team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: activePluginModal.clientId,
+          pluginSlug: plugin.slug,
+          pluginName: plugin.name,
+          currentVersion: plugin.current_version,
+          newVersion: plugin.new_version,
+          reason: safety.reason,
+          riskLevel: safety.riskLevel || 'HIGH'
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBannerNotice(`📢 Alert dispatched to Slack: Tech team notified for ${plugin.name}!`);
+        setTimeout(() => setBannerNotice(null), 5000);
+      } else {
+        setBannerNotice(`⚠️ Notification note: ${data.message || data.error || 'Sent'}`);
+        setTimeout(() => setBannerNotice(null), 5000);
+      }
+    } catch (e: any) {
+      setBannerNotice(`❌ Slack notify failed: ${e.message}`);
+      setTimeout(() => setBannerNotice(null), 5000);
+    } finally {
+      setNotifyingPlugin(null);
+    }
+  };
+
+  const [sendingDigest, setSendingDigest] = useState(false);
+  const handleSendSiteSlackDigest = async () => {
+    if (!activePluginModal) return;
+    setSendingDigest(true);
+    try {
+      const res = await fetch('/api/site-health/notify-site-digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: activePluginModal.clientId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBannerNotice(`📢 ${data.message}`);
+        setTimeout(() => setBannerNotice(null), 6000);
+      } else {
+        setBannerNotice(`⚠️ ${data.message || data.error || 'Failed to dispatch Slack digest'}`);
+        setTimeout(() => setBannerNotice(null), 5000);
+      }
+    } catch (e: any) {
+      setBannerNotice(`❌ Error sending Slack digest: ${e.message}`);
+      setTimeout(() => setBannerNotice(null), 5000);
+    } finally {
+      setSendingDigest(false);
     }
   };
 
@@ -834,25 +900,48 @@ export default function SiteHealth() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Select All Outdated Checkbox */}
+                  {/* Select All Outdated Checkbox (Safe Plugins Only) */}
                   {activePluginModal.pluginsOutdated > 0 && (
                     <button
                       onClick={() => {
-                        const outdatedSlugs = (activePluginModal.pluginsData || [])
-                          .filter(p => p.has_update)
+                        const safeOutdatedSlugs = (activePluginModal.pluginsData || [])
+                          .filter(p => {
+                            if (!p.has_update) return false;
+                            const safety = checkPluginSafety(p.slug, p.name);
+                            return !safety.isRestricted;
+                          })
                           .map(p => p.slug);
-                        if (selectedPluginSlugs.size === outdatedSlugs.length) {
+
+                        if (selectedPluginSlugs.size === safeOutdatedSlugs.length && safeOutdatedSlugs.length > 0) {
                           setSelectedPluginSlugs(new Set());
                         } else {
-                          setSelectedPluginSlugs(new Set(outdatedSlugs));
+                          setSelectedPluginSlugs(new Set(safeOutdatedSlugs));
                         }
                       }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                         theme === 'white' ? 'bg-white border border-zinc-300 hover:bg-zinc-200 text-zinc-800 shadow-sm' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
                       }`}
                     >
-                      {selectedPluginSlugs.size > 0 ? 'Deselect All' : `Select All Updates (${activePluginModal.pluginsOutdated})`}
+                      {selectedPluginSlugs.size > 0 ? 'Deselect All' : `Select Safe Updates`}
                     </button>
+                  )}
+
+                  {/* Send Full Site Digest to Slack */}
+                  {activePluginModal.pluginsOutdated > 0 && (
+                    <Tooltip content="Send full categorized report of this site's pending updates to Slack (Safe vs High-Risk)">
+                      <button
+                        onClick={handleSendSiteSlackDigest}
+                        disabled={sendingDigest}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                          theme === 'white'
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        }`}
+                      >
+                        <MessageSquare size={13} className={sendingDigest ? 'animate-spin' : ''} />
+                        {sendingDigest ? 'Sending...' : 'Slack Updates Digest'}
+                      </button>
+                    </Tooltip>
                   )}
 
                   {selectedPluginSlugs.size > 0 && (
@@ -894,88 +983,156 @@ export default function SiteHealth() {
                       sorted.sort((a, b) => a.name.localeCompare(b.name));
                     }
 
-                    return sorted.map((plugin) => (
-                      <div 
-                        key={plugin.slug} 
-                        className={`p-4 flex items-center justify-between gap-4 transition-colors ${
-                          plugin.has_update 
-                            ? (theme === 'white' ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : 'bg-amber-500/10 border-l-4 border-l-amber-500')
-                            : (theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/[0.02]')
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {/* Checkbox for outdated plugin */}
-                          {plugin.has_update && (
-                            <input
-                              type="checkbox"
-                              checked={selectedPluginSlugs.has(plugin.slug)}
-                              onChange={(e) => {
-                                const next = new Set(selectedPluginSlugs);
-                                if (e.target.checked) next.add(plugin.slug);
-                                else next.delete(plugin.slug);
-                                setSelectedPluginSlugs(next);
-                              }}
-                              className={`w-4 h-4 rounded text-amber-500 focus:ring-amber-400 shrink-0 cursor-pointer ${
-                                theme === 'white' ? 'border-zinc-300 bg-white' : 'border-zinc-700 bg-zinc-800'
-                              }`}
-                            />
-                          )}
+                    return sorted.map((plugin) => {
+                      const safety = checkPluginSafety(plugin.slug, plugin.name);
+                      const isRestricted = safety.isRestricted;
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-semibold text-sm truncate ${
-                                theme === 'white' ? 'text-zinc-900 font-bold' : 'text-white'
-                              }`}>{plugin.name}</span>
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${
-                                plugin.is_active 
-                                  ? (theme === 'white' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400')
-                                  : (theme === 'white' ? 'bg-zinc-100 text-zinc-600 border border-zinc-200' : 'bg-zinc-800 text-zinc-500')
-                              }`}>
-                                {plugin.is_active ? 'Active' : 'Inactive'}
-                              </span>
-                            </div>
-                            <div className={`flex items-center gap-3 text-xs mt-1 font-mono ${
-                              theme === 'white' ? 'text-zinc-600' : 'text-zinc-500'
-                            }`}>
-                              <span>Version: <strong className={theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}>{plugin.current_version}</strong></span>
-                              {plugin.has_update && (
-                                <span className={`font-bold flex items-center gap-1 ${
-                                  theme === 'white' ? 'text-amber-700' : 'text-amber-400'
+                      return (
+                        <div 
+                          key={plugin.slug} 
+                          className={`p-4 flex items-center justify-between gap-4 transition-colors ${
+                            plugin.has_update 
+                              ? isRestricted
+                                ? (theme === 'white' ? 'bg-rose-50/60 border-l-4 border-l-rose-500' : 'bg-rose-950/20 border-l-4 border-l-rose-500')
+                                : (theme === 'white' ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : 'bg-amber-500/10 border-l-4 border-l-amber-500')
+                              : (theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/[0.02]')
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {/* Checkbox for outdated plugin (Only if safe) */}
+                            {plugin.has_update && (
+                              isRestricted ? (
+                                <Tooltip content={`Restricted: ${safety.reason}`}>
+                                  <div className="p-1 rounded bg-rose-500/10 text-rose-500 cursor-not-allowed">
+                                    <Lock size={14} />
+                                  </div>
+                                </Tooltip>
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPluginSlugs.has(plugin.slug)}
+                                  onChange={(e) => {
+                                    const next = new Set(selectedPluginSlugs);
+                                    if (e.target.checked) next.add(plugin.slug);
+                                    else next.delete(plugin.slug);
+                                    setSelectedPluginSlugs(next);
+                                  }}
+                                  className={`w-4 h-4 rounded text-amber-500 focus:ring-amber-400 shrink-0 cursor-pointer ${
+                                    theme === 'white' ? 'border-zinc-300 bg-white' : 'border-zinc-700 bg-zinc-800'
+                                  }`}
+                                />
+                              )
+                            )}
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-semibold text-sm truncate ${
+                                  theme === 'white' ? 'text-zinc-900 font-bold' : 'text-white'
+                                }`}>{plugin.name}</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${
+                                  plugin.is_active 
+                                    ? (theme === 'white' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400')
+                                    : (theme === 'white' ? 'bg-zinc-100 text-zinc-600 border border-zinc-200' : 'bg-zinc-800 text-zinc-500')
                                 }`}>
-                                  &rarr; New: {plugin.new_version}
+                                  {plugin.is_active ? 'Active' : 'Inactive'}
                                 </span>
+
+                                {plugin.has_update && isRestricted && (
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                                    safety.riskLevel === 'CRITICAL'
+                                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                  }`}>
+                                    <Lock size={10} />
+                                    Tech Team Only
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`flex items-center gap-3 text-xs mt-1 font-mono ${
+                                theme === 'white' ? 'text-zinc-600' : 'text-zinc-500'
+                              }`}>
+                                <span>Version: <strong className={theme === 'white' ? 'text-zinc-800' : 'text-zinc-300'}>{plugin.current_version}</strong></span>
+                                {plugin.has_update && (
+                                  <span className={`font-bold flex items-center gap-1 ${
+                                    isRestricted 
+                                      ? (theme === 'white' ? 'text-rose-700' : 'text-rose-400')
+                                      : (theme === 'white' ? 'text-amber-700' : 'text-amber-400')
+                                  }`}>
+                                    &rarr; New: {plugin.new_version}
+                                  </span>
+                                )}
+                                <span className="truncate">By {plugin.author}</span>
+                              </div>
+                              {plugin.has_update && isRestricted && (
+                                <p className={`text-[11px] mt-1 italic flex items-center gap-1 ${
+                                  theme === 'white' ? 'text-rose-700' : 'text-rose-400/90'
+                                }`}>
+                                  <span>⚠️ {safety.reason}</span>
+                                </p>
                               )}
-                              <span className="truncate">By {plugin.author}</span>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Remote Action Button with Pre-update Warning */}
-                        <div>
-                          {plugin.has_update ? (
-                            <button
-                              onClick={() => setPendingUpdateTarget({
-                                clientId: activePluginModal.clientId,
-                                pluginSlug: plugin.slug,
-                                pluginName: plugin.name,
-                                isBulk: false
-                              })}
-                              disabled={updatingPlugin === plugin.slug || isBulkUpdating}
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
-                            >
-                              <Zap size={13} className={updatingPlugin === plugin.slug ? 'animate-spin' : ''} />
-                              {updatingPlugin === plugin.slug ? 'Updating...' : 'Update Now'}
-                            </button>
-                          ) : (
-                            <span className={`text-xs font-bold flex items-center gap-1 ${
-                              theme === 'white' ? 'text-emerald-700' : 'text-emerald-400'
-                            }`}>
-                              <CheckCircle2 size={13} /> Up to Date
-                            </span>
-                          )}
+                          {/* Remote Action Button with Pre-update Warning */}
+                          <div className="flex items-center gap-2">
+                            {plugin.has_update ? (
+                              isRestricted ? (
+                                <div className="flex items-center gap-2">
+                                  <Tooltip content={safety.reason || 'Restricted plugin'}>
+                                    <button
+                                      disabled={true}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-not-allowed flex items-center gap-1.5 border ${
+                                        theme === 'white'
+                                          ? 'bg-zinc-100 text-zinc-400 border-zinc-200'
+                                          : 'bg-zinc-800/80 text-zinc-500 border-zinc-700/50'
+                                      }`}
+                                    >
+                                      <Lock size={12} />
+                                      Staging Required
+                                    </button>
+                                  </Tooltip>
+
+                                  <Tooltip content="Send instant Slack alert to tech team with plugin details & staging request">
+                                    <button
+                                      onClick={() => handleNotifyTechTeam(plugin)}
+                                      disabled={notifyingPlugin === plugin.slug}
+                                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                                        theme === 'white'
+                                          ? 'bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-300'
+                                          : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30'
+                                      }`}
+                                    >
+                                      <Send size={12} className={notifyingPlugin === plugin.slug ? 'animate-spin' : ''} />
+                                      {notifyingPlugin === plugin.slug ? 'Sending...' : 'Slack Tech'}
+                                    </button>
+                                  </Tooltip>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setPendingUpdateTarget({
+                                    clientId: activePluginModal.clientId,
+                                    pluginSlug: plugin.slug,
+                                    pluginName: plugin.name,
+                                    isBulk: false
+                                  })}
+                                  disabled={updatingPlugin === plugin.slug || isBulkUpdating}
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                  <Zap size={13} className={updatingPlugin === plugin.slug ? 'animate-spin' : ''} />
+                                  {updatingPlugin === plugin.slug ? 'Updating...' : 'Update Now'}
+                                </button>
+                              )
+                            ) : (
+                              <span className={`text-xs font-bold flex items-center gap-1 ${
+                                theme === 'white' ? 'text-emerald-700' : 'text-emerald-400'
+                              }`}>
+                                <CheckCircle2 size={13} /> Up to Date
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ));
+                      );
+                    });
                   })()}
                 </div>
               ) : (

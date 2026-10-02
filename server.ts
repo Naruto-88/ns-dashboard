@@ -21,11 +21,185 @@ import {
   getBlogDraftsForClient,
   saveBlogDraftRecord,
   updateBlogDraftReviewRecord,
+  deleteBlogDraftRecord,
   getBlogCalendarForClient,
   saveBlogCalendarRecords,
   getKeywordMetricsStore,
-  saveKeywordMetricsStore
+  saveKeywordMetricsStore,
+  getSiteHealthStoreAll,
+  saveSiteHealthRecord,
+  saveAllSiteHealthRecords
 } from './src/services/storage/supabaseStore';
+import { checkPluginSafety } from './src/config/pluginSafety';
+
+// Slack Alert Cooldown Cache: prevents spamming Slack on repeated scans within 24 hours
+const slackAlertCooldown = new Map<string, number>();
+
+async function sendSlackTechAlert(payload: {
+  clientName: string;
+  siteUrl: string;
+  pluginName: string;
+  pluginSlug: string;
+  currentVersion?: string;
+  newVersion?: string;
+  reason?: string;
+  riskLevel?: string;
+}) {
+  const webhookUrlsRaw = process.env.SLACK_TECH_WEBHOOK_URL;
+  if (!webhookUrlsRaw) {
+    console.log(`[SLACK TECH ALERT (SIMULATED)] Restricted plugin update for ${payload.clientName}: ${payload.pluginName} (${payload.currentVersion} -> ${payload.newVersion}) - Reason: ${payload.reason}`);
+    return;
+  }
+
+  const webhookUrls = webhookUrlsRaw.split(',').map(u => u.trim()).filter(Boolean);
+  if (webhookUrls.length === 0) return;
+
+  const alertKey = `${payload.siteUrl}:${payload.pluginSlug}:${payload.newVersion}`;
+  const now = Date.now();
+  const lastSent = slackAlertCooldown.get(alertKey);
+  if (lastSent && (now - lastSent) < (24 * 60 * 60 * 1000)) {
+    // Already alerted within 24h
+    return;
+  }
+
+  // Support tagging user IDs (e.g. SLACK_TECH_USER_IDS="U1234567,U7654321")
+  const userIdsRaw = process.env.SLACK_TECH_USER_IDS || '';
+  const userMentions = userIdsRaw
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean)
+    .map(id => `<@${id}>`)
+    .join(' ');
+
+  try {
+    const mentionText = userMentions ? `Attention: ${userMentions}\n` : '';
+    const slackMessage = {
+      text: `🚨 *High-Risk Plugin Update Available — Action Required*`,
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '⚠️ High-Risk Plugin Update Detected'
+          }
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Website:*\n<${payload.siteUrl}|${payload.clientName}>` },
+            { type: 'mrkdwn', text: `*Plugin:*\n${payload.pluginName} (\`${payload.pluginSlug}\`)` },
+            { type: 'mrkdwn', text: `*Installed Version:*\n\`${payload.currentVersion || 'Unknown'}\`` },
+            { type: 'mrkdwn', text: `*New Available:*\n\`${payload.newVersion || 'Latest'}\`` },
+            { type: 'mrkdwn', text: `*Risk Level:*\n*${payload.riskLevel || 'HIGH'}*` }
+          ]
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${mentionText}🔒 *Safety Policy:* Direct dashboard updates are blocked for this plugin to prevent live site breakdown.\n📌 *Reason:* ${payload.reason || 'Complex page builder or database engine.'}\n🛠️ *Next Step:* Tech team, please test on a staging environment before upgrading production.`
+          }
+        }
+      ]
+    };
+
+    for (const url of webhookUrls) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slackMessage)
+      });
+
+      if (res.ok) {
+        slackAlertCooldown.set(alertKey, now);
+        console.log(`[SLACK TECH ALERT SENT] Successfully notified tech team on webhook for ${payload.pluginSlug} on ${payload.clientName}`);
+      } else {
+        console.warn(`[SLACK TECH ALERT FAILED] Webhook status: ${res.status}`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[SLACK TECH ALERT ERROR]', err.message);
+  }
+}
+
+async function sendSlackSiteSummaryAlert(payload: {
+  clientName: string;
+  siteUrl: string;
+  safeUpdates: any[];
+  restrictedUpdates: any[];
+}) {
+  const webhookUrlsRaw = process.env.SLACK_TECH_WEBHOOK_URL;
+  if (!webhookUrlsRaw) return;
+  const webhookUrls = webhookUrlsRaw.split(',').map(u => u.trim()).filter(Boolean);
+  if (webhookUrls.length === 0) return;
+
+  const userIdsRaw = process.env.SLACK_TECH_USER_IDS || '';
+  const userMentions = userIdsRaw
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean)
+    .map(id => `<@${id}>`)
+    .join(' ');
+
+  const total = payload.safeUpdates.length + payload.restrictedUpdates.length;
+  if (total === 0) return;
+
+  const mentionLead = userMentions ? `${userMentions} ` : '';
+
+  const safeListText = payload.safeUpdates.length > 0 
+    ? payload.safeUpdates.map(p => `• \`${p.name}\` (${p.current_version} ➔ *${p.new_version}*) — ✅ Ready for Dashboard Update`).join('\n')
+    : '_None_';
+
+  const restrictedListText = payload.restrictedUpdates.length > 0
+    ? payload.restrictedUpdates.map(p => `• 🔒 *${p.name}* (\`${p.current_version}\` ➔ \`${p.new_version}\`)\n   ↳ _${p.reason}_`).join('\n')
+    : '_None_';
+
+  const slackMessage = {
+    text: `${mentionLead}🚨 *Plugin Updates Digest for ${payload.clientName}* (${total} Pending)`,
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `📦 Plugin Updates Digest: ${payload.clientName}`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${userMentions ? `*Attention:* ${userMentions}\n` : ''}*Website:* <${payload.siteUrl}|${payload.clientName}>\n*Total Updates:* *${total}* (${payload.safeUpdates.length} Safe to Update | ${payload.restrictedUpdates.length} Staging/High-Risk)`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*🟢 Safe Plugins (Can be updated via Dashboard):*\n${safeListText}`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*🔴 High-Risk / Restricted Plugins (Tech Team Staging Test Required):*\n${restrictedListText}`
+        }
+      }
+    ]
+  };
+
+  try {
+    for (const url of webhookUrls) {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slackMessage)
+      });
+    }
+  } catch (err: any) {
+    console.error('[SLACK DIGEST ALERT ERROR]', err.message);
+  }
+}
 
 const supabaseUrl = (process.env.VITE_SUPABASE_URL || 'https://pzjfqrvmwlwfrtgojejl.supabase.co')
   .replace(/\/$/, '')
@@ -6110,7 +6284,7 @@ app.get('/api/site-health/all', async (req, res) => {
 
     if (clientErr) throw clientErr;
 
-    // Try reading cached data from DB
+    // Try reading cached data from DB and local disk backup
     let cachedRows: any[] = [];
     try {
       const { data, error } = await supabase.from('site_health_checks').select('*');
@@ -6120,46 +6294,57 @@ app.get('/api/site-health/all', async (req, res) => {
     } catch {
       // ignore if table doesn't exist yet
     }
+    const localStoreMap = await getSiteHealthStoreAll().catch(() => ({}));
 
     const activeClients = (clients || []).filter(c => c.api_import_enabled !== false);
 
     const merged = activeClients.map(c => {
       const dbRecord = cachedRows.find(r => r.client_id === c.id);
       const memRecord = siteHealthMemoryCache.get(c.id);
-      const record = dbRecord || memRecord;
+      const localRecord = localStoreMap[c.id];
+
+      // Pick the most recent record by timestamp to guarantee fresh updates are never lost
+      const candidates = [
+        dbRecord ? { ...dbRecord, time: new Date(dbRecord.last_scanned_at || dbRecord.updated_at || 0).getTime() } : null,
+        memRecord ? { ...memRecord, time: new Date(memRecord.scannedAt || 0).getTime() } : null,
+        localRecord ? { ...localRecord, time: new Date(localRecord.lastScannedAt || localRecord.scannedAt || 0).getTime() } : null
+      ].filter(Boolean) as any[];
+
+      candidates.sort((a, b) => b.time - a.time);
+      const record = candidates[0] || null;
 
       if (record) {
         // Resolve installed bridge version from field or from embedded plugins_data
         const selfPluginFromDb = (record.plugins_data || record.pluginsData || []).find((p: any) =>
           p.slug && p.slug.includes('mission-control-site-bridge')
         );
-        const resolvedBridgeVersion = record.bridge_version || record.bridgeVersion || (selfPluginFromDb ? selfPluginFromDb.current_version : null) || '1.0.0';
+        const resolvedBridgeVersion = record.bridge_version || record.bridgeVersion || (selfPluginFromDb ? selfPluginFromDb.current_version : null) || '1.3.0';
 
         return {
           clientId: c.id,
           clientName: c.name,
           shortCode: c.short_code,
-          siteUrl: record.site_url || extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
-          isOnline: record.is_online ?? true,
-          httpStatus: record.http_status ?? 200,
-          responseTimeMs: record.response_time_ms ?? 0,
-          sslValid: record.ssl_valid ?? true,
-          sslDaysLeft: record.ssl_days_left ?? 90,
-          sslIssuer: record.ssl_issuer,
-          sitemapStatus: record.sitemap_status || 'OK',
-          sitemapUrl: record.sitemap_url,
-          sitemapCount: record.sitemap_count ?? 0,
-          robotsStatus: record.robots_status || 'OK',
-          hasNoindex: record.has_noindex ?? false,
-          wpConnected: record.wp_connected ?? false,
-          wpVersion: record.wp_version,
-          phpVersion: record.php_version,
+          siteUrl: record.site_url || record.siteUrl || extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
+          isOnline: record.is_online ?? record.isOnline ?? true,
+          httpStatus: record.http_status ?? record.httpStatus ?? 200,
+          responseTimeMs: record.response_time_ms ?? record.responseTimeMs ?? 0,
+          sslValid: record.ssl_valid ?? record.sslValid ?? true,
+          sslDaysLeft: record.ssl_days_left ?? record.sslDaysLeft ?? 90,
+          sslIssuer: record.ssl_issuer ?? record.sslIssuer,
+          sitemapStatus: record.sitemap_status || record.sitemapStatus || 'OK',
+          sitemapUrl: record.sitemap_url || record.sitemapUrl,
+          sitemapCount: record.sitemap_count ?? record.sitemapCount ?? 0,
+          robotsStatus: record.robots_status || record.robotsStatus || 'OK',
+          hasNoindex: record.has_noindex ?? record.hasNoindex ?? false,
+          wpConnected: record.wp_connected ?? record.wpConnected ?? false,
+          wpVersion: record.wp_version || record.wpVersion,
+          phpVersion: record.php_version || record.phpVersion,
           bridgeVersion: resolvedBridgeVersion,
-          pluginsTotal: record.plugins_total ?? 0,
-          pluginsOutdated: record.plugins_outdated ?? 0,
-          pluginsData: record.plugins_data || [],
-          issues: record.issues_summary || [],
-          scannedAt: record.last_scanned_at || record.scannedAt || new Date().toISOString()
+          pluginsTotal: record.plugins_total ?? record.pluginsTotal ?? 0,
+          pluginsOutdated: record.plugins_outdated ?? record.pluginsOutdated ?? 0,
+          pluginsData: record.plugins_data || record.pluginsData || [],
+          issues: record.issues_summary || record.issues || [],
+          scannedAt: record.last_scanned_at || record.lastScannedAt || record.scannedAt || new Date().toISOString()
         };
       }
 
@@ -6214,34 +6399,30 @@ app.post('/api/site-health/scan/:clientId', async (req, res) => {
     // Save in memory cache
     siteHealthMemoryCache.set(client.id, audit);
 
-    // Try saving in DB if table exists
-    try {
-      await supabase.from('site_health_checks').upsert({
-        client_id: client.id,
-        site_url: audit.siteUrl,
-        http_status: audit.httpStatus,
-        response_time_ms: audit.responseTimeMs,
-        is_online: audit.isOnline,
-        ssl_valid: audit.sslValid,
-        ssl_days_left: audit.sslDaysLeft,
-        ssl_issuer: audit.sslIssuer,
-        sitemap_status: audit.sitemapStatus,
-        sitemap_url: audit.sitemapUrl,
-        sitemap_count: audit.sitemapCount,
-        robots_status: audit.robotsStatus,
-        has_noindex: audit.hasNoindex,
-        wp_connected: audit.wpConnected,
-        wp_version: audit.wpVersion,
-        php_version: audit.phpVersion,
-        bridge_version: audit.bridgeVersion || '1.0.0',
-        plugins_total: audit.pluginsTotal,
-        plugins_outdated: audit.pluginsOutdated,
-        plugins_data: audit.pluginsData,
-        issues_summary: audit.issues,
-        last_scanned_at: new Date().toISOString()
-      }, { onConflict: 'client_id' });
-    } catch {
-      // Ignore DB write error if table pending
+    // Save in dual local disk JSON & Supabase DB store
+    await saveSiteHealthRecord(client.id, audit).catch(err => {
+      console.warn('[SiteHealth] saveSiteHealthRecord error:', err.message);
+    });
+
+    // Notify Tech Team via Slack if any restricted high-risk plugins have pending updates
+    if (audit.pluginsData && Array.isArray(audit.pluginsData)) {
+      for (const p of audit.pluginsData) {
+        if (p.has_update) {
+          const safety = checkPluginSafety(p.slug, p.name);
+          if (safety.isRestricted) {
+            sendSlackTechAlert({
+              clientName: client.name,
+              siteUrl: audit.siteUrl,
+              pluginName: p.name || p.slug,
+              pluginSlug: p.slug,
+              currentVersion: p.current_version,
+              newVersion: p.new_version,
+              reason: safety.reason,
+              riskLevel: safety.riskLevel
+            });
+          }
+        }
+      }
     }
 
     res.json({ success: true, data: audit });
@@ -6279,36 +6460,32 @@ app.post('/api/site-health/scan-all', async (req, res) => {
       }
     }
 
-    // Persist to DB in batch if table exists
-    try {
-      const records = results.map(audit => ({
-        client_id: audit.clientId,
-        site_url: audit.siteUrl,
-        http_status: audit.httpStatus,
-        response_time_ms: audit.responseTimeMs,
-        is_online: audit.isOnline,
-        ssl_valid: audit.sslValid,
-        ssl_days_left: audit.sslDaysLeft,
-        ssl_issuer: audit.sslIssuer,
-        sitemap_status: audit.sitemapStatus,
-        sitemap_url: audit.sitemapUrl,
-        sitemap_count: audit.sitemapCount,
-        robots_status: audit.robotsStatus,
-        has_noindex: audit.hasNoindex,
-        wp_connected: audit.wpConnected,
-        wp_version: audit.wpVersion,
-        php_version: audit.phpVersion,
-        bridge_version: audit.bridgeVersion || '1.0.0',
-        plugins_total: audit.pluginsTotal,
-        plugins_outdated: audit.pluginsOutdated,
-        plugins_data: audit.pluginsData,
-        issues_summary: audit.issues,
-        last_scanned_at: new Date().toISOString()
-      }));
+    // Persist to dual local disk JSON & Supabase DB store
+    await saveAllSiteHealthRecords(results).catch(err => {
+      console.warn('[SiteHealth] saveAllSiteHealthRecords error:', err.message);
+    });
 
-      await supabase.from('site_health_checks').upsert(records, { onConflict: 'client_id' });
-    } catch {
-      // Ignore DB errors
+    // Notify Tech Team via Slack for all detected high-risk updates across scanned sites
+    for (const audit of results) {
+      if (audit.pluginsData && Array.isArray(audit.pluginsData)) {
+        for (const p of audit.pluginsData) {
+          if (p.has_update) {
+            const safety = checkPluginSafety(p.slug, p.name);
+            if (safety.isRestricted) {
+              sendSlackTechAlert({
+                clientName: audit.clientName || 'Client Site',
+                siteUrl: audit.siteUrl,
+                pluginName: p.name || p.slug,
+                pluginSlug: p.slug,
+                currentVersion: p.current_version,
+                newVersion: p.new_version,
+                reason: safety.reason,
+                riskLevel: safety.riskLevel
+              });
+            }
+          }
+        }
+      }
     }
 
     res.json({ success: true, count: results.length, data: results });
@@ -6331,6 +6508,27 @@ setInterval(async () => {
       try {
         const audit = await auditSingleClient(c);
         siteHealthMemoryCache.set(c.id, audit);
+        await saveSiteHealthRecord(c.id, audit);
+
+        if (audit.pluginsData && Array.isArray(audit.pluginsData)) {
+          for (const p of audit.pluginsData) {
+            if (p.has_update) {
+              const safety = checkPluginSafety(p.slug, p.name);
+              if (safety.isRestricted) {
+                sendSlackTechAlert({
+                  clientName: c.name,
+                  siteUrl: audit.siteUrl,
+                  pluginName: p.name || p.slug,
+                  pluginSlug: p.slug,
+                  currentVersion: p.current_version,
+                  newVersion: p.new_version,
+                  reason: safety.reason,
+                  riskLevel: safety.riskLevel
+                });
+              }
+            }
+          }
+        }
       } catch (e: any) {
         console.warn(`[AUTO SITE-HEALTH SCAN] Failed for ${c.name}:`, e.message);
       }
@@ -6340,6 +6538,75 @@ setInterval(async () => {
     console.error('[AUTO SITE-HEALTH SCAN] Error in scheduled run:', err.message);
   }
 }, TWELVE_HOURS_MS);
+
+// Monday Morning 5:00 AM (Asia/Colombo - Sri Lanka Time) Automated Weekly Plugin Digest
+// Checks every 60 seconds if it's Monday 05:00 Sri Lanka time
+let lastMondayReportDate = '';
+setInterval(async () => {
+  try {
+    const nowSriLanka = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Colombo',
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(new Date());
+
+    const findPart = (type: string) => nowSriLanka.find(p => p.type === type)?.value || '';
+    const weekday = findPart('weekday'); // 'Mon'
+    const hour = findPart('hour');       // '05'
+    const minute = findPart('minute');   // '00'
+    const dateKey = `${findPart('year')}-${findPart('month')}-${findPart('day')}`;
+
+    if (weekday === 'Mon' && hour === '05' && minute === '00' && lastMondayReportDate !== dateKey) {
+      lastMondayReportDate = dateKey;
+      console.log(`[MONDAY DIGEST] It is Monday 05:00 AM Sri Lanka time (${dateKey}). Running weekly plugin scans and dispatching digests...`);
+
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('id, name, short_code, gsc_site_url, wordpress_url, seo_webhook_secret, api_import_enabled');
+      const activeClients = (clients || []).filter(c => c.api_import_enabled !== false);
+
+      for (const client of activeClients) {
+        try {
+          const audit = await auditSingleClient(client);
+          siteHealthMemoryCache.set(client.id, audit);
+          await saveSiteHealthRecord(client.id, audit);
+
+          const outdated = (audit.pluginsData || []).filter((p: any) => p.has_update);
+          if (outdated.length > 0) {
+            const safeUpdates: any[] = [];
+            const restrictedUpdates: any[] = [];
+
+            outdated.forEach((p: any) => {
+              const safety = checkPluginSafety(p.slug, p.name);
+              if (safety.isRestricted) {
+                restrictedUpdates.push({ ...p, reason: safety.reason, riskLevel: safety.riskLevel });
+              } else {
+                safeUpdates.push(p);
+              }
+            });
+
+            await sendSlackSiteSummaryAlert({
+              clientName: client.name,
+              siteUrl: audit.siteUrl,
+              safeUpdates,
+              restrictedUpdates
+            });
+          }
+        } catch (scanErr: any) {
+          console.warn(`[MONDAY DIGEST] Scan error for ${client.name}:`, scanErr.message);
+        }
+      }
+      console.log('[MONDAY DIGEST] Weekly Monday morning plugin digests dispatched successfully.');
+    }
+  } catch (err: any) {
+    console.error('[MONDAY DIGEST ERROR]', err.message);
+  }
+}, 60 * 1000);
 
 // 4. Remote Plugin Update Trigger via WordPress Bridge
 app.post('/api/site-health/update-plugin', async (req, res) => {
@@ -6366,6 +6633,27 @@ app.post('/api/site-health/update-plugin', async (req, res) => {
       return res.status(400).json({ error: 'Client WordPress URL or Bridge Secret Key is not configured.' });
     }
 
+    // Safety Policy Guard: Check if the plugin is restricted (e.g. Elementor, ACF, WooCommerce)
+    const safetyCheck = checkPluginSafety(pluginSlug);
+    if (safetyCheck.isRestricted) {
+      // Trigger Slack alert for tech team awareness
+      sendSlackTechAlert({
+        clientName: client.name,
+        siteUrl: baseUrl,
+        pluginName: pluginSlug,
+        pluginSlug: pluginSlug,
+        reason: safetyCheck.reason,
+        riskLevel: safetyCheck.riskLevel
+      });
+
+      return res.status(403).json({
+        error: `High-Risk Plugin Update Blocked by Safety Policy. Direct dashboard updates for ${pluginSlug} are restricted to prevent breaking live layouts. Technical team must test and deploy via staging.`,
+        isRestricted: true,
+        reason: safetyCheck.reason,
+        riskLevel: safetyCheck.riskLevel
+      });
+    }
+
     const endpoint = `${baseUrl}/wp-json/mc-bridge/v1/update-plugin`;
     console.log(`[WP REMOTE UPDATE] Dispatching upgrade for ${pluginSlug} at ${endpoint}`);
 
@@ -6387,9 +6675,12 @@ app.post('/api/site-health/update-plugin', async (req, res) => {
       });
     }
 
-    // Refresh the client's cached audit data immediately
+    // Refresh the client's cached audit data immediately & persist to both disk & DB
     const updatedAudit = await auditSingleClient(client);
     siteHealthMemoryCache.set(client.id, updatedAudit);
+    await saveSiteHealthRecord(client.id, updatedAudit).catch(err => {
+      console.warn('[SiteHealth] Failed to persist post-update audit:', err.message);
+    });
 
     res.json({
       success: true,
@@ -6399,6 +6690,82 @@ app.post('/api/site-health/update-plugin', async (req, res) => {
     });
   } catch (err: any) {
     console.error('Remote plugin update error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual trigger to notify Tech Team on Slack for any plugin update
+app.post('/api/site-health/notify-tech-team', async (req, res) => {
+  try {
+    const { clientId, pluginSlug, pluginName, currentVersion, newVersion, reason, riskLevel } = req.body;
+    const { data: client } = await supabase.from('clients').select('name, gsc_site_url, wordpress_url').eq('id', clientId).single();
+    const clientName = client?.name || 'Client Site';
+    const siteUrl = extractCleanBaseUrl(client?.gsc_site_url, client?.wordpress_url);
+
+    // Bypass cooldown for explicit manual clicks
+    const alertKey = `${siteUrl}:${pluginSlug}:${newVersion}`;
+    slackAlertCooldown.delete(alertKey);
+
+    await sendSlackTechAlert({
+      clientName,
+      siteUrl,
+      pluginName: pluginName || pluginSlug,
+      pluginSlug,
+      currentVersion,
+      newVersion,
+      reason: reason || 'Manual team notification requested from dashboard.',
+      riskLevel: riskLevel || 'HIGH'
+    });
+
+    res.json({ success: true, message: `Tech team notified via Slack for ${pluginName || pluginSlug}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual trigger to send complete site plugin updates digest to Slack
+app.post('/api/site-health/notify-site-digest', async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    const { data: client } = await supabase.from('clients').select('*').eq('id', clientId).single();
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const localStoreMap = await getSiteHealthStoreAll().catch(() => ({}));
+    const siteData = siteHealthMemoryCache.get(clientId) || localStoreMap[clientId];
+    const pluginsData = siteData?.pluginsData || siteData?.plugins_data || [];
+
+    const outdated = pluginsData.filter((p: any) => p.has_update);
+    if (outdated.length === 0) {
+      return res.json({ success: true, message: 'All plugins are already up to date! Nothing to report.' });
+    }
+
+    const safeUpdates: any[] = [];
+    const restrictedUpdates: any[] = [];
+
+    outdated.forEach((p: any) => {
+      const safety = checkPluginSafety(p.slug, p.name);
+      if (safety.isRestricted) {
+        restrictedUpdates.push({ ...p, reason: safety.reason, riskLevel: safety.riskLevel });
+      } else {
+        safeUpdates.push(p);
+      }
+    });
+
+    const siteUrl = extractCleanBaseUrl(client.gsc_site_url, client.wordpress_url);
+    await sendSlackSiteSummaryAlert({
+      clientName: client.name,
+      siteUrl,
+      safeUpdates,
+      restrictedUpdates
+    });
+
+    res.json({
+      success: true,
+      message: `Slack Digest dispatched! (${safeUpdates.length} Safe, ${restrictedUpdates.length} Staging Required)`,
+      safeCount: safeUpdates.length,
+      restrictedCount: restrictedUpdates.length
+    });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -7217,73 +7584,145 @@ app.post('/api/blog-studio/profile', async (req, res) => {
 
 // 2. Generate Full Blog Post with Rank Math Meta & Adaptive Rules
 app.post('/api/blog-studio/generate', async (req, res) => {
-  const { clientId, topic, focusKeyword, length, customInstructions } = req.body;
+    const { clientId, topic, focusKeyword, length, customInstructions, targetHubUrl } = req.body;
 
-  if (!clientId || !topic) {
-    return res.status(400).json({ error: 'clientId and topic are required' });
-  }
+    if (!clientId || !topic) {
+      return res.status(400).json({ error: 'clientId and topic are required' });
+    }
 
-  try {
-    const profile = (await getBrandProfileRecord(clientId)) || {};
-    const learnedRules = await getLearnedRulesRecord(clientId);
+    try {
+      const profile = (await getBrandProfileRecord(clientId)) || {};
+      const learnedRules = await getLearnedRulesRecord(clientId);
 
-    // Fetch client record for live website URL and details
-    const { data: clientRow } = await supabase
-      .from('clients')
-      .select('name, wordpress_url, gsc_site_url')
-      .eq('id', clientId)
-      .maybeSingle();
+      // Fetch client record for live website URL and details
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('name, wordpress_url, gsc_site_url, seo_webhook_secret')
+        .eq('id', clientId)
+        .maybeSingle();
 
-    const clientBrand = profile.brandName || clientRow?.name || 'Our Company';
-    const clientSite = clientRow?.wordpress_url || clientRow?.gsc_site_url || 'https://client-site.com.au';
-    const clientLoc = profile.targetLocation || 'Australia';
-    const clientAudience = profile.targetAudience || 'Australian property owners and business customers';
-    const targetWordCount = length === 'short' ? '700-900 words' : length === 'long' ? '1400-1800 words' : '1000-1300 words';
+      const clientBrand = profile.brandName || clientRow?.name || 'Our Company';
+      const clientSite = clientRow?.wordpress_url || clientRow?.gsc_site_url || 'https://client-site.com.au';
+      const clientLoc = profile.targetLocation || 'Australia';
+      const clientAudience = profile.targetAudience || 'Australian business owners, decision-makers, and professionals';
+      const targetWordCount = length === 'short' ? '700-900 words' : length === 'long' ? '1400-1800 words' : '1000-1300 words';
 
-    const prompt = `Act as an experienced Australian SEO editor and writer. Create a natural, useful, publish-ready blog article using the verified information below. Write for the reader first. Do not claim that any writing format guarantees rankings or citations in AI search.
+      // Fetch existing published posts from WordPress for internal linking
+      let existingPosts: { title: string; url: string; slug: string }[] = [];
+      try {
+        const baseUrl = extractCleanBaseUrl(clientRow?.gsc_site_url, clientRow?.wordpress_url);
+        const bridgeSecret = clientRow?.seo_webhook_secret;
+        if (baseUrl && bridgeSecret) {
+          const postsRes = await fetch(`${baseUrl}/wp-json/mc-bridge/v1/posts-seo?per_page=50`, {
+            headers: { 'X-MC-Bridge-Key': bridgeSecret }
+          });
+          if (postsRes.ok) {
+            const postsData = await postsRes.json();
+            if (postsData.posts && Array.isArray(postsData.posts)) {
+              existingPosts = postsData.posts.map((p: any) => ({
+                title: p.title || '',
+                url: p.link || `${baseUrl}/${p.slug || ''}`,
+                slug: p.slug || ''
+              }));
+            }
+          }
+          console.log(`[BLOG STUDIO] Fetched ${existingPosts.length} existing posts for interlinks from ${clientBrand}`);
+        }
+      } catch (interlinkErr: any) {
+        console.warn('[BLOG STUDIO] Could not fetch existing posts for interlinks:', interlinkErr.message);
+      }
+
+      const currentDate = new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+
+      let primaryHubDirective = '';
+      if (targetHubUrl && targetHubUrl.trim()) {
+        primaryHubDirective = `\nPRIMARY COMMERCIAL HUB URL (CRITICAL):\n- Main Commercial Service URL: ${targetHubUrl.trim()}\n- RULE: This article is an informational supporting guide. You MUST link to this primary commercial hub page early or in the key context paragraph using descriptive anchor text representing the core service. Prioritise this link over generic or older blog posts.\n`;
+      }
+
+      const interlinkSection = existingPosts.length > 0
+        ? `\nEXISTING SITE PAGES FOR INTERNAL LINKING (SUPPORTING LINKS):\nThe following are live published pages/posts on this client's website. Naturally weave 1 to 3 relevant internal links into body paragraphs using descriptive anchor text. Do NOT over-link (maximum 2-4 internal links in total across the entire article). Never link to unrelated or outdated topics.\n${existingPosts.slice(0, 30).map(p => `- "${p.title}" → ${p.url}`).join('\n')}\n`
+        : '';
+
+      const prompt = `You are an elite Australian SEO content editor producing a publish-ready blog article. Your output must meet strict editorial, factual, and structural standards.
 
 CLIENT BRIEF
 - Brand: "${clientBrand}"
 - Website: "${clientSite}"
 - Topic: "${topic}"
 - Focus keyword: "${focusKeyword || topic}"
-- Money keyword / hub keyword: "${focusKeyword || topic}"
-- Target reader and location: "${clientAudience} in ${clientLoc}"
-- Search intent: Educational, practical, and commercial research
-- Tone of Voice: "${profile.toneOfVoice || 'Natural Australian English, authoritative, clear, conversational, trustworthy'}"
-- Forbidden Robotic AI Words (STRICTLY PROHIBITED): "${profile.forbiddenWords || 'delve, tapestry, in a nutshell, moreover, furthermore, beacon, leverage, embark, testament, game-changer'}"
-- Key Selling Points / Client Strengths: "${profile.keySellingPoints || ''}"
+- Target reader: "${clientAudience} in ${clientLoc}"
+- Tone of Voice: "${profile.toneOfVoice || 'Natural Australian English — authoritative, clear, conversational, objective'}"
 - Target Word Count: approximately ${targetWordCount}
-- Custom Editorial Directives: "${customInstructions || 'Answer search intent early. Provide concrete Australian real-world advice.'}"
+- Publishing Date Stamp: "${currentDate}"
+${primaryHubDirective}
+${interlinkSection}
+LEARNED RULES FROM HUMAN EDITORIAL REVIEWS (STRICTLY ADHERE — these override defaults):
+${learnedRules.length > 0 ? learnedRules.map((r, i) => `${i + 1}. ${r}`).join('\n') : '• Write with direct, objective rhythm and practical clarity.'}
 
-LEARNED RULES FROM HUMAN EDITORIAL REVIEWS (STRICTLY ADHERE):
-${learnedRules.length > 0 ? learnedRules.map((r, i) => `${i + 1}. ${r}`).join('\n') : '• Write with punchy rhythm and real-world clarity.'}
+═══════════════════════════════════════════════
+MANDATORY ARTICLE STRUCTURE (Every blog must include ALL elements in content_html):
+═══════════════════════════════════════════════
+1. H1 TITLE: Start content_html with a single, clear <h1> title tag matching the article title.
+2. BYLINE & DATE BAR: Immediately below the H1, include a clean metadata paragraph:
+   <p class="article-meta"><em>Written by: The ${clientBrand} Team | Last Updated: ${currentDate}</em></p>
+3. KEY TAKEAWAYS: Include an <h2>Key Takeaways</h2> followed by a concise <ul> with 3 to 5 high-impact bullet points.
+4. DIRECT-ANSWER INTRO (NO REPETITION):
+   - The opening paragraphs must answer the search intent directly and immediately.
+   - CRITICAL: Do NOT repeat the same concept in paragraph 1 and paragraph 2. Paragraph 1 should define the core premise; paragraph 2 must introduce practical context or transition to the main comparison without rephrasing paragraph 1.
+5. LOGICAL H2 & H3 SECTIONS: Detailed, balanced analysis.
+   - For comparison topics (e.g. Fractional CFO vs In-house team): Present realistic scenarios. Do NOT present them as mutually exclusive opposites (e.g. a Fractional CFO often works alongside an existing in-house bookkeeper or finance team).
+6. FINAL THOUGHTS (CONCISE & FRESH):
+   - Keep the Final Thoughts section concise (1-2 tight paragraphs max).
+   - Do NOT rehash or repeat arguments already covered in earlier sections. Provide a forward-looking summary.
+7. FAQS (6 TO 7 PRACTICAL QUESTIONS):
+   - Include 6 or 7 practical questions.
+   - Format: Use <h3> for the question and <p> for the concise answer (2-3 sentences).
+   - CRITICAL FORMATTING RULE: Do NOT use <ol>, <li>, or "1.", "2." numbering inside the FAQ section. Headings should be clean <h3> tags only.
+   - NO KEYWORD STUFFING IN FAQS: Avoid synthetic questions created solely to insert a location keyword (e.g. "What about my Sydney business?"). Only include location where genuine regional regulations or local practical differences exist.
+8. FACTUAL CALL TO ACTION: End with a measured, factual invitation:
+   "${clientBrand} assists businesses with [relevant service area]. Contact the team to discuss your operational requirements."
 
-WRITING RULES:
-1. Write in natural Australian English (spelling: specialise, analyse, colour, practice vs practise, etc.). Sound like a knowledgeable Australian specialist explaining the subject to a real customer. Vary sentence length and rhythm. Use specific, plain language and natural transitions.
-2. Answer the main question early. Then explain the practical details, differences, conditions, and limitations. Cover the topic thoroughly without padding or repeating ideas.
-3. Give the article a distinct angle. Include concrete, useful details in the main sections. Never invent projects, customer stories, fake guarantees, or imaginary regulations.
-4. Cover related concepts naturally. Do NOT force awkward exact-match keywords or robotic keyword lists into headings.
-5. Use descriptive H2s and H3s. Keep question-format H2s as questions. Number headings for step-by-step instructions. Use bullet points or comparisons only where they genuinely improve readability.
-6. Avoid generic AI-sounding phrases, exaggerated claims, repetitive transitions, uniform paragraph lengths, and advice that could appear unchanged on any competitor’s website.
-7. End with a 3-question practical FAQ section and a natural, understated next step inviting the reader to contact ${clientBrand}.
+═══════════════════════════════════════════════
+STRICT EDITORIAL POLICIES:
+═══════════════════════════════════════════════
+1. PROHIBITED PROMOTIONAL & GUARANTEE CLICHÉS:
+   Banned phrases:
+   - "at a fraction of the cost"
+   - "unparalleled dedication"
+   - "top-tier financial leadership"
+   - "ensuring compliance" (compliance cannot be 100% guaranteed; use "supporting compliance" or "helping maintain regulatory standards")
+   - "game-changer", "delve", "tapestry", "in a nutshell", "moreover", "furthermore", "beacon", "leverage", "embark", "testament", "navigate the complexities", "optimise your outcomes"
+2. INTERNAL LINK DISCIPLINE:
+   - Keep total internal links to between 2 and 4 links across the whole post.
+   - Prioritise the Primary Commercial Hub page where relevant.
+   - Do not stuff multiple links in consecutive paragraphs.
+3. BALANCED REALISTIC COMPARISONS:
+   - Do not create false dilemmas. For advisory roles, explain how external specialists collaborate with internal staff.
 
 FORMAT REQUIREMENTS:
-- Provide semantic HTML formatting for the article body (<h2>, <h3>, <p>, <ul>, <li>, <strong>). Do NOT include <html> or <body> tags.
-- Provide Rank Math SEO tags: SEO title (< 60 chars), Meta description (140-155 chars with natural CTR appeal), Focus Keyword.
+- Return strictly valid HTML inside content_html: <h1>, <p>, <h2>, <h3>, <ul>, <li>, <strong>, <a>. No <html> or <body> tags.
+- Meta Title: Max 60 characters with CTR hook.
+- Meta Description: 140-155 characters.
 
-RETURN STRICTLY VALID JSON ONLY (no markdown ticks or conversational text outside JSON):
+RETURN STRICTLY VALID JSON ONLY (no conversational markdown outside JSON):
 {
-  "title": "Natural H1 Article Title",
-  "meta_title": "SEO Title < 60 chars | Brand",
+  "title": "Natural H1 Title",
+  "meta_title": "SEO Title < 60 chars | ${clientBrand}",
   "meta_description": "Natural Australian Meta Description (140-155 chars)",
   "focus_keyword": "${focusKeyword || topic}",
-  "content_html": "<h2>...</h2><p>Article HTML here...</p>",
+  "content_html": "<h1>Article Title</h1><p><em>Written by: The ${clientBrand} Team | Last Updated: ${currentDate}</em></p><h2>Key Takeaways</h2><ul><li>...</li></ul><p>Distinct introductory paragraph answering query...</p><p>Practical context paragraph without repeating paragraph 1...</p><h2>...</h2>...",
   "word_count_estimate": 1100,
   "reading_time_minutes": 5,
   "faqs": [
-    { "question": "Question 1?", "answer": "Answer 1" }
-  ]
+    { "question": "Question 1?", "answer": "Concise answer 1" },
+    { "question": "Question 2?", "answer": "Concise answer 2" },
+    { "question": "Question 3?", "answer": "Concise answer 3" },
+    { "question": "Question 4?", "answer": "Concise answer 4" },
+    { "question": "Question 5?", "answer": "Concise answer 5" },
+    { "question": "Question 6?", "answer": "Concise answer 6" }
+  ],
+  "suggested_slug": "natural-url-slug",
+  "schema_type": "Article"
 }`;
 
     const aiRes = await executeStrategicAiModel(prompt);
@@ -7341,32 +7780,42 @@ app.post('/api/blog-studio/submit-feedback', async (req, res) => {
   }
 
   try {
-    const prompt = `You are an AI Style & Writing Mentor analyzing the edits made by a Human Content Writer to improve an AI-generated draft.
-Compare the ORIGINAL AI content with the HUMAN-EDITED content.
-Identify 2 to 3 concise, highly actionable "Writing Rules" that the AI should adopt to match this writer's tone, phrasing, and quality standards for future blogs.
+    const prompt = `You are an expert editorial AI analyzing human corrections to an AI-generated blog article. Your job is to extract permanent, reusable writing rules that will prevent the same mistakes in ALL future articles for this client.
+
+Compare the ORIGINAL AI-generated content with the HUMAN-CORRECTED version and the writer's notes. Identify 3 to 5 specific, actionable rules.
 
 ORIGINAL AI CONTENT (Excerpt):
 """
-${originalContent.slice(0, 1500)}
+${originalContent.slice(0, 2500)}
 """
 
-HUMAN EDITED CONTENT (Excerpt):
+HUMAN-CORRECTED CONTENT (Excerpt):
 """
-${editedContent.slice(0, 1500)}
+${editedContent.slice(0, 2500)}
 """
 
-WRITER NOTES: "${writerNotes || 'Refined tone, eliminated fluff, improved local flow.'}"
+WRITER NOTES: "${writerNotes || 'General tone and accuracy improvements.'}"
 
-TASK:
-Extract 2 to 3 clear, reusable rules (e.g. "Avoid bullet lists in introductions", "Use active phrasing instead of passive voice", "Include upfront pricing mention in Australian dollars").
+ANALYSIS CATEGORIES — extract rules from each that applies:
+1. LANGUAGE & TONE: Did the writer remove AI-sounding phrases, clichés, or promotional language? What replacements were used?
+2. FACTUAL ACCURACY: Did the writer add qualifications, conditions, or caveats to claims? Were outdated figures corrected?
+3. STRUCTURE: Did the writer change heading hierarchy, add sections (FAQs, Key Takeaways), or reorganise content?
+4. SCOPE BOUNDARIES: Did the writer remove financial advice, investment recommendations, or overclaims?
+5. LOCAL RELEVANCE: Were random location references removed or refined?
+
+Each rule must be specific enough for an AI to follow without ambiguity.
+BAD example: "Use better tone" (too vague)
+GOOD example: "Replace 'navigate the complexities' with direct action phrases like 'review your records before 30 June'" (specific)
 
 OUTPUT STRICTLY VALID JSON ONLY:
 {
   "rulesLearned": [
-    "Rule 1 string",
-    "Rule 2 string"
+    "Rule 1 — specific, actionable instruction",
+    "Rule 2 — specific, actionable instruction",
+    "Rule 3 — specific, actionable instruction"
   ],
-  "styleSummary": "1 sentence summarizing the writer's style adjustments"
+  "styleSummary": "1-2 sentences summarizing the overall pattern of corrections",
+  "severityLevel": "minor|moderate|major"
 }`;
 
     const aiRes = await executeStrategicAiModel(prompt);
@@ -7569,6 +8018,21 @@ app.post('/api/blog-studio/drafts/update-review', async (req, res) => {
 
   await updateBlogDraftReviewRecord(clientId, draftId, status, writerEdits, writerName, title);
   res.json({ success: true, message: 'Draft updated successfully' });
+});
+
+// E. Delete a Blog Draft
+app.post('/api/blog-studio/drafts/delete', async (req, res) => {
+  const { clientId, draftId } = req.body;
+  if (!clientId || !draftId) return res.status(400).json({ error: 'clientId and draftId required' });
+
+  try {
+    await deleteBlogDraftRecord(clientId, draftId);
+    console.log(`[BLOG STUDIO] Deleted draft ${draftId} for client ${clientId}`);
+    res.json({ success: true, message: 'Draft deleted successfully' });
+  } catch (err: any) {
+    console.error('Draft delete error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==========================================================

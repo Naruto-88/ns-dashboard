@@ -280,6 +280,25 @@ export async function updateBlogDraftReviewRecord(
   }
 }
 
+export async function deleteBlogDraftRecord(clientId: string, draftId: string): Promise<void> {
+  // Remove from local JSON
+  const localMap = readJsonStore<Record<string, any[]>>(DRAFTS_STORE, {});
+  const drafts = localMap[clientId] || [];
+  localMap[clientId] = drafts.filter((d: any) => d.id !== draftId);
+  writeJsonStore(DRAFTS_STORE, localMap);
+
+  // Remove from Supabase
+  try {
+    await supabase
+      .from('blog_drafts')
+      .delete()
+      .eq('id', draftId)
+      .eq('client_id', clientId);
+  } catch (err: any) {
+    console.warn('[supabaseStore] blog_drafts delete error:', err.message);
+  }
+}
+
 
 // =========================================================================
 // 5. BLOG CALENDAR
@@ -372,4 +391,102 @@ export async function saveKeywordMetricsStore(clientId: string, metricsMap: Reco
   localMap[clientId] = { ...existing, ...metricsMap };
   writeJsonStore(KEYWORD_METRICS_STORE, localMap);
 }
+
+// =========================================================================
+// 6. SITE HEALTH CHECKS PERSISTENCE (DUAL LOCAL JSON & SUPABASE STORE)
+// =========================================================================
+const SITE_HEALTH_STORE = 'site_health_checks.json';
+
+export async function getSiteHealthStoreAll(): Promise<Record<string, any>> {
+  return readJsonStore<Record<string, any>>(SITE_HEALTH_STORE, {});
+}
+
+export async function saveSiteHealthRecord(clientId: string, audit: any): Promise<void> {
+  // 1. Immediately persist to local disk JSON store
+  const localMap = readJsonStore<Record<string, any>>(SITE_HEALTH_STORE, {});
+  localMap[clientId] = {
+    ...audit,
+    lastScannedAt: audit.scannedAt || new Date().toISOString()
+  };
+  writeJsonStore(SITE_HEALTH_STORE, localMap);
+
+  // 2. Persist to Supabase DB table
+  try {
+    await supabase.from('site_health_checks').upsert({
+      client_id: clientId,
+      site_url: audit.siteUrl,
+      http_status: audit.httpStatus,
+      response_time_ms: audit.responseTimeMs,
+      is_online: audit.isOnline,
+      ssl_valid: audit.sslValid,
+      ssl_days_left: audit.sslDaysLeft,
+      ssl_issuer: audit.sslIssuer,
+      sitemap_status: audit.sitemapStatus,
+      sitemap_url: audit.sitemapUrl,
+      sitemap_count: audit.sitemapCount,
+      robots_status: audit.robotsStatus,
+      has_noindex: audit.hasNoindex,
+      wp_connected: audit.wpConnected,
+      wp_version: audit.wpVersion,
+      php_version: audit.phpVersion,
+      bridge_version: audit.bridgeVersion || '1.3.0',
+      plugins_total: audit.pluginsTotal,
+      plugins_outdated: audit.pluginsOutdated,
+      plugins_data: audit.pluginsData,
+      issues_summary: audit.issues,
+      last_scanned_at: audit.scannedAt || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'client_id' });
+  } catch (err: any) {
+    console.warn('[supabaseStore] site_health_checks upsert warning:', err.message);
+  }
+}
+
+export async function saveAllSiteHealthRecords(audits: any[]): Promise<void> {
+  const localMap = readJsonStore<Record<string, any>>(SITE_HEALTH_STORE, {});
+  const now = new Date().toISOString();
+
+  for (const audit of audits) {
+    if (audit.clientId) {
+      localMap[audit.clientId] = {
+        ...audit,
+        lastScannedAt: audit.scannedAt || now
+      };
+    }
+  }
+  writeJsonStore(SITE_HEALTH_STORE, localMap);
+
+  try {
+    const records = audits.map(audit => ({
+      client_id: audit.clientId,
+      site_url: audit.siteUrl,
+      http_status: audit.httpStatus,
+      response_time_ms: audit.responseTimeMs,
+      is_online: audit.isOnline,
+      ssl_valid: audit.sslValid,
+      ssl_days_left: audit.sslDaysLeft,
+      ssl_issuer: audit.sslIssuer,
+      sitemap_status: audit.sitemapStatus,
+      sitemap_url: audit.sitemapUrl,
+      sitemap_count: audit.sitemapCount,
+      robots_status: audit.robotsStatus,
+      has_noindex: audit.hasNoindex,
+      wp_connected: audit.wpConnected,
+      wp_version: audit.wpVersion,
+      php_version: audit.phpVersion,
+      bridge_version: audit.bridgeVersion || '1.3.0',
+      plugins_total: audit.pluginsTotal,
+      plugins_outdated: audit.pluginsOutdated,
+      plugins_data: audit.pluginsData,
+      issues_summary: audit.issues,
+      last_scanned_at: audit.scannedAt || now,
+      updated_at: now
+    }));
+
+    await supabase.from('site_health_checks').upsert(records, { onConflict: 'client_id' });
+  } catch (err: any) {
+    console.warn('[supabaseStore] batch site_health_checks upsert warning:', err.message);
+  }
+}
+
 

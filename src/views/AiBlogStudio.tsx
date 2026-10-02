@@ -20,7 +20,8 @@ import {
   Eye,
   Clock,
   Link2,
-  Save
+  Save,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
@@ -93,6 +94,7 @@ export default function AiBlogStudio() {
   const activeDraftIdRef = useRef<string | null>(null);
   const [topic, setTopic] = useState('');
   const [focusKeyword, setFocusKeyword] = useState('');
+  const [targetHubUrl, setTargetHubUrl] = useState('');
   const [blogLength, setBlogLength] = useState<'short' | 'medium' | 'long'>('medium');
   const [customNotes, setCustomNotes] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -112,7 +114,7 @@ export default function AiBlogStudio() {
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Synchronize visualEditorRef innerHTML ONLY when a different draft is loaded
+  // Synchronize visualEditorRef innerHTML ONLY when a different draft is loaded or returning from diff view
   useEffect(() => {
     if (activeDraft && visualEditorRef.current) {
       if (activeDraftIdRef.current !== activeDraft.id) {
@@ -122,7 +124,7 @@ export default function AiBlogStudio() {
         visualEditorRef.current.innerHTML = activeDraft.currentContent;
       }
     }
-  }, [activeDraft?.id, editorViewMode]);
+  }, [activeDraft?.id, editorViewMode, showDiffView]);
 
   // Debounced Auto-Save for Draft Title & Body
   useEffect(() => {
@@ -267,7 +269,7 @@ export default function AiBlogStudio() {
   };
 
   // Generate Blog from form or calendar topic
-  const handleGenerateBlog = async (targetTopic: string, targetKw: string, targetNotes: string = '') => {
+  const handleGenerateBlog = async (targetTopic: string, targetKw: string, targetNotes: string = '', specificHubUrl?: string) => {
     setGenerating(true);
     setNotification(null);
     setActiveTab('studio');
@@ -281,7 +283,8 @@ export default function AiBlogStudio() {
           topic: targetTopic,
           focusKeyword: targetKw || targetTopic,
           length: blogLength,
-          customInstructions: targetNotes || customNotes
+          customInstructions: targetNotes || customNotes,
+          targetHubUrl: specificHubUrl || targetHubUrl
         })
       });
       const data = await res.json();
@@ -400,6 +403,29 @@ export default function AiBlogStudio() {
       setNotification({ type: 'error', message: e.message });
     } finally {
       setPublishing(false);
+    }
+  };
+
+  // Delete a Blog Draft
+  const handleDeleteDraft = async (draftId: string) => {
+    if (!confirm('Are you sure you want to delete this draft? This cannot be undone.')) return;
+    try {
+      const res = await fetch('/api/blog-studio/drafts/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClientId, draftId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete draft');
+
+      setDraftsList(prev => prev.filter(d => d.id !== draftId));
+      if (activeDraft?.id === draftId) {
+        setActiveDraft(null);
+        setShowDiffView(false);
+      }
+      setNotification({ type: 'success', message: 'Draft deleted successfully.' });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message });
     }
   };
 
@@ -568,6 +594,21 @@ export default function AiBlogStudio() {
                     placeholder="e.g. deck maintenance sydney"
                     value={focusKeyword}
                     onChange={(e) => setFocusKeyword(e.target.value)}
+                    className={`w-full p-3 rounded-xl border text-xs outline-none font-mono ${
+                      theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/10 text-white'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-400 block mb-1">
+                    Primary Commercial Hub URL <span className="text-zinc-500 font-normal">(Optional — e.g. /expert-cfo-services-australia/)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://... or /commercial-service-page/"
+                    value={targetHubUrl}
+                    onChange={(e) => setTargetHubUrl(e.target.value)}
                     className={`w-full p-3 rounded-xl border text-xs outline-none font-mono ${
                       theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-950 border-white/10 text-white'
                     }`}
@@ -748,6 +789,13 @@ export default function AiBlogStudio() {
                       {publishing ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
                       {publishing ? 'Pushing...' : 'Push to Site'}
                     </button>
+                    <button
+                      onClick={() => activeDraft && handleDeleteDraft(activeDraft.id)}
+                      className="p-2 rounded-xl bg-zinc-800 hover:bg-rose-600 text-zinc-400 hover:text-white transition-all border border-white/5"
+                      title="Delete this draft"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
 
@@ -815,10 +863,14 @@ export default function AiBlogStudio() {
                       theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-800' : 'bg-zinc-950/80 border-white/10 text-zinc-200'
                     }`}>
                       {(() => {
-                        const origTitle = (activeDraft as any).originalTitle || activeDraft.title || '';
-                        const origWithTitle = (origTitle ? '<h1>' + origTitle + '</h1>' : '') + (activeDraft.originalAiContent || '');
+                        const origBody = activeDraft.originalAiContent || '';
                         const currBody = activeDraft.currentContent || '';
-                        const currWithTitle = (activeDraft.title ? '<h1>' + activeDraft.title + '</h1>' : '') + currBody;
+                        const origHasH1 = /^\s*<h1/i.test(origBody);
+                        const currHasH1 = /^\s*<h1/i.test(currBody);
+
+                        const origTitle = (activeDraft as any).originalTitle || activeDraft.title || '';
+                        const origWithTitle = (!origHasH1 && origTitle ? '<h1>' + origTitle + '</h1>' : '') + origBody;
+                        const currWithTitle = (!currHasH1 && activeDraft.title ? '<h1>' + activeDraft.title + '</h1>' : '') + currBody;
                         const diffParts = computeWordDiff(origWithTitle, currWithTitle);
                         const hasDifferences = diffParts.some(p => p.type === 'added' || p.type === 'removed');
 
@@ -987,22 +1039,27 @@ export default function AiBlogStudio() {
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
                     Finished editing? Clicking <strong>"Approve & Teach AI"</strong> will analyze your changes, update the AI's permanent style rules for this client, and mark this article as <strong>REVIEWED</strong>.
                   </p>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      placeholder="Optional notes: (e.g. Cut long intro, used active voice)"
+                  <div className="space-y-3">
+                    <textarea
+                      rows={3}
+                      placeholder="Enter detailed feedback or corrections (e.g. Cut generic intro, remove unqualified tax statements, fix WFH rate, add Sydney accounting service internal links, ensure 6 FAQs)..."
                       value={writerFeedbackNotes}
                       onChange={(e) => setWriterFeedbackNotes(e.target.value)}
-                      className="flex-1 p-2.5 rounded-xl bg-zinc-950 border border-white/10 text-xs text-white outline-none focus:border-blue-400"
+                      className="w-full p-3 rounded-xl bg-zinc-950 border border-white/10 text-xs text-white outline-none focus:border-blue-400 font-sans leading-relaxed resize-y min-h-[70px]"
                     />
-                    <button
-                      onClick={handleDistillFeedbackAndApprove}
-                      disabled={submittingFeedback}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:brightness-110 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 transition-all"
-                    >
-                      {submittingFeedback ? <RefreshCw size={13} className="animate-spin" /> : <BrainCircuit size={14} />}
-                      {submittingFeedback ? 'Teaching AI...' : 'Approve & Teach AI'}
-                    </button>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] text-zinc-500">
+                        💡 Rules extracted from this feedback are saved permanently for this client.
+                      </span>
+                      <button
+                        onClick={handleDistillFeedbackAndApprove}
+                        disabled={submittingFeedback}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:brightness-110 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 transition-all"
+                      >
+                        {submittingFeedback ? <RefreshCw size={13} className="animate-spin" /> : <BrainCircuit size={14} />}
+                        {submittingFeedback ? 'Teaching AI...' : 'Approve & Teach AI'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1090,8 +1147,9 @@ export default function AiBlogStudio() {
                           onClick={() => {
                             setTopic(item.topic);
                             setFocusKeyword(item.focusKeyword);
+                            setTargetHubUrl(item.targetUrl || '');
                             setCustomNotes(`Internal Link target: ${item.targetUrl || ''}`);
-                            handleGenerateBlog(item.topic, item.focusKeyword, `Target URL to link: ${item.targetUrl}`);
+                            handleGenerateBlog(item.topic, item.focusKeyword, `Target URL to link: ${item.targetUrl}`, item.targetUrl);
                           }}
                           disabled={generating}
                           className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1 shadow-md ml-auto"
@@ -1136,15 +1194,24 @@ export default function AiBlogStudio() {
                       <span className="text-amber-400">Needs Review</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setActiveDraft(draft);
-                      setActiveTab('studio');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md"
-                  >
-                    <Eye size={13} /> Review & Edit
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setActiveDraft(draft);
+                        setActiveTab('studio');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md"
+                    >
+                      <Eye size={13} /> Review & Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDraft(draft.id)}
+                      className="p-2 rounded-xl bg-zinc-800 hover:bg-rose-600 text-zinc-400 hover:text-white transition-all border border-white/5"
+                      title="Delete draft"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1178,15 +1245,24 @@ export default function AiBlogStudio() {
                       <span className="text-emerald-400 font-semibold">Reviewed & AI Style Updated</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setActiveDraft(draft);
-                      setActiveTab('studio');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center gap-1.5"
-                  >
-                    <Eye size={13} /> View in Studio
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setActiveDraft(draft);
+                        setActiveTab('studio');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center gap-1.5"
+                    >
+                      <Eye size={13} /> View in Studio
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDraft(draft.id)}
+                      className="p-2 rounded-xl bg-zinc-800 hover:bg-rose-600 text-zinc-400 hover:text-white transition-all border border-white/5"
+                      title="Delete draft"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
