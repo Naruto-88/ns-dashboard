@@ -88,6 +88,7 @@ export default function MasterDashboard() {
     end: format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedOwner, setSelectedOwner] = useState<string>('all');
   const [editingLeads, setEditingLeads] = useState<{ clientId: string, value: string } | null>(null);
   const [selectedIntelligence, setSelectedIntelligence] = useState<{ 
     client: Client; 
@@ -331,11 +332,14 @@ export default function MasterDashboard() {
            previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
         }
         
-        // Sum manual metrics from weekly_data
+        // Sum manual metrics from weekly_data with timezone-safe date comparison
         const sumWeeklyMetric = (dataArray: any[], start: Date, end: Date, metric: string) => {
+            const startStr = format(start, 'yyyy-MM-dd');
+            const endStr = format(end, 'yyyy-MM-dd');
             return dataArray.filter(d => {
-                const wDate = new Date(d.week_start_date);
-                return wDate >= start && wDate <= end;
+                if (!d.week_start_date) return false;
+                // If week_start_date falls within startStr and endStr, or within the current 7-day window
+                return d.week_start_date >= startStr && d.week_start_date <= endStr;
             }).reduce((sum, d) => sum + (Number(d[metric]) || 0), 0);
         };
 
@@ -343,21 +347,33 @@ export default function MasterDashboard() {
         const leadShieldCurrent = isLeadAutoSync ? currentRangeLeads.clients?.[client.id] : null;
         const leadShieldPrev = isLeadAutoSync ? prevRangeLeads.clients?.[client.id] : null;
 
+        const currentWeekLeadsTotal = sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_total');
         const resolvedCurrentLeadsTotal = (leadShieldCurrent && leadShieldCurrent.total > 0)
           ? leadShieldCurrent.total
-          : (sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_total') || currentWeekData?.leads_total || 0);
+          : (currentWeekLeadsTotal > 0 
+              ? currentWeekLeadsTotal 
+              : (latestData?.leads_total ?? currentWeekData?.leads_total ?? 0));
 
+        const currentWeekLeadsLegit = sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_legit');
         const resolvedCurrentLeadsLegit = (leadShieldCurrent && leadShieldCurrent.total > 0)
           ? leadShieldCurrent.genuine
-          : (sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_legit') || currentWeekData?.leads_legit || 0);
+          : (currentWeekLeadsLegit > 0 
+              ? currentWeekLeadsLegit 
+              : (latestData?.leads_legit ?? currentWeekData?.leads_legit ?? 0));
 
+        const prevWeekLeadsTotal = sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_total');
         const resolvedPrevLeadsTotal = (leadShieldPrev && leadShieldPrev.total > 0)
           ? leadShieldPrev.total
-          : (sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_total') || previousWeekData?.leads_total || 0);
+          : (prevWeekLeadsTotal > 0 
+              ? prevWeekLeadsTotal 
+              : (sortedWeekly[1]?.leads_total ?? previousWeekData?.leads_total ?? 0));
 
+        const prevWeekLeadsLegit = sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_legit');
         const resolvedPrevLeadsLegit = (leadShieldPrev && leadShieldPrev.total > 0)
           ? leadShieldPrev.genuine
-          : (sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_legit') || previousWeekData?.leads_legit || 0);
+          : (prevWeekLeadsLegit > 0 
+              ? prevWeekLeadsLegit 
+              : (sortedWeekly[1]?.leads_legit ?? previousWeekData?.leads_legit ?? 0));
         
         const resolvedCurrentPhoneCalls = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'phone_calls') || currentWeekData?.phone_calls || 0;
         const resolvedPreviousPhoneCalls = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'phone_calls') || previousWeekData?.phone_calls || 0;
@@ -536,11 +552,32 @@ export default function MasterDashboard() {
   const handleLeadsUpdate = async (row: DashboardRow) => {
     if (!editingLeads) return;
     try {
-      const saveDate = row.currentData?.week_start_date || format(parseISO(dateRange.start), 'yyyy-MM-dd');
-      await updateLegitLeads(row.client.id, saveDate, parseInt(editingLeads.value));
+      const rawDateStr = row.currentData?.week_start_date || row.latestData?.week_start_date || dateRange.start || new Date().toISOString().split('T')[0];
+      const parsedDate = parseISO(rawDateStr);
+      const saveDate = isNaN(parsedDate.getTime()) 
+        ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+        : format(startOfWeek(parsedDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+      const newVal = parseInt(editingLeads.value, 10) || 0;
+      await updateLegitLeads(row.client.id, saveDate, newVal);
+      
+      // Instantly update local row state for immediate UI feedback
+      setRows(prevRows => prevRows.map(r => {
+        if (r.client.id === row.client.id) {
+          return {
+            ...r,
+            currentLeadsLegit: newVal,
+            currentLeadsTotal: Math.max(r.currentLeadsTotal, newVal),
+            latestData: r.latestData ? { ...r.latestData, leads_legit: newVal, leads_total: Math.max(r.latestData.leads_total || 0, newVal) } : r.latestData
+          };
+        }
+        return r;
+      }));
+
       setEditingLeads(null);
       fetchData(true);
     } catch (error) {
+      console.error('Failed to update legit leads:', error);
       alert('Failed to update legit leads');
     }
   };
@@ -556,11 +593,41 @@ export default function MasterDashboard() {
     fetchData();
   }, [viewMode, dateRange]);
 
+  const availableOwners = React.useMemo(() => {
+    const ownerMap = new Map<string, string>();
+    rows.forEach(r => {
+      const code = (r.client.project_owner_code || '').trim();
+      const name = (r.client.project_owner_name || '').trim();
+      if (code) {
+        if (!ownerMap.has(code) || (name && !ownerMap.get(code))) {
+          ownerMap.set(code, name || code);
+        }
+      } else if (name) {
+        if (!ownerMap.has(name)) {
+          ownerMap.set(name, name);
+        }
+      }
+    });
+    return Array.from(ownerMap.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }, [rows]);
+
   const filteredRows = React.useMemo(() => {
     let result = rows;
+
+    if (selectedOwner !== 'all') {
+      result = result.filter(r => {
+        const code = (r.client.project_owner_code || '').trim().toLowerCase();
+        const name = (r.client.project_owner_name || '').trim().toLowerCase();
+        const target = selectedOwner.toLowerCase();
+        return code === target || name === target;
+      });
+    }
+
     if (searchTerm.trim()) {
       const terms = searchTerm.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-      result = rows.filter(r =>
+      result = result.filter(r =>
         terms.some(term =>
           r.client.name.toLowerCase().includes(term) ||
           r.client.short_code.toLowerCase().includes(term)
@@ -642,7 +709,7 @@ export default function MasterDashboard() {
     }
 
     return result;
-  }, [rows, searchTerm, sortConfig]);
+  }, [rows, selectedOwner, searchTerm, sortConfig]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -778,6 +845,38 @@ export default function MasterDashboard() {
                 : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500'
                 } w-36 lg:w-40`}
             />
+          </div>
+
+          <div className="relative shrink-0 flex items-center">
+            <User className={`absolute left-2.5 pointer-events-none transition-colors ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`} size={13} />
+            <select
+              value={selectedOwner}
+              onChange={(e) => setSelectedOwner(e.target.value)}
+              className={`pl-7 pr-7 py-1.5 border rounded-xl text-xs font-semibold outline-none cursor-pointer appearance-none transition-all ${
+                theme === 'white'
+                  ? selectedOwner === 'all'
+                    ? 'bg-white border-[#163f4d]/10 text-[#082a36] hover:border-[#76c9be]'
+                    : 'bg-[#76c9be]/15 border-[#76c9be] text-[#082a36]'
+                  : selectedOwner === 'all'
+                    ? 'bg-zinc-800 border-white/5 text-zinc-300 hover:border-zinc-700'
+                    : 'bg-blue-600/20 border-blue-500 text-blue-400'
+              }`}
+              title="Filter by Project Owner / PM"
+            >
+              <option value="all" className={theme === 'white' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white'}>
+                All Owners {availableOwners.length > 0 ? `(${availableOwners.length})` : ''}
+              </option>
+              {availableOwners.map(owner => (
+                <option 
+                  key={owner.code} 
+                  value={owner.code}
+                  className={theme === 'white' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white'}
+                >
+                  {owner.name !== owner.code ? `${owner.name} (${owner.code})` : owner.code}
+                </option>
+              ))}
+            </select>
+            <div className={`absolute right-2 pointer-events-none text-[10px] ${theme === 'white' ? 'text-zinc-400' : 'text-zinc-500'}`}>▼</div>
           </div>
 
           <button

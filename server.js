@@ -4502,7 +4502,30 @@ app.get("/api/cron/sync-dashboard-cache", async (req, res) => {
         let prevGsc = await fetchGscLive(client, pStart, pEnd);
         let curGa4 = await fetchGa4Live(client, cStart, cEnd);
         let prevGa4 = await fetchGa4Live(client, pStart, pEnd);
+        let curWeeklyLeads = { leads_total: 0, leads_legit: 0 };
+        let prevWeeklyLeads = { leads_total: 0, leads_legit: 0 };
+        try {
+          const { data: wCurRows } = await supabase2.from("weekly_data").select("leads_total, leads_legit, week_start_date").eq("client_id", client.id).gte("week_start_date", cStart).lte("week_start_date", cEnd);
+          if (wCurRows && wCurRows.length > 0) {
+            curWeeklyLeads.leads_total = wCurRows.reduce((sum, r) => sum + (Number(r.leads_total) || 0), 0);
+            curWeeklyLeads.leads_legit = wCurRows.reduce((sum, r) => sum + (Number(r.leads_legit) || 0), 0);
+          } else {
+            const { data: latestW } = await supabase2.from("weekly_data").select("leads_total, leads_legit").eq("client_id", client.id).order("week_start_date", { ascending: false }).limit(1).maybeSingle();
+            if (latestW) {
+              curWeeklyLeads.leads_total = Number(latestW.leads_total) || 0;
+              curWeeklyLeads.leads_legit = Number(latestW.leads_legit) || 0;
+            }
+          }
+          const { data: wPrevRows } = await supabase2.from("weekly_data").select("leads_total, leads_legit").eq("client_id", client.id).gte("week_start_date", pStart).lte("week_start_date", pEnd);
+          if (wPrevRows && wPrevRows.length > 0) {
+            prevWeeklyLeads.leads_total = wPrevRows.reduce((sum, r) => sum + (Number(r.leads_total) || 0), 0);
+            prevWeeklyLeads.leads_legit = wPrevRows.reduce((sum, r) => sum + (Number(r.leads_legit) || 0), 0);
+          }
+        } catch (leadFetchErr) {
+          console.warn(`[CACHE SYNC] Could not fetch saved weekly leads for ${client.name}:`, leadFetchErr.message);
+        }
         const current_data = {
+          week_start_date: cStart,
           gsc_clicks: curGsc.clicks,
           gsc_impressions: curGsc.impressions,
           gsc_position: curGsc.position,
@@ -4512,10 +4535,11 @@ app.get("/api/cron/sync-dashboard-cache", async (req, res) => {
           ga4_traffic: curGa4.traffic,
           ga4_organic_traffic: curGa4.organic_traffic,
           phone_calls: curGa4.phone_calls,
-          leads_total: curGa4.leads_total,
-          leads_legit: curGa4.leads_total
+          leads_total: curWeeklyLeads.leads_total || curGa4.leads_total,
+          leads_legit: curWeeklyLeads.leads_legit || curGa4.leads_total
         };
         const prev_data = {
+          week_start_date: pStart,
           gsc_clicks: prevGsc.clicks,
           gsc_impressions: prevGsc.impressions,
           gsc_position: prevGsc.position,
@@ -4525,8 +4549,8 @@ app.get("/api/cron/sync-dashboard-cache", async (req, res) => {
           ga4_traffic: prevGa4.traffic,
           ga4_organic_traffic: prevGa4.organic_traffic,
           phone_calls: prevGa4.phone_calls,
-          leads_total: prevGa4.leads_total,
-          leads_legit: prevGa4.leads_total
+          leads_total: prevWeeklyLeads.leads_total || prevGa4.leads_total,
+          leads_legit: prevWeeklyLeads.leads_legit || prevGa4.leads_total
         };
         let tableName = "dashboard_cache";
         let conflictTarget = "client_id,view_mode";
@@ -6486,11 +6510,18 @@ setInterval(async () => {
     console.error("[MONDAY DIGEST ERROR]", err.message);
   }
 }, 60 * 1e3);
+var activePluginUpgradeLocks = /* @__PURE__ */ new Set();
 app.post("/api/site-health/update-plugin", async (req, res) => {
   const { clientId, pluginSlug } = req.body;
   if (!clientId || !pluginSlug) {
     return res.status(400).json({ error: "clientId and pluginSlug are required" });
   }
+  if (activePluginUpgradeLocks.has(clientId)) {
+    return res.status(409).json({
+      error: "Another plugin update is currently in progress for this website. Please wait for it to finish before starting the next update."
+    });
+  }
+  activePluginUpgradeLocks.add(clientId);
   try {
     const { data: client, error } = await supabase2.from("clients").select("id, name, short_code, gsc_site_url, wordpress_url, seo_webhook_secret").eq("id", clientId).single();
     if (error || !client) {
@@ -6518,6 +6549,13 @@ app.post("/api/site-health/update-plugin", async (req, res) => {
         riskLevel: safetyCheck.riskLevel
       });
     }
+    const cachedAudit = siteHealthMemoryCache.get(clientId);
+    const currentBridgeVer = cachedAudit?.bridgeVersion || "1.0.0";
+    if (currentBridgeVer.localeCompare("1.5.0", void 0, { numeric: true, sensitivity: "base" }) < 0) {
+      return res.status(400).json({
+        error: `Bridge Plugin Update Required (currently v${currentBridgeVer}). Bridge versions below v1.5.0 lack atomic installation locking and fail-safe active-state reconciliation. Please upload Netstripes Mission Control Site Bridge v1.5.0 to this site first.`
+      });
+    }
     const endpoint = `${baseUrl}/wp-json/mc-bridge/v1/update-plugin`;
     console.log(`[WP REMOTE UPDATE] Dispatching upgrade for ${pluginSlug} at ${endpoint}`);
     const wpRes = await fetch(endpoint, {
@@ -6525,6 +6563,7 @@ app.post("/api/site-health/update-plugin", async (req, res) => {
       headers: {
         "Content-Type": "application/json",
         "X-MC-Bridge-Key": secretKey,
+        "X-MC-Actor": "Netstripes-Dashboard-Admin",
         "User-Agent": "Netstripes-MissionControl-HealthBot/1.0"
       },
       body: JSON.stringify({ slug: pluginSlug })
@@ -6536,6 +6575,7 @@ app.post("/api/site-health/update-plugin", async (req, res) => {
         details: wpData
       });
     }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     const updatedAudit = await auditSingleClient(client);
     siteHealthMemoryCache.set(client.id, updatedAudit);
     await saveSiteHealthRecord(client.id, updatedAudit).catch((err) => {
@@ -6549,6 +6589,56 @@ app.post("/api/site-health/update-plugin", async (req, res) => {
     });
   } catch (err) {
     console.error("Remote plugin update error:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    activePluginUpgradeLocks.delete(clientId);
+  }
+});
+app.post("/api/site-health/activate-plugin", async (req, res) => {
+  const { clientId, pluginSlug } = req.body;
+  if (!clientId || !pluginSlug) {
+    return res.status(400).json({ error: "clientId and pluginSlug are required" });
+  }
+  try {
+    const { data: client, error } = await supabase2.from("clients").select("id, name, short_code, gsc_site_url, wordpress_url, seo_webhook_secret").eq("id", clientId).single();
+    if (error || !client) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+    const baseUrl = extractCleanBaseUrl(client.gsc_site_url, client.wordpress_url);
+    const secretKey = client.seo_webhook_secret;
+    if (!baseUrl || !secretKey) {
+      return res.status(400).json({ error: "Client WordPress URL or Bridge Secret Key is not configured." });
+    }
+    const endpoint = `${baseUrl}/wp-json/mc-bridge/v1/activate-plugin`;
+    const wpRes = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-MC-Bridge-Key": secretKey,
+        "X-MC-Actor": "Netstripes-Dashboard-Admin",
+        "User-Agent": "Netstripes-MissionControl-HealthBot/1.0"
+      },
+      body: JSON.stringify({ slug: pluginSlug })
+    });
+    const wpData = await wpRes.json().catch(() => ({}));
+    if (!wpRes.ok || wpData.code || wpData.success === false) {
+      return res.status(400).json({
+        error: wpData.message || "Remote WordPress bridge could not activate the plugin.",
+        details: wpData
+      });
+    }
+    const updatedAudit = await auditSingleClient(client);
+    siteHealthMemoryCache.set(client.id, updatedAudit);
+    await saveSiteHealthRecord(client.id, updatedAudit).catch(() => {
+    });
+    res.json({
+      success: true,
+      message: `Successfully activated plugin ${pluginSlug}`,
+      wpResponse: wpData,
+      updatedAudit
+    });
+  } catch (err) {
+    console.error("Remote plugin activation error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -7272,14 +7362,27 @@ app.post("/api/blog-studio/generate", async (req, res) => {
         if (postsRes.ok) {
           const postsData = await postsRes.json();
           if (postsData.posts && Array.isArray(postsData.posts)) {
+            const currentTopicNorm = topic.toLowerCase().replace(/[^a-z0-9]/g, "");
             existingPosts = postsData.posts.map((p) => ({
               title: p.title || "",
               url: p.link || `${baseUrl}/${p.slug || ""}`,
               slug: p.slug || ""
-            }));
+            })).filter((p) => {
+              const slugNorm = (p.slug || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              const titleNorm = (p.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              if (slugNorm.includes(currentTopicNorm) || currentTopicNorm.includes(slugNorm)) return false;
+              if (slugNorm.includes("fractionalcfo") || slugNorm.includes("inhousefinance")) return false;
+              if (slugNorm.includes("outsourcing-cfo-services")) return false;
+              if (currentTopicNorm.includes("cfo")) {
+                if (slugNorm.includes("tax-planning") || slugNorm.includes("ecommerce") || slugNorm.includes("e-commerce")) {
+                  return false;
+                }
+              }
+              return true;
+            });
           }
         }
-        console.log(`[BLOG STUDIO] Fetched ${existingPosts.length} existing posts for interlinks from ${clientBrand}`);
+        console.log(`[BLOG STUDIO] Fetched ${existingPosts.length} clean filtered existing posts for interlinks from ${clientBrand}`);
       }
     } catch (interlinkErr) {
       console.warn("[BLOG STUDIO] Could not fetch existing posts for interlinks:", interlinkErr.message);
@@ -7298,7 +7401,7 @@ EXISTING SITE PAGES FOR INTERNAL LINKING (SUPPORTING LINKS):
 The following are live published pages/posts on this client's website. Naturally weave 1 to 3 relevant internal links into body paragraphs using descriptive anchor text. Do NOT over-link (maximum 2-4 internal links in total across the entire article). Never link to unrelated or outdated topics.
 ${existingPosts.slice(0, 30).map((p) => `- "${p.title}" \u2192 ${p.url}`).join("\n")}
 ` : "";
-    const prompt = `You are an elite Australian SEO content editor producing a publish-ready blog article. Your output must meet strict editorial, factual, and structural standards.
+    const prompt = `You are a professional Australian SEO content writer. Your task is to produce a publish-ready, factually accurate, editorially sound blog article that reads as though written by a subject-matter expert \u2014 not generated by AI. Every sentence must be direct, qualified where required, and written in plain Australian English.
 
 CLIENT BRIEF
 - Brand: "${clientBrand}"
@@ -7311,70 +7414,127 @@ CLIENT BRIEF
 - Publishing Date Stamp: "${currentDate}"
 ${primaryHubDirective}
 ${interlinkSection}
-LEARNED RULES FROM HUMAN EDITORIAL REVIEWS (STRICTLY ADHERE \u2014 these override defaults):
+LEARNED RULES FROM HUMAN EDITORIAL REVIEWS (STRICTLY ADHERE \u2014 these override all defaults):
 ${learnedRules.length > 0 ? learnedRules.map((r, i) => `${i + 1}. ${r}`).join("\n") : "\u2022 Write with direct, objective rhythm and practical clarity."}
 
 \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-MANDATORY ARTICLE STRUCTURE (Every blog must include ALL elements in content_html):
+MANDATORY ARTICLE STRUCTURE
 \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-1. H1 TITLE: Start content_html with a single, clear <h1> title tag matching the article title.
-2. BYLINE & DATE BAR: Immediately below the H1, include a clean metadata paragraph:
+1. H1 TITLE
+   - Single <h1> tag at the top of content_html. Clear, descriptive, no clickbait.
+
+2. BYLINE & DATE
    <p class="article-meta"><em>Written by: The ${clientBrand} Team | Last Updated: ${currentDate}</em></p>
-3. KEY TAKEAWAYS: Include an <h2>Key Takeaways</h2> followed by a concise <ul> with 3 to 5 high-impact bullet points.
-4. DIRECT-ANSWER INTRO (NO REPETITION):
-   - The opening paragraphs must answer the search intent directly and immediately.
-   - CRITICAL: Do NOT repeat the same concept in paragraph 1 and paragraph 2. Paragraph 1 should define the core premise; paragraph 2 must introduce practical context or transition to the main comparison without rephrasing paragraph 1.
-5. LOGICAL H2 & H3 SECTIONS: Detailed, balanced analysis.
-   - For comparison topics (e.g. Fractional CFO vs In-house team): Present realistic scenarios. Do NOT present them as mutually exclusive opposites (e.g. a Fractional CFO often works alongside an existing in-house bookkeeper or finance team).
-6. FINAL THOUGHTS (CONCISE & FRESH):
-   - Keep the Final Thoughts section concise (1-2 tight paragraphs max).
-   - Do NOT rehash or repeat arguments already covered in earlier sections. Provide a forward-looking summary.
-7. FAQS (6 TO 7 PRACTICAL QUESTIONS):
-   - Include 6 or 7 practical questions.
-   - Format: Use <h3> for the question and <p> for the concise answer (2-3 sentences).
-   - CRITICAL FORMATTING RULE: Do NOT use <ol>, <li>, or "1.", "2." numbering inside the FAQ section. Headings should be clean <h3> tags only.
-   - NO KEYWORD STUFFING IN FAQS: Avoid synthetic questions created solely to insert a location keyword (e.g. "What about my Sydney business?"). Only include location where genuine regional regulations or local practical differences exist.
-8. FACTUAL CALL TO ACTION: End with a measured, factual invitation:
-   "${clientBrand} assists businesses with [relevant service area]. Contact the team to discuss your operational requirements."
+
+3. KEY TAKEAWAYS
+   - <h2>Key Takeaways</h2> immediately after byline.
+   - 3 to 5 bullet points in a <ul>. Each point must be factual and distinct.
+
+4. INTRODUCTION (2 paragraphs \u2014 FOLLOW THIS GOLD STANDARD MODEL EXACTLY)
+   GOLD STANDARD TO REPLICATE:
+   "For Australian businesses planning to expand, choosing the right financial leadership structure can affect the quality of forecasting, reporting and commercial decision-making. The choice may involve engaging a fractional CFO, building an in-house finance team or combining both models.
+   A fractional CFO can provide senior financial guidance without requiring a full-time executive appointment. An in-house team offers ongoing operational support and deeper integration with the business. The right option depends on your growth stage, internal resources, financial complexity and need for day-to-day support.
+   ${clientBrand} provides flexible [Service Name](commercial_hub_link) for businesses that need strategic and operational financial support."
+
+   - DO NOT start either paragraph with "In today's", "When it comes to", "Navigating", or any AI opener.
+   - ABSOLUTELY BANNED OPENING PHRASES: "unique set of financial considerations", "robust strategic oversight", "meticulous operational management", "critical decision", "impacts your growth trajectory", "best of both worlds", "sustainable expansion", "comprehensive guide", "pivotal strategic decision", "growth ambitions", "understanding these nuances is critical", "optimal financial structure", "significantly impacts", "financial health", "burgeoning", "shape your financial future".
+
+5. BODY SECTIONS (H2 + H3)
+   - Balanced, objective, factually qualified analysis.
+   - For comparison topics: Present both options fairly. Do NOT imply they are always mutually exclusive.
+   - A fractional CFO is NOT a replacement for every in-house finance role. After any cost comparison section, add this exact disclaimer paragraph:
+     "A fractional CFO is not necessarily a replacement for every role within an in-house finance team. Businesses may still require bookkeeping, payroll, reconciliations and transactional accounting support."
+   - Description of fractional CFO model: "This model may suit [businesses] that need senior financial guidance but do not yet require a full-time CFO." NEVER write "This model is ideal for".
+   - Description of what a fractional CFO provides: "providing access to senior financial experience on a flexible schedule." NEVER write "offering the expertise of a seasoned financial leader".
+   - Description of in-house team: "employees who manage the organisation's ongoing financial operations according to their roles and level of experience." NEVER write "handle all aspects".
+   - In-house team availability: "They work exclusively for the organisation and are regularly available to support operational queries and internal decision-making." NEVER write "They are on-site daily" or "round-the-clock attention" or "dedicated, round-the-clock".
+   - Scalability: "The level of service may be adjusted as the business's requirements change." NEVER write "You can easily adjust".
+   - Urgent availability: "Availability is based on the agreed schedule and service scope." NEVER write "urgent needs can often be accommodated".
+
+6. COST COMPARISON
+   - Use this EXACT framing for cost:
+     Fractional CFO: "May cost less when the business requires senior support for limited hours or specific projects. The actual cost depends on the service scope, required availability and engagement length."
+     In-House: "Involves salaries, superannuation, leave entitlements, recruitment, training and systems costs. The investment may be appropriate when the business has enough ongoing work to support permanent finance roles."
+   - NEVER write "generally more cost-effective", "at a fraction of the cost", or any absolute cost superiority claim.
+
+7. FINAL THOUGHTS
+   - <h2>Final Thoughts</h2>
+   - 1 to 2 paragraphs max. Must NOT repeat arguments from body sections.
+   - Provide a forward-looking, factually neutral summary. Example: "Businesses at different stages will have different requirements. The most appropriate structure depends on the level of ongoing financial activity, budget, and the need for day-to-day operational support versus strategic advisory input."
+   - Do NOT write: "well-positioned for future success", "critical for successful expansion", "paramount", "high-calibre financial leadership".
+
+8. FAQ SECTION
+   - Start with <h2>Frequently Asked Questions</h2> \u2014 this tag is MANDATORY.
+   - 5 to 7 questions using <h3> per question, <p> per answer.
+   - NEVER use <ol>, <li>, or numbered FAQs ("1.", "2.").
+   - Onboarding FAQ: Do NOT state specific timeframes ("days or weeks"). Write: "The time required to integrate a fractional CFO depends on the complexity of the business and the scope of work agreed upon."
+   - Cost FAQ: Apply the same qualified framing as the cost comparison section above.
+   - International expansion FAQ: Use qualified language. Write "may assist", "can provide guidance", not "will handle" or "manages seamlessly".
+   - No synthetic location-keyword questions. Only include location where genuine regional regulatory differences exist.
+
+9. CALL TO ACTION (END OF ARTICLE)
+   - Use this structure: "${clientBrand} can assist with [relevant service area]. Learn more about our [Service Name linked to commercial hub URL] or contact the team to discuss your requirements."
+   - If a Primary Commercial Hub URL was provided, ALWAYS link the service name in the CTA to that URL.
+   - NEVER write: "don't hesitate to reach out", "unlock your potential", "take the next step in your journey", "transform your business".
 
 \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-STRICT EDITORIAL POLICIES:
+ABSOLUTE BANS \u2014 NEVER USE ANY OF THESE:
 \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-1. PROHIBITED PROMOTIONAL & GUARANTEE CLICH\xC9S:
-   Banned phrases:
-   - "at a fraction of the cost"
-   - "unparalleled dedication"
-   - "top-tier financial leadership"
-   - "ensuring compliance" (compliance cannot be 100% guaranteed; use "supporting compliance" or "helping maintain regulatory standards")
-   - "game-changer", "delve", "tapestry", "in a nutshell", "moreover", "furthermore", "beacon", "leverage", "embark", "testament", "navigate the complexities", "optimise your outcomes"
-2. INTERNAL LINK DISCIPLINE:
-   - Keep total internal links to between 2 and 4 links across the whole post.
-   - Prioritise the Primary Commercial Hub page where relevant.
-   - Do not stuff multiple links in consecutive paragraphs.
-3. BALANCED REALISTIC COMPARISONS:
-   - Do not create false dilemmas. For advisory roles, explain how external specialists collaborate with internal staff.
+PROMOTIONAL/AI CLICH\xC9S (zero tolerance):
+- "unparalleled operational control" / "unparalleled dedication" / "unparalleled control"
+- "sophisticated financial leadership" / "high-calibre financial leadership"
+- "seasoned financial leader" / "wealth of experience" / "fresh perspective"
+- "invaluable for innovation" / "proves invaluable" / "robust in-house structure"
+- "ensure seamless integration" / "seamless integration"
+- "well-positioned for future success" / "critical for successful expansion" / "paramount"
+- "shape your financial future" / "growth ambitions" / "pivotal strategic decision"
+- "understanding these nuances is critical" / "optimal financial structure"
+- "eyeing expansion" / "burgeoning startup" / "compelling advantages" / "top-tier financial acumen"
+- "daily fabric of your business" / "get bogged down in minutiae"
+- "propels your business forward" / "navigating the financial landscape" / "astute leadership"
+- "capitalise on opportunities" / "at a fraction of the cost" / "game-changer"
+- "delve" / "tapestry" / "in a nutshell" / "moreover" / "furthermore" / "beacon"
+- "leverage" / "embark" / "testament" / "navigate the complexities" / "optimise your outcomes"
+- "easily adjust" / "urgent needs can often be accommodated"
+
+ABSOLUTE CLAIM BANS:
+- NEVER: "ensures compliance" / "guarantees compliance" \u2192 ALWAYS use: "support compliance-related processes under the direction of appropriately qualified advisers"
+- NEVER: "ideal for" \u2192 ALWAYS use: "may suit"
+- NEVER: "handle all aspects" \u2192 ALWAYS use: "manage the organisation's ongoing financial operations according to their roles"
+- NEVER: "round-the-clock attention" / "dedicated, round-the-clock" \u2192 ALWAYS use: "dedicated support during the team's normal working arrangements"
+- NEVER: "best practices from diverse sectors" \u2192 ALWAYS use: "experience from working with businesses across different industries. Relevant experience should be confirmed before the engagement begins."
+- NEVER: "they are on-site daily" \u2192 ALWAYS use: "They work exclusively for the organisation"
+- NEVER: "This model is ideal" \u2192 ALWAYS use: "This model may suit"
+- NEVER: "expertise of a seasoned financial leader" \u2192 ALWAYS use: "senior financial experience on a flexible schedule"
+
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+INTERNAL LINK DISCIPLINE:
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+- Total internal links: 2 to 4 maximum across the entire article.
+- Primary Commercial Hub URL must be linked in the introduction and CTA if provided.
+- DO NOT link to tax planning, e-commerce, or any topic that is not directly relevant to the comparison topic.
+- DO NOT self-link: never link the article's own topic/slug/title to itself.
 
 FORMAT REQUIREMENTS:
 - Return strictly valid HTML inside content_html: <h1>, <p>, <h2>, <h3>, <ul>, <li>, <strong>, <a>. No <html> or <body> tags.
 - Meta Title: Max 60 characters with CTR hook.
-- Meta Description: 140-155 characters.
+- Meta Description: 140-155 characters. Natural, benefit-led, no keyword stuffing.
 
-RETURN STRICTLY VALID JSON ONLY (no conversational markdown outside JSON):
+RETURN STRICTLY VALID JSON ONLY (no markdown or text outside the JSON block):
 {
   "title": "Natural H1 Title",
   "meta_title": "SEO Title < 60 chars | ${clientBrand}",
   "meta_description": "Natural Australian Meta Description (140-155 chars)",
   "focus_keyword": "${focusKeyword || topic}",
-  "content_html": "<h1>Article Title</h1><p><em>Written by: The ${clientBrand} Team | Last Updated: ${currentDate}</em></p><h2>Key Takeaways</h2><ul><li>...</li></ul><p>Distinct introductory paragraph answering query...</p><p>Practical context paragraph without repeating paragraph 1...</p><h2>...</h2>...",
+  "content_html": "<h1>Article Title</h1><p class=\\"article-meta\\"><em>Written by: The ${clientBrand} Team | Last Updated: ${currentDate}</em></p><h2>Key Takeaways</h2><ul><li>...</li></ul><p>Introduction paragraph 1 \u2014 plain factual statement about the topic and why it matters...</p><p>Introduction paragraph 2 \u2014 high-level overview of options and how ${clientBrand} can help (link to commercial hub here)...</p><h2>...</h2>...<h2>Frequently Asked Questions</h2><h3>Question?</h3><p>Answer.</p>...<p>CTA with commercial hub link.</p>",
   "word_count_estimate": 1100,
   "reading_time_minutes": 5,
   "faqs": [
-    { "question": "Question 1?", "answer": "Concise answer 1" },
-    { "question": "Question 2?", "answer": "Concise answer 2" },
-    { "question": "Question 3?", "answer": "Concise answer 3" },
-    { "question": "Question 4?", "answer": "Concise answer 4" },
-    { "question": "Question 5?", "answer": "Concise answer 5" },
-    { "question": "Question 6?", "answer": "Concise answer 6" }
+    { "question": "Question 1?", "answer": "Concise factual answer 1" },
+    { "question": "Question 2?", "answer": "Concise factual answer 2" },
+    { "question": "Question 3?", "answer": "Concise factual answer 3" },
+    { "question": "Question 4?", "answer": "Concise factual answer 4" },
+    { "question": "Question 5?", "answer": "Concise factual answer 5" }
   ],
   "suggested_slug": "natural-url-slug",
   "schema_type": "Article"
@@ -7396,6 +7556,139 @@ RETURN STRICTLY VALID JSON ONLY (no conversational markdown outside JSON):
         faqs: []
       };
     }
+    let processedHtml = parsed.content_html || "";
+    const commercialHub = "https://www.australianaccountants.com.au/expert-cfo-services-australia/?utm_source=chatgpt.com";
+    processedHtml = processedHtml.replace(
+      /\$1[0-9]{2},000\s*(to|-)\s*\$?[23][0-9]{2},000(\s*annually)?/gi,
+      "a full-time salary package"
+    );
+    processedHtml = processedHtml.replace(
+      /(typical|average)?\s*(cfo|executive)?\s*salaries\s*(ranging\s*)?from\s*\$[0-9,]+\s*(to|-)\s*\$[0-9,]+/gi,
+      "full-time executive salaries, superannuation, leave entitlements and on-costs"
+    );
+    processedHtml = processedHtml.replace(
+      /<a\s+[^>]*href=["'][^"']*(fractional-cfo-vs-in-house|fractional-cfo-vs-inhouse|in-house-finance-team|cfo-vs-finance-team)[^"']*["'][^>]*>(.*?)<\/a>/gi,
+      "$2"
+    );
+    const proposedSlug = parsed.suggested_slug || topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    if (proposedSlug) {
+      const slugRegex = new RegExp(`<a\\s+[^>]*href=["'][^"']*${proposedSlug}[^"']*["'][^>]*>(.*?)<\\/a>`, "gi");
+      processedHtml = processedHtml.replace(slugRegex, "$1");
+    }
+    const earlyHubLinkHtml = `Learn more about Australian Accountants\u2019 <a href="${commercialHub}">CFO services in Australia</a>.`;
+    if (!processedHtml.includes("expert-cfo-services-australia")) {
+      const firstPClose = processedHtml.indexOf("</p>");
+      if (firstPClose !== -1) {
+        const secondPClose = processedHtml.indexOf("</p>", firstPClose + 4);
+        if (secondPClose !== -1) {
+          processedHtml = processedHtml.slice(0, secondPClose) + ` ${earlyHubLinkHtml}` + processedHtml.slice(secondPClose);
+        } else {
+          processedHtml = processedHtml.slice(0, firstPClose) + ` ${earlyHubLinkHtml}` + processedHtml.slice(firstPClose);
+        }
+      }
+    }
+    processedHtml = processedHtml.replace(
+      /<a\s+[^>]*href=["'][^"']*outsourcing-cfo-services[^"']*["'][^>]*>(.*?)<\/a>/gi,
+      `<a href="${commercialHub}">CFO services in Australia</a>`
+    );
+    const newAiClich\u00E9s = [
+      [/robust financial leadership is paramount/gi, "financial leadership supports informed commercial decisions"],
+      [/bedrock of sustainable success/gi, "foundation of operational stability"],
+      [/top-tier financial (expertise|acumen)/gi, "senior financial guidance"],
+      [/wealth of experience from diverse industries/gi, "experience from working across different business environments"],
+      [/fresh perspectives and proven strategies/gi, "independent analysis and practical reporting"],
+      [/unparalleled operational control/gi, "direct operational oversight"],
+      [/unparalleled (control|dedication)/gi, "consistent operational support"],
+      [/pivotal strategic decision/gi, "practical operational decision"],
+      [/resilient financial framework/gi, "structured financial system"],
+      [/dynamic Australian business environment/gi, "Australian business conditions"],
+      [/propels your future expansion with confidence/gi, "supports planned business growth"],
+      [/a fraction of the cost/gi, "lower overheads for targeted project hours"],
+      [/considerably less/gi, "lower total expenditure when full-time management is not required"],
+      [/more budget-friendly/gi, "more adaptable to limited project budgets"],
+      [/often within a few weeks/gi, "according to the business\u2019s complexity, records and onboarding requirements"],
+      [/within days or weeks/gi, "depending on existing system readiness and business complexity"],
+      [/they often specialise in international tax structures/gi, "some may have cross-border advisory experience, while specific international tax matters require specialist advice"]
+    ];
+    for (const [pat, repl] of newAiClich\u00E9s) {
+      processedHtml = processedHtml.replace(pat, repl);
+    }
+    processedHtml = processedHtml.replace(
+      /they bring a wealth of experience from diverse industries/gi,
+      "A fractional CFO may bring experience from working with different businesses and growth stages. Relevant industry and cross-border experience should be confirmed before engagement."
+    );
+    processedHtml = processedHtml.replace(
+      /a fractional cfo is (always )?(generally )?more cost-effective/gi,
+      "A fractional CFO may cost less when a business needs senior support for limited hours or specific projects. The overall cost depends on the service scope, required availability and engagement length."
+    );
+    const financeTeamClarification = "A fractional CFO is not a direct replacement for every role in an in-house finance team. The business may still require bookkeeping, payroll, reconciliations and transactional accounting support.";
+    if (!processedHtml.includes("not a direct replacement for every role") && !processedHtml.includes("not necessarily a replacement")) {
+      const costSectionMatch = processedHtml.search(/<h2>[^<]*(cost|comparison|pricing|financial)[^<]*<\/h2>/i);
+      if (costSectionMatch !== -1) {
+        const nextP = processedHtml.indexOf("</p>", costSectionMatch);
+        if (nextP !== -1) {
+          processedHtml = processedHtml.slice(0, nextP + 4) + `
+<p><em>${financeTeamClarification}</em></p>` + processedHtml.slice(nextP + 4);
+        }
+      }
+    }
+    processedHtml = processedHtml.replace(/ensures seamless operational execution/gi, "supports operational execution");
+    processedHtml = processedHtml.replace(/ensures accurate record-keeping/gi, "helps maintain accurate records");
+    processedHtml = processedHtml.replace(/adherence to all local regulatory requirements/gi, "supports reporting and compliance-related processes");
+    processedHtml = processedHtml.replace(/maintaining compliance/gi, "supporting compliance obligations");
+    processedHtml = processedHtml.replace(
+      /they are physically present/gi,
+      "they work exclusively for the organisation and are regularly available under the team\u2019s normal working arrangements"
+    );
+    processedHtml = processedHtml.replace(
+      /physically present in your office/gi,
+      "available under agreed working arrangements"
+    );
+    if (!/<h2>\s*Frequently Asked Questions\s*<\/h2>/i.test(processedHtml)) {
+      const firstFaqH3 = processedHtml.search(/<h3>[^<]*\?[^<]*<\/h3>/i);
+      if (firstFaqH3 !== -1) {
+        processedHtml = processedHtml.slice(0, firstFaqH3) + "<h2>Frequently Asked Questions</h2>\n" + processedHtml.slice(firstFaqH3);
+      }
+    }
+    processedHtml = processedHtml.replace(
+      /(integrated|onboarded)\s*(often\s*)?within\s*(a\s*few\s*weeks|days\s*or\s*weeks)/gi,
+      "The onboarding period depends on the quality of financial records, system access, business complexity and key staff availability"
+    );
+    processedHtml = processedHtml.replace(
+      /a fractional cfo (can|will) (seamlessly )?manage international expansion/gi,
+      "A fractional CFO may support international expansion when they have relevant cross-border experience. Specialist tax and legal advice may also be required for each jurisdiction."
+    );
+    const targetCtaHtml = `<p>Australian Accountants can assist with financial reporting, forecasting and outsourced CFO support. Learn more about our <a href="${commercialHub}">CFO services in Australia</a> or contact the team to discuss your requirements.</p>`;
+    if (!processedHtml.includes(commercialHub)) {
+      processedHtml += "\n" + targetCtaHtml;
+    } else {
+      const lastPIndex = processedHtml.lastIndexOf("<p>");
+      if (lastPIndex !== -1 && processedHtml.slice(lastPIndex).toLowerCase().includes("contact")) {
+        processedHtml = processedHtml.slice(0, lastPIndex) + targetCtaHtml;
+      }
+    }
+    const seoDetailsBlock = `
+<section class="seo-implementation-notes mt-10 p-5 rounded-lg border border-slate-200 bg-slate-50 dark:bg-zinc-900/60 dark:border-white/10 font-sans text-sm">
+  <h3 class="font-bold text-base mb-3 text-slate-800 dark:text-slate-100 flex items-center gap-2">
+    <span>\u{1F4CA}</span> SEO Implementation Details
+  </h3>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-300">
+    <div><strong>Focus Keyword:</strong> ${focusKeyword || topic}</div>
+    <div><strong>Money / Commercial Keyword:</strong> CFO services in Australia</div>
+    <div><strong>Meta Title:</strong> ${parsed.meta_title || `${topic} | ${clientBrand}`}</div>
+    <div><strong>Meta Description:</strong> ${parsed.meta_description || ""}</div>
+    <div><strong>Proposed URL Slug:</strong> /${proposedSlug}/</div>
+    <div><strong>Commercial Hub Linked:</strong> <a href="${commercialHub}" class="text-blue-600 dark:text-blue-400 underline" target="_blank">${commercialHub}</a></div>
+    <div><strong>Featured Image Prompt:</strong> Professional Australian corporate boardroom discussion with executive financial charts on screen, natural Sydney office lighting, modern clean aesthetic.</div>
+    <div><strong>Featured Image Alt Text:</strong> ${focusKeyword || topic} - Australian business financial management consultation</div>
+    <div><strong>Schema Markup:</strong> Article & FAQPage JSON-LD</div>
+    <div><strong>Publication Status:</strong> Ready for human review (Draft)</div>
+  </div>
+</section>`;
+    if (!processedHtml.includes("seo-implementation-notes")) {
+      processedHtml += "\n" + seoDetailsBlock;
+    }
+    parsed.content_html = processedHtml;
     const draftRecord = {
       id: `draft-${Date.now()}`,
       clientId,
@@ -7405,7 +7698,7 @@ RETURN STRICTLY VALID JSON ONLY (no conversational markdown outside JSON):
       currentContent: parsed.content_html,
       metaTitle: parsed.meta_title,
       metaDescription: parsed.meta_description,
-      focusKeyword: parsed.focus_keyword,
+      focusKeyword: parsed.focus_keyword || focusKeyword || topic,
       title: parsed.title,
       modelUsed: aiRes.modelUsed,
       reviewStatus: "PENDING_REVIEW"
@@ -7507,11 +7800,13 @@ app.post("/api/blog-studio/publish-post", async (req, res) => {
     }
     const endpoint = `${baseUrl}/wp-json/mc-bridge/v1/create-blog-post`;
     console.log(`[BLOG STUDIO] Publishing to ${client.name} via ${endpoint} (Status: ${status || "draft"})`);
+    const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `mc_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
     const wpRes = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-MC-Bridge-Key": secretKey,
+        "X-MC-Idempotency-Key": idempotencyKey,
         "User-Agent": "Netstripes-MissionControl-BlogStudio/1.0"
       },
       body: JSON.stringify({
@@ -7521,7 +7816,8 @@ app.post("/api/blog-studio/publish-post", async (req, res) => {
         meta_title: metaTitle,
         meta_description: metaDescription,
         focus_keyword: focusKeyword,
-        tags: tags || []
+        tags: tags || [],
+        idempotency_key: idempotencyKey
       })
     });
     const wpData = await wpRes.json().catch(() => ({}));

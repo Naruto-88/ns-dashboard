@@ -176,6 +176,7 @@ export default function Dashboard() {
         }
       }
 
+      let hasRenderedCache = false;
       if (!forceLive) {
         const cachedMetrics = sessionStorage.getItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`);
         const cachedInsights = sessionStorage.getItem(`agency_dash_insights_${selectedClient}_${range.startDate}_${range.endDate}`);
@@ -186,7 +187,8 @@ export default function Dashboard() {
           setInsights(JSON.parse(cachedInsights));
           setTrendData(JSON.parse(cachedTrend));
           setLoading(false);
-          return;
+          hasRenderedCache = true;
+          // Continue to background revalidation below so edited leads refresh automatically!
         }
       }
       
@@ -196,7 +198,7 @@ export default function Dashboard() {
         getPerformanceTrend(selectedClient, range)
       ]);
 
-      if (forceLive) {
+      if (forceLive || hasRenderedCache) {
         sessionStorage.setItem(`agency_dash_metrics_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(metricsData));
         sessionStorage.setItem(`agency_dash_insights_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(insightsData));
         sessionStorage.setItem(`agency_dash_trend_${selectedClient}_${range.startDate}_${range.endDate}`, JSON.stringify(trendDataRes));
