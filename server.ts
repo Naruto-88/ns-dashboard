@@ -5932,7 +5932,7 @@ app.get('/api/leads/stream', (req, res) => {
 // GET /api/leads/recent - Return REAL genuine leads for active clients sorted newest first
 app.get('/api/leads/recent', async (req, res) => {
   try {
-    // Fetch real genuine leads from Lead Shield API for active clients
+    // 1. Fetch real genuine leads from Lead Shield API for active Lead Shield clients (SDS, MP, GS)
     const rawLeads = await fetchLeadShieldStats();
     const { data: activeLeadClients } = await supabase
       .from('clients')
@@ -5941,14 +5941,12 @@ app.get('/api/leads/recent', async (req, res) => {
 
     const activeMap = new Map((activeLeadClients || []).map(c => [c.id, c.name]));
 
-    const formatted = rawLeads
+    const formattedLeadShield = rawLeads
       .filter((l: any) => {
         const shieldId = (l.client_id || '').toLowerCase().trim();
         const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
         return mappedId && activeMap.has(mappedId) && (l.status || '').toUpperCase() === 'GENUINE';
       })
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 20)
       .map((l: any) => {
         const shieldId = (l.client_id || '').toLowerCase().trim();
         const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
@@ -5967,7 +5965,43 @@ app.get('/api/leads/recent', async (req, res) => {
         };
       });
 
-    res.json({ success: true, leads: formatted });
+    // 2. Fetch recent genuine leads from client_leads table (populated by Grok Bot and webhooks)
+    let formattedDbLeads: any[] = [];
+    try {
+      const { data: dbLeads, error: dbErr } = await supabase
+        .from('client_leads')
+        .select('*')
+        .eq('status', 'GENUINE')
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!dbErr && Array.isArray(dbLeads)) {
+        formattedDbLeads = dbLeads.map((dl: any) => {
+          const formData = dl.form_data?.body || dl.form_data || {};
+          return {
+            id: String(dl.id || Math.random()),
+            clientId: dl.client_id,
+            clientName: activeMap.get(dl.client_id) || 'Client',
+            customerName: formData['your-name'] || formData['name'] || formData['first-name'] || formData['fist-name'] || 'Customer',
+            email: formData['your-email'] || formData['email'] || '',
+            phone: formData['contact-number'] || formData['phone'] || '',
+            message: formData['your-comments'] || formData['your-message'] || formData['message'] || formData['your-size'] || '',
+            status: (dl.status || 'GENUINE').toUpperCase(),
+            channel: dl.channel || 'website',
+            createdAt: dl.created_at || new Date().toISOString()
+          };
+        });
+      }
+    } catch (e) {
+      console.warn('[LEADS RECENT] Warning reading client_leads for recent list:', e);
+    }
+
+    // Combine both sources, sort newest first, and take top 25
+    const combined = [...formattedLeadShield, ...formattedDbLeads]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 25);
+
+    res.json({ success: true, leads: combined });
   } catch (err: any) {
     console.error('Error fetching recent leads:', err);
     res.status(500).json({ error: err.message });
