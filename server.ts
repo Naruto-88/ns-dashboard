@@ -6263,6 +6263,34 @@ const handleLeadShieldWebhook = async (req: express.Request, res: express.Respon
       });
     }
 
+    // Check if this lead was already processed using unique message ID / idempotency key
+    const uniqueLeadId = (req.body.id || req.body.lead_id || '').toString().trim();
+    let isDuplicate = false;
+
+    if (uniqueLeadId) {
+      try {
+        const { data: existingLead } = await supabase
+          .from('client_leads')
+          .select('id')
+          .eq('client_id', targetClientId)
+          .eq('lead_shield_lead_id', uniqueLeadId)
+          .maybeSingle();
+
+        if (existingLead) {
+          isDuplicate = true;
+          console.log(`[LEAD_WEBHOOK_DEDUP] Lead ${uniqueLeadId} for client ${targetClientId} already exists in DB. Skipping counter increment.`);
+          return res.json({
+            success: true,
+            duplicate: true,
+            message: 'Duplicate lead detected via message ID. Counters not incremented.',
+            client_id: targetClientId
+          });
+        }
+      } catch (e) {
+        // Safe fallback if column query fails
+      }
+    }
+
     // Determine target Monday week_start_date
     let targetDateStr = week_start_date;
     const leadDateObj = leadTimeRaw ? new Date(leadTimeRaw) : new Date();
@@ -6319,11 +6347,12 @@ const handleLeadShieldWebhook = async (req: express.Request, res: express.Respon
         });
     }
 
-    // Try inserting into client_leads
+    // Insert into client_leads with the unique message ID
     try {
       await supabase.from('client_leads').insert({
         client_id: targetClientId,
         lead_shield_id: rawInput,
+        lead_shield_lead_id: uniqueLeadId || null,
         status: status || (action === 'increment' ? 'GENUINE' : 'UNCLASSIFIED'),
         lead_date: leadDateObj.toISOString().split('T')[0],
         created_at: leadDateObj.toISOString(),
@@ -6331,7 +6360,7 @@ const handleLeadShieldWebhook = async (req: express.Request, res: express.Respon
         channel: channel || 'website'
       });
     } catch (e) {
-      // ignore if table doesn't exist
+      console.warn('[LEAD_WEBHOOK] client_leads insert error:', e);
     }
 
     // Construct structured lead notification

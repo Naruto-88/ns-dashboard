@@ -5973,6 +5973,24 @@ var handleLeadShieldWebhook = async (req, res) => {
         client_id: targetClientId
       });
     }
+    const uniqueLeadId = (req.body.id || req.body.lead_id || "").toString().trim();
+    let isDuplicate = false;
+    if (uniqueLeadId) {
+      try {
+        const { data: existingLead } = await supabase2.from("client_leads").select("id").eq("client_id", targetClientId).eq("lead_shield_lead_id", uniqueLeadId).maybeSingle();
+        if (existingLead) {
+          isDuplicate = true;
+          console.log(`[LEAD_WEBHOOK_DEDUP] Lead ${uniqueLeadId} for client ${targetClientId} already exists in DB. Skipping counter increment.`);
+          return res.json({
+            success: true,
+            duplicate: true,
+            message: "Duplicate lead detected via message ID. Counters not incremented.",
+            client_id: targetClientId
+          });
+        }
+      } catch (e) {
+      }
+    }
     let targetDateStr = week_start_date;
     const leadDateObj = leadTimeRaw ? new Date(leadTimeRaw) : /* @__PURE__ */ new Date();
     if (!targetDateStr) {
@@ -6015,6 +6033,7 @@ var handleLeadShieldWebhook = async (req, res) => {
       await supabase2.from("client_leads").insert({
         client_id: targetClientId,
         lead_shield_id: rawInput,
+        lead_shield_lead_id: uniqueLeadId || null,
         status: status || (action === "increment" ? "GENUINE" : "UNCLASSIFIED"),
         lead_date: leadDateObj.toISOString().split("T")[0],
         created_at: leadDateObj.toISOString(),
@@ -6022,6 +6041,7 @@ var handleLeadShieldWebhook = async (req, res) => {
         channel: channel || "website"
       });
     } catch (e) {
+      console.warn("[LEAD_WEBHOOK] client_leads insert error:", e);
     }
     const formData = form_data?.body || form_data || {};
     const leadNotification = {
