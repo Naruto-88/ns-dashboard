@@ -5848,14 +5848,24 @@ const LEAD_SHIELD_CLIENT_MAP: Record<string, string> = {
   'goldspar': '2fed0918-c029-4ba1-aaee-511a2aa68273',
   'multipole': 'ec64c5bc-57df-4c99-a07f-f5f9e243fcfe',
   'sydney_decking_solutions': '77d52cff-404f-44bd-a861-76d981f4e01b',
-  'sydney_decking': '77d52cff-404f-44bd-a861-76d981f4e01b'
+  'sydney_decking': '77d52cff-404f-44bd-a861-76d981f4e01b',
+  'extend_a_home': '97609694-7a52-458f-b1a7-3640814c4d85',
+  'extenda_home': '97609694-7a52-458f-b1a7-3640814c4d85',
+  'extendahome': '97609694-7a52-458f-b1a7-3640814c4d85',
+  'dream_boats': '61ccad52-8b3a-4c84-87df-c263a7441573',
+  'dreamboats': '61ccad52-8b3a-4c84-87df-c263a7441573',
+  'reverse_mortagage': '4b48ff10-bb43-4fcd-90d6-6872597d569f',
+  'reverse_mortgage': '4b48ff10-bb43-4fcd-90d6-6872597d569f'
 };
 
 // Reverse map: Supabase UUID -> Lead Shield slug
 const REVERSE_LEAD_SHIELD_MAP: Record<string, string> = {
   '2fed0918-c029-4ba1-aaee-511a2aa68273': 'gold_spar',
   'ec64c5bc-57df-4c99-a07f-f5f9e243fcfe': 'multipole',
-  '77d52cff-404f-44bd-a861-76d981f4e01b': 'sydney_decking_solutions'
+  '77d52cff-404f-44bd-a861-76d981f4e01b': 'sydney_decking_solutions',
+  '97609694-7a52-458f-b1a7-3640814c4d85': 'extend_a_home',
+  '61ccad52-8b3a-4c84-87df-c263a7441573': 'dream_boats',
+  '4b48ff10-bb43-4fcd-90d6-6872597d569f': 'reverse_mortagage'
 };
 
 // Helper to fetch leads from Lead Shield API
@@ -6200,6 +6210,19 @@ const handleLeadShieldWebhook = async (req: express.Request, res: express.Respon
       return res.json({ success: true, message: 'Auto-sync is disabled for this client. Lead ignored.' });
     }
 
+    const normalizedStatus = (status || (action === 'increment' ? 'GENUINE' : 'UNCLASSIFIED')).toString().toUpperCase().trim();
+
+    // 0. If this is a TEST payload, ignore DB updates completely and return success
+    if (normalizedStatus === 'TEST' || action === 'test') {
+      console.log(`[LEAD_WEBHOOK_TEST] Test payload received for client ${targetClientId}. Ignoring database writes.`);
+      return res.json({
+        success: true,
+        test_mode: true,
+        message: 'Test payload received successfully. No database updates performed.',
+        client_id: targetClientId
+      });
+    }
+
     // Determine target Monday week_start_date
     let targetDateStr = week_start_date;
     const leadDateObj = leadTimeRaw ? new Date(leadTimeRaw) : new Date();
@@ -6222,18 +6245,18 @@ const handleLeadShieldWebhook = async (req: express.Request, res: express.Respon
       .eq('week_start_date', targetDateStr)
       .maybeSingle();
 
-    let newLegit = 0;
-    let newTotal = 0;
+    let newLegit = existingRecord?.leads_legit || 0;
+    let newTotal = existingRecord?.leads_total || 0;
 
     if (typeof genuine_leads_count === 'number') {
       newLegit = genuine_leads_count;
       newTotal = typeof total_leads_count === 'number' ? total_leads_count : Math.max(newLegit, existingRecord?.leads_total || 0);
-    } else if (action === 'increment' || status === 'GENUINE' || status === 'genuine') {
-      newLegit = (existingRecord?.leads_legit || 0) + 1;
-      newTotal = (existingRecord?.leads_total || 0) + 1;
-    } else {
-      newLegit = (existingRecord?.leads_legit || 0);
-      newTotal = (existingRecord?.leads_total || 0) + (status === 'SPAM' ? 1 : 0);
+    } else if (normalizedStatus === 'GENUINE' || action === 'increment') {
+      newLegit += 1;
+      newTotal += 1;
+    } else if (normalizedStatus === 'SPAM') {
+      // SPAM increments total leads count, but NOT genuine/legit leads
+      newTotal += 1;
     }
 
     if (existingRecord) {
