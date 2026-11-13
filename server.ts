@@ -5855,7 +5855,15 @@ const LEAD_SHIELD_CLIENT_MAP: Record<string, string> = {
   'dream_boats': '61ccad52-8b3a-4c84-87df-c263a7441573',
   'dreamboats': '61ccad52-8b3a-4c84-87df-c263a7441573',
   'reverse_mortagage': '4b48ff10-bb43-4fcd-90d6-6872597d569f',
-  'reverse_mortgage': '4b48ff10-bb43-4fcd-90d6-6872597d569f'
+  'reverse_mortgage': '4b48ff10-bb43-4fcd-90d6-6872597d569f',
+  // Common Sheet Aliases
+  'w adv': 'c24c7b15-e429-4b4f-946e-e3aebb07303b',
+  'w_adv': 'c24c7b15-e429-4b4f-946e-e3aebb07303b',
+  'wadvisory': 'c24c7b15-e429-4b4f-946e-e3aebb07303b',
+  'wad': 'c24c7b15-e429-4b4f-946e-e3aebb07303b',
+  '360se': '72593721-4d23-4c28-84df-392d351f52b2', // CSG
+  '360_se': '72593721-4d23-4c28-84df-392d351f52b2',
+  'nlr': '45bd1870-d89b-4c7c-8e61-d76cb8e01eb6' // JD Financial (Next Level Real estate / JDF)
 };
 
 // Reverse map: Supabase UUID -> Lead Shield slug
