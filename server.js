@@ -5737,11 +5737,11 @@ app.get("/api/leads/recent", async (req, res) => {
     const rawLeads = await fetchLeadShieldStats();
     const { data: activeLeadClients } = await supabase2.from("clients").select("id, name, lead_api_url").not("lead_api_url", "is", null);
     const activeMap = new Map((activeLeadClients || []).map((c) => [c.id, c.name]));
-    const formatted = rawLeads.filter((l) => {
+    const formattedLeadShield = rawLeads.filter((l) => {
       const shieldId = (l.client_id || "").toLowerCase().trim();
       const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
       return mappedId && activeMap.has(mappedId) && (l.status || "").toUpperCase() === "GENUINE";
-    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20).map((l) => {
+    }).map((l) => {
       const shieldId = (l.client_id || "").toLowerCase().trim();
       const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
       const formData = l.form_data?.body || l.form_data || {};
@@ -5758,7 +5758,31 @@ app.get("/api/leads/recent", async (req, res) => {
         createdAt: l.created_at || (/* @__PURE__ */ new Date()).toISOString()
       };
     });
-    res.json({ success: true, leads: formatted });
+    let formattedDbLeads = [];
+    try {
+      const { data: dbLeads, error: dbErr } = await supabase2.from("client_leads").select("*").eq("status", "GENUINE").order("created_at", { ascending: false }).limit(30);
+      if (!dbErr && Array.isArray(dbLeads)) {
+        formattedDbLeads = dbLeads.map((dl) => {
+          const formData = dl.form_data?.body || dl.form_data || {};
+          return {
+            id: String(dl.id || Math.random()),
+            clientId: dl.client_id,
+            clientName: activeMap.get(dl.client_id) || "Client",
+            customerName: formData["your-name"] || formData["name"] || formData["first-name"] || formData["fist-name"] || "Customer",
+            email: formData["your-email"] || formData["email"] || "",
+            phone: formData["contact-number"] || formData["phone"] || "",
+            message: formData["your-comments"] || formData["your-message"] || formData["message"] || formData["your-size"] || "",
+            status: (dl.status || "GENUINE").toUpperCase(),
+            channel: dl.channel || "website",
+            createdAt: dl.created_at || (/* @__PURE__ */ new Date()).toISOString()
+          };
+        });
+      }
+    } catch (e) {
+      console.warn("[LEADS RECENT] Warning reading client_leads for recent list:", e);
+    }
+    const combined = [...formattedLeadShield, ...formattedDbLeads].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 25);
+    res.json({ success: true, leads: combined });
   } catch (err) {
     console.error("Error fetching recent leads:", err);
     res.status(500).json({ error: err.message });
