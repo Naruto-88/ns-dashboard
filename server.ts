@@ -6014,6 +6014,51 @@ app.get('/api/leads/stats-by-range', async (req, res) => {
       statsByClient[mappedClientId].leads.push(lead);
     }
 
+    // Also fetch stored leads from client_leads table (populated via Grok Bot and webhooks)
+    try {
+      let clientLeadsQuery = supabase.from('client_leads').select('*');
+      if (startDate && startDate !== 'all') {
+        clientLeadsQuery = clientLeadsQuery.gte('created_at', startDate);
+      }
+      if (endDate && endDate !== 'all') {
+        clientLeadsQuery = clientLeadsQuery.lte('created_at', endDate);
+      }
+      if (clientId) {
+        clientLeadsQuery = clientLeadsQuery.eq('client_id', clientId);
+      }
+
+      const { data: dbLeads, error: dbLeadsErr } = await clientLeadsQuery;
+      if (!dbLeadsErr && Array.isArray(dbLeads)) {
+        for (const dl of dbLeads) {
+          const cId = dl.client_id;
+          if (!cId || (!clientId && !activeClientIds.has(cId))) continue;
+
+          // Don't duplicate if already in Lead Shield (only populate for webhook/Grok clients)
+          if (!statsByClient[cId]) {
+            statsByClient[cId] = { genuine: 0, spam: 0, total: 0, leads: [] };
+          }
+
+          const isGen = (dl.status || '').toUpperCase() === 'GENUINE';
+          statsByClient[cId].leads.push({
+            id: dl.id,
+            client_id: dl.lead_shield_id || cId,
+            status: dl.status,
+            created_at: dl.created_at,
+            form_data: dl.form_data,
+            channel: dl.channel
+          });
+          statsByClient[cId].total += 1;
+          if (isGen) {
+            statsByClient[cId].genuine += 1;
+          } else {
+            statsByClient[cId].spam += 1;
+          }
+        }
+      }
+    } catch (dbErr) {
+      console.warn('[LEAD STATS] Warning fetching client_leads table:', dbErr);
+    }
+
     res.json({
       success: true,
       startDate: startDate || 'all',

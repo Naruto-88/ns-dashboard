@@ -421,12 +421,48 @@ export default function MasterDashboard() {
           organicShareDiff
         };
 
+        // Breakdown channels for individual leads if available
+        const leadDetails = leadShieldCurrent?.leads || [];
+        const channelCounts = {
+          seo: 0,
+          googleAds: 0,
+          metaAds: 0,
+          social: 0,
+          other: 0
+        };
+
+        for (const dl of leadDetails) {
+          const isGen = (dl.status || '').toUpperCase() === 'GENUINE';
+          if (!isGen) continue;
+          const ch = (dl.channel || '').toLowerCase();
+          if (ch.includes('seo') || ch.includes('organic') || ch.includes('website') || ch === '') {
+            channelCounts.seo += 1;
+          } else if (ch.includes('google') || ch.includes('adwords') || ch.includes('gclid')) {
+            channelCounts.googleAds += 1;
+          } else if (ch.includes('meta') || ch.includes('facebook') || ch.includes('fb') || ch.includes('instagram') || ch.includes('ig')) {
+            channelCounts.metaAds += 1;
+          } else if (ch.includes('social')) {
+            channelCounts.social += 1;
+          } else {
+            channelCounts.other += 1;
+          }
+        }
+
+        // Pure SEO leads: if channel data is present, use verified SEO leads, otherwise fallback to total legit
+        const hasChannelTracking = leadDetails.length > 0;
+        const seoLeadsCount = hasChannelTracking && (channelCounts.googleAds > 0 || channelCounts.metaAds > 0)
+          ? channelCounts.seo
+          : resolvedCurrentLeadsLegit;
+
         const leads = {
           current: resolvedCurrentLeadsTotal,
           legit: resolvedCurrentLeadsLegit,
+          seoLegit: seoLeadsCount,
+          channelCounts,
+          hasChannelTracking,
           prevLegit: resolvedPrevLeadsLegit,
           change: calculateChange(resolvedCurrentLeadsLegit, resolvedPrevLeadsLegit),
-          details: leadShieldCurrent?.leads || [],
+          details: leadDetails,
           rangeStr: leadRangeStr,
           prevRangeStr: leadPrevRangeStr
         };
@@ -462,13 +498,16 @@ export default function MasterDashboard() {
         const monthlyTarget = client.lead_target_monthly || 0;
         const periodLeadTarget = monthlyTarget * (daysCount / 30.4);
 
-        // Leads score (70% weight)
+        // Leads score (70% weight) - strictly based on Pure SEO leads when ads are running
         let leadsScore = 100;
         const reasons: string[] = [];
+        const effectiveLeadsForStatus = leads.seoLegit;
+
         if (monthlyTarget > 0) {
-          leadsScore = periodLeadTarget > 0 ? (leads.legit / periodLeadTarget) * 100 : 100;
+          leadsScore = periodLeadTarget > 0 ? (effectiveLeadsForStatus / periodLeadTarget) * 100 : 100;
           leadsScore = Math.min(100, Math.max(0, leadsScore));
-          reasons.push(`Leads: ${leadsScore.toFixed(0)}% (${leads.legit}/${Math.round(periodLeadTarget)} target)`);
+          const leadTypeLabel = (leads.hasChannelTracking && (leads.channelCounts.googleAds > 0 || leads.channelCounts.metaAds > 0)) ? 'SEO Leads' : 'Leads';
+          reasons.push(`${leadTypeLabel}: ${leadsScore.toFixed(0)}% (${effectiveLeadsForStatus}/${Math.round(periodLeadTarget)} target)`);
         } else {
           reasons.push("No Lead Target");
         }
@@ -1093,14 +1132,59 @@ export default function MasterDashboard() {
                         />
                       </div>
                     ) : (
-                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[260px]" content={
+                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[280px]" content={
                         <div className="space-y-1.5 p-1 text-left text-xs">
                           <div className={`font-semibold border-b pb-1 flex justify-between items-center ${theme === 'white' ? 'border-zinc-200 text-zinc-700' : 'border-zinc-800 text-zinc-300'}`}>
-                            <span className="font-bold">Leads Breakdown</span>
-                            <span className="text-[10px] opacity-70">Genuine / Total</span>
+                            <span className="font-bold">Leads Channel Breakdown</span>
+                            <span className="text-[10px] opacity-70">Genuine</span>
                           </div>
-                          <div className="flex justify-between items-center py-0.5">
-                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Current Genuine:</span>
+
+                          {(row.leads as any).hasChannelTracking && ((row.leads as any).channelCounts?.googleAds > 0 || (row.leads as any).channelCounts?.metaAds > 0 || (row.leads as any).channelCounts?.social > 0) ? (
+                            <div className="space-y-1 py-1">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="flex items-center gap-1.5 font-medium text-emerald-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  Pure SEO Leads:
+                                </span>
+                                <span className="font-bold font-mono text-emerald-400">{(row.leads as any).channelCounts?.seo || 0}</span>
+                              </div>
+                              {(row.leads as any).channelCounts?.googleAds > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-blue-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                    Google Ads Leads:
+                                  </span>
+                                  <span className="font-bold font-mono text-blue-400">{(row.leads as any).channelCounts.googleAds}</span>
+                                </div>
+                              )}
+                              {(row.leads as any).channelCounts?.metaAds > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-purple-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                    Meta / Social Ads:
+                                  </span>
+                                  <span className="font-bold font-mono text-purple-400">{(row.leads as any).channelCounts.metaAds}</span>
+                                </div>
+                              )}
+                              {(row.leads as any).channelCounts?.social > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-pink-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
+                                    Social / Direct:
+                                  </span>
+                                  <span className="font-bold font-mono text-pink-400">{(row.leads as any).channelCounts.social}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Current Genuine:</span>
+                              <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Total Legit Leads:</span>
                             <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
                           </div>
                           <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
@@ -2674,9 +2758,22 @@ function LeadsDetailModal({ modalData, onClose, theme }: { modalData: any; onClo
                       <User size={15} className="text-emerald-500" />
                       {name}
                     </span>
-                    <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      {lead.status || 'GENUINE'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {lead.channel && (
+                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${
+                          (lead.channel.toLowerCase().includes('google') || lead.channel.toLowerCase().includes('adwords'))
+                            ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                            : (lead.channel.toLowerCase().includes('meta') || lead.channel.toLowerCase().includes('facebook') || lead.channel.toLowerCase().includes('instagram'))
+                              ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+                              : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                        }`}>
+                          {lead.channel}
+                        </span>
+                      )}
+                      <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        {lead.status || 'GENUINE'}
+                      </span>
+                    </div>
                   </div>
 
                   {(email || phone) && (
