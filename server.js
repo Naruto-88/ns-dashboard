@@ -5816,10 +5816,12 @@ app.get("/api/leads/stats-by-range", async (req, res) => {
     try {
       let clientLeadsQuery = supabase2.from("client_leads").select("*");
       if (startDate && startDate !== "all") {
-        clientLeadsQuery = clientLeadsQuery.gte("created_at", startDate);
+        const startIso = startDate.includes("T") ? startDate : `${startDate}T00:00:00.000Z`;
+        clientLeadsQuery = clientLeadsQuery.gte("created_at", startIso);
       }
       if (endDate && endDate !== "all") {
-        clientLeadsQuery = clientLeadsQuery.lte("created_at", endDate);
+        const endIso = endDate.includes("T") ? endDate : `${endDate}T23:59:59.999Z`;
+        clientLeadsQuery = clientLeadsQuery.lte("created_at", endIso);
       }
       if (clientId) {
         clientLeadsQuery = clientLeadsQuery.eq("client_id", clientId);
