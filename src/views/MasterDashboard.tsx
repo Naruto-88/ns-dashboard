@@ -22,10 +22,16 @@ import {
   TrendingUp,
   TrendingDown,
   FileSpreadsheet,
-  Link
+  Link,
+  ShieldCheck,
+  User,
+  Mail,
+  Phone,
+  Clock
 } from 'lucide-react';
-import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData, getCitations, CitationData, getAiCitations, AiCitationData } from '../services/dataService';
+import { getClients, getWeeklyData, getAllWeeklyData, getDashboardCache, Client, WeeklyData, updateLegitLeads, getLiveMetrics, getKeywords, getInsights, getKeywordRankingDetails, syncWeeklyData, getCitations, CitationData, getAiCitations, AiCitationData, syncLeadShieldLeads, getLeadStatsByRange } from '../services/dataService';
 import Tooltip from '../components/Tooltip';
+import LeadNotificationCenter from '../components/LeadNotificationCenter';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays, addDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -82,6 +88,7 @@ export default function MasterDashboard() {
     end: format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedOwner, setSelectedOwner] = useState<string>('all');
   const [editingLeads, setEditingLeads] = useState<{ clientId: string, value: string } | null>(null);
   const [selectedIntelligence, setSelectedIntelligence] = useState<{ 
     client: Client; 
@@ -100,10 +107,28 @@ export default function MasterDashboard() {
     endDate: string;
   } | null>(null);
 
+  const [selectedLeadsModal, setSelectedLeadsModal] = useState<{
+    client: Client;
+    legit: number;
+    total: number;
+    prevLegit: number;
+    currentRangeStr: string;
+    leads: any[];
+  } | null>(null);
+
   const [viewingPeriod, setViewingPeriod] = useState<{ start: Date; end: Date } | null>(null);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 80);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSyncToSheets = async () => {
     if (rows.length === 0) {
@@ -228,6 +253,60 @@ export default function MasterDashboard() {
       const currentRangeStr = `${format(currentStart, 'MMM dd')} - ${format(currentEnd, 'MMM dd')}`;
       const prevRangeStr = `${format(prevStart, 'MMM dd')} - ${format(prevEnd, 'MMM dd')}`;
 
+      const currentStartStr = format(currentStart, 'yyyy-MM-dd');
+      const currentEndStr = format(currentEnd, 'yyyy-MM-dd');
+      const prevStartStr = format(prevStart, 'yyyy-MM-dd');
+      const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
+
+      // 2. Real-Time Leads Dates (Friday to Thursday / Up-to-Date right now, no Google API lag)
+      let leadCurrentStart: Date, leadCurrentEnd: Date, leadPrevStart: Date, leadPrevEnd: Date;
+      if (viewMode === 'rolling') {
+        leadCurrentEnd = new Date(today);
+        leadCurrentEnd.setHours(23, 59, 59, 999);
+        leadCurrentStart = subDays(leadCurrentEnd, 6); // 7 continuous days ending today (e.g. Fri Aug 21 - Thu Aug 27)
+        leadCurrentStart.setHours(0, 0, 0, 0);
+
+        leadPrevEnd = subDays(leadCurrentStart, 1); // Thu Aug 20
+        leadPrevEnd.setHours(23, 59, 59, 999);
+        leadPrevStart = subDays(leadPrevEnd, 6); // Fri Aug 14
+        leadPrevStart.setHours(0, 0, 0, 0);
+      } else if (viewMode === '28days') {
+        leadCurrentEnd = new Date(today);
+        leadCurrentEnd.setHours(23, 59, 59, 999);
+        leadCurrentStart = subDays(leadCurrentEnd, 27);
+        leadCurrentStart.setHours(0, 0, 0, 0);
+
+        leadPrevEnd = subDays(leadCurrentStart, 1);
+        leadPrevEnd.setHours(23, 59, 59, 999);
+        leadPrevStart = subDays(leadPrevEnd, 27);
+        leadPrevStart.setHours(0, 0, 0, 0);
+      } else {
+        leadCurrentStart = new Date(currentStart);
+        leadCurrentEnd = new Date(currentEnd);
+        leadPrevStart = new Date(prevStart);
+        leadPrevEnd = new Date(prevEnd);
+      }
+
+      const leadCurrentStartStr = format(leadCurrentStart, 'yyyy-MM-dd');
+      const leadCurrentEndStr = format(leadCurrentEnd, 'yyyy-MM-dd');
+      const leadPrevStartStr = format(leadPrevStart, 'yyyy-MM-dd');
+      const leadPrevEndStr = format(leadPrevEnd, 'yyyy-MM-dd');
+
+      const leadRangeStr = `${format(leadCurrentStart, 'MMM dd')} - ${format(leadCurrentEnd, 'MMM dd')}`;
+      const leadPrevRangeStr = `${format(leadPrevStart, 'MMM dd')} - ${format(leadPrevEnd, 'MMM dd')}`;
+
+      // Fetch date-precise leads from Lead Shield API for real-time lead periods
+      let currentRangeLeads: any = { clients: {} };
+      let prevRangeLeads: any = { clients: {} };
+      try {
+        [currentRangeLeads, prevRangeLeads] = await Promise.all([
+          getLeadStatsByRange(leadCurrentStartStr, leadCurrentEndStr),
+          getLeadStatsByRange(leadPrevStartStr, leadPrevEndStr)
+        ]);
+      } catch (leadErr) {
+        console.warn('[LEAD SHIELD] Range query fallback:', leadErr);
+      }
+
       const dashboardCache = await getDashboardCache(viewMode);
       const allWeeklyData = await getAllWeeklyData({
         startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
@@ -253,17 +332,48 @@ export default function MasterDashboard() {
            previousWeekData = weeklyData.find(d => d.week_start_date === prevWeekStartStr) || sortedWeekly[1] || latestData;
         }
         
-        // Sum manual metrics from weekly_data because dashboard_cache might zero them out
+        // Sum manual metrics from weekly_data with timezone-safe date comparison
         const sumWeeklyMetric = (dataArray: any[], start: Date, end: Date, metric: string) => {
+            const startStr = format(start, 'yyyy-MM-dd');
+            const endStr = format(end, 'yyyy-MM-dd');
             return dataArray.filter(d => {
-                const wDate = new Date(d.week_start_date);
-                return wDate >= start && wDate <= end;
+                if (!d.week_start_date) return false;
+                // If week_start_date falls within startStr and endStr, or within the current 7-day window
+                return d.week_start_date >= startStr && d.week_start_date <= endStr;
             }).reduce((sum, d) => sum + (Number(d[metric]) || 0), 0);
         };
-        const resolvedCurrentLeadsTotal = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_total');
-        const resolvedCurrentLeadsLegit = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'leads_legit');
-        const resolvedPrevLeadsTotal = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_total');
-        const resolvedPrevLeadsLegit = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'leads_legit');
+
+        const isLeadAutoSync = !!client.lead_api_url && client.lead_api_url.trim() !== '';
+        const leadShieldCurrent = isLeadAutoSync ? currentRangeLeads.clients?.[client.id] : null;
+        const leadShieldPrev = isLeadAutoSync ? prevRangeLeads.clients?.[client.id] : null;
+
+        const currentWeekLeadsTotal = sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_total');
+        const resolvedCurrentLeadsTotal = (leadShieldCurrent && leadShieldCurrent.total > 0)
+          ? leadShieldCurrent.total
+          : (currentWeekLeadsTotal > 0 
+              ? currentWeekLeadsTotal 
+              : (latestData?.leads_total ?? currentWeekData?.leads_total ?? 0));
+
+        const currentWeekLeadsLegit = sumWeeklyMetric(weeklyData, leadCurrentStart, leadCurrentEnd, 'leads_legit');
+        const resolvedCurrentLeadsLegit = (leadShieldCurrent && leadShieldCurrent.total > 0)
+          ? leadShieldCurrent.genuine
+          : (currentWeekLeadsLegit > 0 
+              ? currentWeekLeadsLegit 
+              : (latestData?.leads_legit ?? currentWeekData?.leads_legit ?? 0));
+
+        const prevWeekLeadsTotal = sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_total');
+        const resolvedPrevLeadsTotal = (leadShieldPrev && leadShieldPrev.total > 0)
+          ? leadShieldPrev.total
+          : (prevWeekLeadsTotal > 0 
+              ? prevWeekLeadsTotal 
+              : (sortedWeekly[1]?.leads_total ?? previousWeekData?.leads_total ?? 0));
+
+        const prevWeekLeadsLegit = sumWeeklyMetric(weeklyData, leadPrevStart, leadPrevEnd, 'leads_legit');
+        const resolvedPrevLeadsLegit = (leadShieldPrev && leadShieldPrev.total > 0)
+          ? leadShieldPrev.genuine
+          : (prevWeekLeadsLegit > 0 
+              ? prevWeekLeadsLegit 
+              : (sortedWeekly[1]?.leads_legit ?? previousWeekData?.leads_legit ?? 0));
         
         const resolvedCurrentPhoneCalls = sumWeeklyMetric(weeklyData, currentStart, currentEnd, 'phone_calls') || currentWeekData?.phone_calls || 0;
         const resolvedPreviousPhoneCalls = sumWeeklyMetric(weeklyData, prevStart, prevEnd, 'phone_calls') || previousWeekData?.phone_calls || 0;
@@ -290,19 +400,71 @@ export default function MasterDashboard() {
         const resolvedCurrentOrganic = currentWeekData?.ga4_organic_traffic ?? 0;
         const resolvedPreviousOrganic = previousWeekData?.ga4_organic_traffic ?? 0;
 
+        const currentOrganicPct = resolvedCurrentTraffic > 0 
+          ? (resolvedCurrentOrganic / resolvedCurrentTraffic) * 100 
+          : 0;
+        const prevOrganicPct = resolvedPreviousTraffic > 0 
+          ? (resolvedPreviousOrganic / resolvedPreviousTraffic) * 100 
+          : 0;
+        const organicShareDiff = currentOrganicPct - prevOrganicPct;
+        const organicChange = calculateChange(resolvedCurrentOrganic, resolvedPreviousOrganic);
+
         const ga4Traffic = {
           current: resolvedCurrentTraffic,
           previous: resolvedPreviousTraffic,
           change: calculateChange(resolvedCurrentTraffic, resolvedPreviousTraffic),
           organic: resolvedCurrentOrganic,
-          prevOrganic: resolvedPreviousOrganic
+          prevOrganic: resolvedPreviousOrganic,
+          organicChange,
+          currentOrganicPct,
+          prevOrganicPct,
+          organicShareDiff
         };
 
+        // Breakdown channels for individual leads if available
+        const leadDetails = leadShieldCurrent?.leads || [];
+        const channelCounts = {
+          seo: 0,
+          googleAds: 0,
+          metaAds: 0,
+          social: 0,
+          other: 0
+        };
+
+        for (const dl of leadDetails) {
+          const isGen = (dl.status || '').toUpperCase() === 'GENUINE';
+          if (!isGen) continue;
+          const ch = (dl.channel || '').toLowerCase();
+          if (ch.includes('seo') || ch.includes('organic') || ch.includes('website') || ch === '') {
+            channelCounts.seo += 1;
+          } else if (ch.includes('google') || ch.includes('adwords') || ch.includes('gclid')) {
+            channelCounts.googleAds += 1;
+          } else if (ch.includes('meta') || ch.includes('facebook') || ch.includes('fb') || ch.includes('instagram') || ch.includes('ig')) {
+            channelCounts.metaAds += 1;
+          } else if (ch.includes('social')) {
+            channelCounts.social += 1;
+          } else {
+            channelCounts.other += 1;
+          }
+        }
+
+        // Pure SEO leads: if channel data is present, use verified SEO leads, otherwise fallback to total legit
+        const hasChannelTracking = leadDetails.length > 0;
+        const seoLeadsCount = hasChannelTracking && (channelCounts.googleAds > 0 || channelCounts.metaAds > 0)
+          ? channelCounts.seo
+          : resolvedCurrentLeadsLegit;
+
         const leads = {
-          current: resolvedCurrentLeadsTotal || currentWeekData?.leads_total || 0,
-          legit: resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0,
-          prevLegit: resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0,
-          change: calculateChange(resolvedCurrentLeadsLegit || currentWeekData?.leads_legit || 0, resolvedPrevLeadsLegit || previousWeekData?.leads_legit || 0)
+          current: resolvedCurrentLeadsTotal,
+          legit: resolvedCurrentLeadsLegit,
+          seoLegit: seoLeadsCount,
+          channelCounts,
+          hasChannelTracking,
+          prevLegit: resolvedPrevLeadsLegit,
+          change: calculateChange(resolvedCurrentLeadsLegit, resolvedPrevLeadsLegit),
+          details: leadDetails,
+          rangeStr: leadRangeStr,
+          prevRangeStr: leadPrevRangeStr
         };
 
         const phoneCalls = {
@@ -311,29 +473,21 @@ export default function MasterDashboard() {
           change: calculateChange(resolvedCurrentPhoneCalls, resolvedPreviousPhoneCalls)
         };
 
-        // Calculate historical previous data for Ahrefs comparison
-        let historicalPrev = sortedWeekly.find(d => d.week_start_date === format(startOfWeek(prevEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
-        if (!historicalPrev && sortedWeekly.length > 1) {
-          if (currentWeekData?.id === sortedWeekly[0].id) {
-            historicalPrev = sortedWeekly[1];
-          } else {
-            const currentIndex = sortedWeekly.findIndex(d => d.id === currentWeekData?.id);
-            if (currentIndex !== -1 && currentIndex + 1 < sortedWeekly.length) {
-              historicalPrev = sortedWeekly[currentIndex + 1];
-            }
-          }
-        }
+        // Resolve latest saved Ahrefs metrics from live weeklyData
+        const sortedWithAhrefs = sortedWeekly.filter(d => ((d.ahrefs_dr || 0) > 0) || ((d.ahrefs_backlinks || 0) > 0) || ((d.ahrefs_ref_domains || 0) > 0));
+        const resolvedAhrefsCurrent = sortedWithAhrefs[0] || currentWeekData || latestData;
+        const historicalPrev = sortedWithAhrefs.length > 1 ? sortedWithAhrefs[1] : null;
 
-        const isSameAsCurrent = historicalPrev?.week_start_date === (currentWeekData?.week_start_date || latestData?.week_start_date);
+        const isSameAsCurrent = !historicalPrev || historicalPrev?.id === resolvedAhrefsCurrent?.id || (historicalPrev?.week_start_date === resolvedAhrefsCurrent?.week_start_date);
         const ahrefs = {
-          dr: currentWeekData?.ahrefs_dr || latestData?.ahrefs_dr || 0,
-          backlinks: currentWeekData?.ahrefs_backlinks || latestData?.ahrefs_backlinks || 0,
-          refDomains: currentWeekData?.ahrefs_ref_domains || latestData?.ahrefs_ref_domains || 0,
-          targetDr: client.target_dr || 0,
-          prevDr: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_dr || 0),
-          prevBacklinks: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_backlinks || 0),
-          prevRefDomains: isSameAsCurrent ? 0 : (historicalPrev?.ahrefs_ref_domains || 0),
-          hasPrev: true
+          dr: Number(resolvedAhrefsCurrent?.ahrefs_dr) || 0,
+          backlinks: Number(resolvedAhrefsCurrent?.ahrefs_backlinks) || 0,
+          refDomains: Number(resolvedAhrefsCurrent?.ahrefs_ref_domains) || 0,
+          targetDr: Number(client.target_dr) || 0,
+          prevDr: isSameAsCurrent ? 0 : (Number(historicalPrev?.ahrefs_dr) || 0),
+          prevBacklinks: isSameAsCurrent ? 0 : (Number(historicalPrev?.ahrefs_backlinks) || 0),
+          prevRefDomains: isSameAsCurrent ? 0 : (Number(historicalPrev?.ahrefs_ref_domains) || 0),
+          hasPrev: !isSameAsCurrent && !!historicalPrev
         };
 
         // Calculate duration of selected timeframe in days
@@ -344,13 +498,16 @@ export default function MasterDashboard() {
         const monthlyTarget = client.lead_target_monthly || 0;
         const periodLeadTarget = monthlyTarget * (daysCount / 30.4);
 
-        // Leads score (70% weight)
+        // Leads score (70% weight) - strictly based on Pure SEO leads when ads are running
         let leadsScore = 100;
         const reasons: string[] = [];
+        const effectiveLeadsForStatus = leads.seoLegit;
+
         if (monthlyTarget > 0) {
-          leadsScore = periodLeadTarget > 0 ? (leads.legit / periodLeadTarget) * 100 : 100;
+          leadsScore = periodLeadTarget > 0 ? (effectiveLeadsForStatus / periodLeadTarget) * 100 : 100;
           leadsScore = Math.min(100, Math.max(0, leadsScore));
-          reasons.push(`Leads: ${leadsScore.toFixed(0)}% (${leads.legit}/${Math.round(periodLeadTarget)} target)`);
+          const leadTypeLabel = (leads.hasChannelTracking && (leads.channelCounts.googleAds > 0 || leads.channelCounts.metaAds > 0)) ? 'SEO Leads' : 'Leads';
+          reasons.push(`${leadTypeLabel}: ${leadsScore.toFixed(0)}% (${effectiveLeadsForStatus}/${Math.round(periodLeadTarget)} target)`);
         } else {
           reasons.push("No Lead Target");
         }
@@ -434,11 +591,32 @@ export default function MasterDashboard() {
   const handleLeadsUpdate = async (row: DashboardRow) => {
     if (!editingLeads) return;
     try {
-      const saveDate = row.currentData?.week_start_date || format(parseISO(dateRange.start), 'yyyy-MM-dd');
-      await updateLegitLeads(row.client.id, saveDate, parseInt(editingLeads.value));
+      const rawDateStr = row.currentData?.week_start_date || row.latestData?.week_start_date || dateRange.start || new Date().toISOString().split('T')[0];
+      const parsedDate = parseISO(rawDateStr);
+      const saveDate = isNaN(parsedDate.getTime()) 
+        ? format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+        : format(startOfWeek(parsedDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+      const newVal = parseInt(editingLeads.value, 10) || 0;
+      await updateLegitLeads(row.client.id, saveDate, newVal);
+      
+      // Instantly update local row state for immediate UI feedback
+      setRows(prevRows => prevRows.map(r => {
+        if (r.client.id === row.client.id) {
+          return {
+            ...r,
+            currentLeadsLegit: newVal,
+            currentLeadsTotal: Math.max(r.currentLeadsTotal, newVal),
+            latestData: r.latestData ? { ...r.latestData, leads_legit: newVal, leads_total: Math.max(r.latestData.leads_total || 0, newVal) } : r.latestData
+          };
+        }
+        return r;
+      }));
+
       setEditingLeads(null);
       fetchData(true);
     } catch (error) {
+      console.error('Failed to update legit leads:', error);
       alert('Failed to update legit leads');
     }
   };
@@ -454,11 +632,41 @@ export default function MasterDashboard() {
     fetchData();
   }, [viewMode, dateRange]);
 
+  const availableOwners = React.useMemo(() => {
+    const ownerMap = new Map<string, string>();
+    rows.forEach(r => {
+      const code = (r.client.project_owner_code || '').trim();
+      const name = (r.client.project_owner_name || '').trim();
+      if (code) {
+        if (!ownerMap.has(code) || (name && !ownerMap.get(code))) {
+          ownerMap.set(code, name || code);
+        }
+      } else if (name) {
+        if (!ownerMap.has(name)) {
+          ownerMap.set(name, name);
+        }
+      }
+    });
+    return Array.from(ownerMap.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }, [rows]);
+
   const filteredRows = React.useMemo(() => {
     let result = rows;
+
+    if (selectedOwner !== 'all') {
+      result = result.filter(r => {
+        const code = (r.client.project_owner_code || '').trim().toLowerCase();
+        const name = (r.client.project_owner_name || '').trim().toLowerCase();
+        const target = selectedOwner.toLowerCase();
+        return code === target || name === target;
+      });
+    }
+
     if (searchTerm.trim()) {
       const terms = searchTerm.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-      result = rows.filter(r =>
+      result = result.filter(r =>
         terms.some(term =>
           r.client.name.toLowerCase().includes(term) ||
           r.client.short_code.toLowerCase().includes(term)
@@ -540,43 +748,44 @@ export default function MasterDashboard() {
     }
 
     return result;
-  }, [rows, searchTerm, sortConfig]);
+  }, [rows, selectedOwner, searchTerm, sortConfig]);
 
   return (
     <div className="space-y-8 pb-12">
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 rounded-[40px] border relative z-50 ${theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/40 border-white/5 backdrop-blur-2xl'
-        }`}>
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${theme === 'white' ? 'bg-[#76c9be] shadow-[#76c9be]/20' : 'bg-blue-600 shadow-blue-600/20'}`}>
-              <LayoutDashboard className="text-white" size={24} />
-            </div>
-            <div>
-              <h2 className={`text-3xl font-medium font-heading tracking-tighter  italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Master Dashboard</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-zinc-500 text-sm font-medium   leading-none">Cross-Property Intelligence</p>
-                {viewingPeriod && (
-                  <span className={`px-2 py-0.5 rounded-full text-sm font-medium   ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-blue-600/10 text-blue-600'}`}>
-                    {format(viewingPeriod.start, 'MMM dd')} - {format(viewingPeriod.end, 'MMM dd, yyyy')}
-                  </span>
-                )}
-              </div>
+      <div className={`flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-5 md:p-6 rounded-[32px] border relative z-50 ${
+        theme === 'white' ? 'bg-white border-[#163f4d]/10 shadow-sm' : 'bg-zinc-900/40 border-white/5 backdrop-blur-2xl'
+      }`}>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${theme === 'white' ? 'bg-[#76c9be] shadow-[#76c9be]/20' : 'bg-blue-600 shadow-blue-600/20'}`}>
+            <LayoutDashboard className="text-white" size={20} />
+          </div>
+          <div>
+            <h2 className={`text-2xl font-bold font-heading tracking-tight italic ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>Master Dashboard</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-zinc-500 text-xs font-medium leading-none">Cross-Property Intelligence</p>
+              {viewingPeriod && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${theme === 'white' ? 'bg-[#76c9be]/10 text-[#76c9be]' : 'bg-blue-600/10 text-blue-400'}`}>
+                  {format(viewingPeriod.start, 'MMM dd')} - {format(viewingPeriod.end, 'MMM dd, yyyy')}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className={`p-1.5 rounded-2xl flex gap-1 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'
-            }`}>
+        <div className="flex flex-wrap xl:flex-nowrap items-center gap-2.5">
+          <div className={`p-1 rounded-xl flex items-center gap-0.5 border shrink-0 ${
+            theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800/80 border-white/5'
+          }`}>
             <Tooltip content="Rolling Last 7 Days vs Previous 7 Days">
               <button
                 onClick={() => setViewMode('rolling')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === 'rolling'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === 'rolling'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 Rolling 7D
               </button>
@@ -584,12 +793,13 @@ export default function MasterDashboard() {
             <Tooltip content="Last 28 Days vs Previous 28 Days">
               <button
                 onClick={() => setViewMode('28days')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === '28days'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === '28days'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 28 Days
               </button>
@@ -597,12 +807,13 @@ export default function MasterDashboard() {
             <Tooltip content="Month over Month Performance">
               <button
                 onClick={() => setViewMode('monthly')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === 'monthly'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === 'monthly'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 Monthly (MoM)
               </button>
@@ -610,12 +821,13 @@ export default function MasterDashboard() {
             <Tooltip content="3 Months Performance vs Previous 3 Months">
               <button
                 onClick={() => setViewMode('3months')}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium   transition-all relative ${viewMode === '3months'
-                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  viewMode === '3months'
+                    ? theme === 'white' ? 'bg-[#082a36] text-white shadow-md' : 'bg-blue-600 text-white shadow-md'
                     : theme === 'white'
                       ? 'text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
-                  }`}
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
               >
                 3 Months
               </button>
@@ -623,90 +835,143 @@ export default function MasterDashboard() {
           </div>
 
           {viewMode === 'custom' && (
-            <div className={`p-1.5 rounded-2xl flex items-center gap-2 border ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'}`}>
+            <div className={`p-1 rounded-xl flex items-center gap-1 border shrink-0 ${theme === 'white' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-800 border-white/5'}`}>
               <input 
                 type="date" 
                 value={dateRange.start} 
                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className={`bg-transparent text-sm font-medium  outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
+                className={`bg-transparent text-xs font-medium outline-none px-1.5 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
-              <Minus size={12} className="text-zinc-500" />
+              <Minus size={10} className="text-zinc-500" />
               <input 
                 type="date" 
                 value={dateRange.end} 
                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className={`bg-transparent text-sm font-medium  outline-none px-2 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
+                className={`bg-transparent text-xs font-medium outline-none px-1.5 ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}
               />
               <button 
                 onClick={() => setViewMode('rolling')}
-                className="p-1 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
+                className="p-0.5 hover:bg-red-500/10 text-red-500 rounded transition-colors"
               >
-                <X size={14} />
+                <X size={12} />
               </button>
             </div>
           )}
 
           <button 
             onClick={() => setViewMode('custom')}
-            className={`p-2.5 rounded-xl border transition-all ${
+            title="Custom Date Range"
+            className={`p-2 rounded-xl border transition-all shrink-0 ${
               viewMode === 'custom'
-                ? theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] shadow-lg' : 'bg-blue-600 text-white border-blue-600 shadow-lg'
+                ? theme === 'white' ? 'bg-[#082a36] text-white border-[#082a36] shadow-md' : 'bg-blue-600 text-white border-blue-600 shadow-md'
                 : theme === 'white'
                   ? 'bg-white border-[#163f4d]/10 text-[#607a80] hover:text-[#082a36] hover:bg-[#76c9be]/10'
-                  : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-white hover:bg-zinc-700'
+                  : 'bg-zinc-800 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-700'
             }`}
           >
-            <Calendar size={18} />
+            <Calendar size={15} />
           </button>
 
-          <div className="relative group">
-            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${theme === 'white' ? 'text-[#607a80] group-focus-within:text-[#76c9be]' : 'text-zinc-500 group-focus-within:text-blue-500'}`} size={18} />
+          <div className="relative group shrink-0">
+            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${theme === 'white' ? 'text-[#607a80] group-focus-within:text-[#76c9be]' : 'text-zinc-500 group-focus-within:text-blue-500'}`} size={14} />
             <input
               type="text"
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-12 pr-6 py-2.5 border rounded-2xl text-sm font-medium outline-none transition-all ${theme === 'white' 
+              className={`pl-8 pr-3 py-1.5 border rounded-xl text-xs font-medium outline-none transition-all ${theme === 'white' 
                 ? 'bg-white border-[#163f4d]/10 text-[#082a36] focus:border-[#76c9be]' 
                 : 'bg-zinc-800 border-white/5 text-white focus:border-blue-500'
-                } w-48`}
+                } w-36 lg:w-40`}
             />
           </div>
+
+          <div className="relative shrink-0 flex items-center">
+            <User className={`absolute left-2.5 pointer-events-none transition-colors ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-400'}`} size={13} />
+            <select
+              value={selectedOwner}
+              onChange={(e) => setSelectedOwner(e.target.value)}
+              className={`pl-7 pr-7 py-1.5 border rounded-xl text-xs font-semibold outline-none cursor-pointer appearance-none transition-all ${
+                theme === 'white'
+                  ? selectedOwner === 'all'
+                    ? 'bg-white border-[#163f4d]/10 text-[#082a36] hover:border-[#76c9be]'
+                    : 'bg-[#76c9be]/15 border-[#76c9be] text-[#082a36]'
+                  : selectedOwner === 'all'
+                    ? 'bg-zinc-800 border-white/5 text-zinc-300 hover:border-zinc-700'
+                    : 'bg-blue-600/20 border-blue-500 text-blue-400'
+              }`}
+              title="Filter by Project Owner / PM"
+            >
+              <option value="all" className={theme === 'white' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white'}>
+                All Owners {availableOwners.length > 0 ? `(${availableOwners.length})` : ''}
+              </option>
+              {availableOwners.map(owner => (
+                <option 
+                  key={owner.code} 
+                  value={owner.code}
+                  className={theme === 'white' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white'}
+                >
+                  {owner.name !== owner.code ? `${owner.name} (${owner.code})` : owner.code}
+                </option>
+              ))}
+            </select>
+            <div className={`absolute right-2 pointer-events-none text-[10px] ${theme === 'white' ? 'text-zinc-400' : 'text-zinc-500'}`}>▼</div>
+          </div>
+
           <button
             onClick={handleLiveSync}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${
               theme === 'white' 
-                ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-lg shadow-[#76c9be]/20' 
-                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20'
+                ? 'bg-[#76c9be] text-white hover:bg-[#5bb8ad] shadow-md shadow-[#76c9be]/20' 
+                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-md shadow-emerald-600/20'
             }`}
           >
-            <RefreshCcw size={14} className={isLiveSyncing ? 'animate-spin' : ''} />
+            <RefreshCcw size={12} className={isLiveSyncing ? 'animate-spin' : ''} />
             Live Sync
           </button>
 
           <button
             onClick={handleSyncToSheets}
             disabled={isSyncingSheets}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium   transition-all flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${
               theme === 'white' 
-                ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 shadow-lg border border-[#082a36]' 
-                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg border border-blue-500 shadow-blue-600/20'
+                ? 'bg-[#082a36] text-white hover:bg-[#082a36]/90 shadow-md border border-[#082a36]' 
+                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-md border border-blue-500 shadow-blue-600/20'
             } disabled:opacity-50`}
           >
-            <FileSpreadsheet size={14} className={isSyncingSheets ? 'animate-pulse' : ''} />
+            <FileSpreadsheet size={12} className={isSyncingSheets ? 'animate-pulse' : ''} />
             {isSyncingSheets ? 'Syncing...' : 'Sync to Sheets'}
           </button>
+
+          <LeadNotificationCenter />
         </div>
       </div>
 
-      <div className={`rounded-[20px] border backdrop-blur-xl shadow-2xl overflow-hidden ${theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
-        }`}>
-        <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
+      <div className={`rounded-[20px] border backdrop-blur-xl shadow-2xl overflow-hidden ${
+        theme === 'white' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-white/5'
+      }`}>
+        <div 
+          onScroll={(e) => {
+            const target = e.currentTarget;
+            setIsScrolled(target.scrollTop > 40 || window.scrollY > 80);
+          }}
+          className="overflow-x-auto max-h-[calc(100vh-100px)] overflow-y-auto custom-scrollbar"
+        >
           <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-[30]">
-              <tr className={`border-b ${theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl'}`}>
+            <thead className={`sticky top-0 z-[45] transition-all duration-200 ${
+              isScrolled 
+                ? 'shadow-lg backdrop-blur-xl border-b' 
+                : 'border-b'
+            }`}>
+              <tr className={`transition-all duration-200 ${
+                theme === 'white' 
+                  ? isScrolled ? 'bg-[#082a36]/95 border-[#163f4d]/30 text-white backdrop-blur-md' : 'bg-[#082a36] border-[#163f4d]/20 text-white' 
+                  : isScrolled ? 'bg-zinc-950/95 border-white/10 text-[#607a80] backdrop-blur-md shadow-md' : 'bg-zinc-950/90 border-white/5 backdrop-blur-xl text-[#607a80]'
+              }`}>
                 <th
-                  className={`px-6 py-2 text-sm font-medium   sticky left-0 z-[40] border-r cursor-pointer transition-colors rounded-tl-[20px] ${
+                  className={`px-6 text-sm font-medium sticky left-0 z-[46] border-r cursor-pointer transition-all duration-200 rounded-tl-[20px] ${
+                    isScrolled ? 'py-1.5' : 'py-2'
+                  } ${
                     theme === 'white' ? 'bg-[#082a36] border-[#163f4d]/20 text-white hover:text-[#76c9be]' : 'bg-zinc-950 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)] text-[#607a80] hover:text-[#76c9be]'
                   }`}
                   onClick={() => handleSort('client')}
@@ -717,75 +982,103 @@ export default function MasterDashboard() {
                     {sortConfig?.key === 'client' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-2 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('pm')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-2'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('pm')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Project Manager Code" position="bottom">PM</Tooltip>
                     {sortConfig?.key === 'pm' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('leads')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('leads')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Verified high-quality leads" position="bottom">Legit Leads</Tooltip>
                     {sortConfig?.key === 'leads' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('phone_calls')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GA4 Phone Calls" position="bottom">Phone Calls (C/P)</Tooltip>
                     {sortConfig?.key === 'phone_calls' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top3')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Keywords in top 3 positions" position="bottom">Top 3</Tooltip>
                     {sortConfig?.key === 'top3' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top10')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('top10')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Actual vs Target keywords in top 10" position="bottom">Top 10 (A/T)</Tooltip>
                     {sortConfig?.key === 'top10' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('ctr')}>
+                <th className={`px-4 text-center text-sm font-medium cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-4'
+                } ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('ctr')}>
                   <div className="flex items-center justify-center gap-1">
                     Avg CTR {sortConfig?.key === 'ctr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('impressions')}>
+                <th className={`px-4 text-center text-sm font-medium cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-4'
+                } ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('impressions')}>
                   <div className="flex items-center justify-center gap-1">
                     Impressions {sortConfig?.key === 'impressions' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-4 text-center text-sm font-medium   cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('position')}>
+                <th className={`px-4 text-center text-sm font-medium cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-4'
+                } ${theme === 'white' ? 'text-white' : 'text-zinc-500'}`} onClick={() => handleSort('position')}>
                   <div className="flex items-center justify-center gap-1">
                     Avg Pos {sortConfig?.key === 'position' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('gsc')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('gsc')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GSC Clicks" position="bottom">GSC Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'gsc' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Current vs Previous GA4 Users" position="bottom">GA4 Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'ga4' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center cursor-pointer hover:text-[#76c9be] transition-colors ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
+                <th className={`px-4 text-sm font-medium text-center cursor-pointer hover:text-[#76c9be] transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('dr')}>
                   <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Ahrefs Domain Rating & Backlinks" position="bottom">Ahrefs DR & BL</Tooltip>
                     {sortConfig?.key === 'dr' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
+                <th className={`px-4 text-sm font-medium text-center transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>
                   <Tooltip content="Weekly production activities" position="bottom">Activity</Tooltip>
                 </th>
-                <th className={`px-4 py-5 text-sm font-medium   text-center ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Intelligence</th>
-                <th className={`px-8 py-2 text-sm font-medium   text-center sticky right-0 z-[40] border-l cursor-pointer hover:text-[#76c9be] transition-colors rounded-tr-[20px] ${
-                  theme === 'white' ? 'bg-[#082a36] text-white border-[#163f4d]/20' : 'bg-inherit text-[#607a80] shadow-[-2px_0_10px_rgba(3,7,18,0.5)]'
+                <th className={`px-4 text-sm font-medium text-center transition-all duration-200 ${
+                  isScrolled ? 'py-1.5' : 'py-5'
+                } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`}>Intelligence</th>
+                <th className={`px-8 text-sm font-medium text-center sticky right-0 z-[46] border-l cursor-pointer hover:text-[#76c9be] transition-all duration-200 rounded-tr-[20px] ${
+                  isScrolled ? 'py-1.5' : 'py-2'
+                } ${
+                  theme === 'white' ? 'bg-[#082a36] text-white border-[#163f4d]/20' : 'bg-zinc-950 text-[#607a80] border-white/5 shadow-[-2px_0_10px_rgba(3,7,18,0.5)]'
                 }`} onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">
                     Status
@@ -839,19 +1132,100 @@ export default function MasterDashboard() {
                         />
                       </div>
                     ) : (
-                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                        <div className="space-y-1 text-[12px] font-medium text-center normal-case tracking-normal tooltip-override">
-                          {row.leads.legit === 0 && row.leads.prevLegit === 0 && <div className="text-red-500 mb-1">NO DATA</div>}
-                          <div className="flex justify-between gap-4"><span>CURRENT LEGIT:</span> <span className="opacity-80">{row.currentRangeStr} ({row.leads.legit})</span></div>
-                          <div className="flex justify-between gap-4"><span>PREVIOUS LEGIT:</span> <span className="opacity-80">{row.prevRangeStr} ({row.leads.prevLegit})</span></div>
+                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[280px]" content={
+                        <div className="space-y-1.5 p-1 text-left text-xs">
+                          <div className={`font-semibold border-b pb-1 flex justify-between items-center ${theme === 'white' ? 'border-zinc-200 text-zinc-700' : 'border-zinc-800 text-zinc-300'}`}>
+                            <span className="font-bold">Leads Channel Breakdown</span>
+                            <span className="text-[10px] opacity-70">Genuine</span>
+                          </div>
+
+                          {(row.leads as any).hasChannelTracking && ((row.leads as any).channelCounts?.googleAds > 0 || (row.leads as any).channelCounts?.metaAds > 0 || (row.leads as any).channelCounts?.social > 0) ? (
+                            <div className="space-y-1 py-1">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="flex items-center gap-1.5 font-medium text-emerald-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  Pure SEO Leads:
+                                </span>
+                                <span className="font-bold font-mono text-emerald-400">{(row.leads as any).channelCounts?.seo || 0}</span>
+                              </div>
+                              {(row.leads as any).channelCounts?.googleAds > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-blue-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                    Google Ads Leads:
+                                  </span>
+                                  <span className="font-bold font-mono text-blue-400">{(row.leads as any).channelCounts.googleAds}</span>
+                                </div>
+                              )}
+                              {(row.leads as any).channelCounts?.metaAds > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-purple-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                    Meta / Social Ads:
+                                  </span>
+                                  <span className="font-bold font-mono text-purple-400">{(row.leads as any).channelCounts.metaAds}</span>
+                                </div>
+                              )}
+                              {(row.leads as any).channelCounts?.social > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-pink-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
+                                    Social / Direct:
+                                  </span>
+                                  <span className="font-bold font-mono text-pink-400">{(row.leads as any).channelCounts.social}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex justify-between items-center py-0.5">
+                              <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Current Genuine:</span>
+                              <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Total Legit Leads:</span>
+                            <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Previous Genuine:</span>
+                            <span className="font-medium text-zinc-400 font-mono">{row.leads.prevLegit}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
+                            <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Growth:</span>
+                            <span className={`font-bold font-mono ${row.leads.change > 0 ? 'text-emerald-500' : row.leads.change < 0 ? 'text-red-500' : 'text-zinc-500'}`}>
+                              {row.leads.change > 0 ? `▲ +${row.leads.change.toFixed(1)}%` : row.leads.change < 0 ? `▼ ${row.leads.change.toFixed(1)}%` : '• 0%'}
+                            </span>
+                          </div>
+                          <div className={`border-t pt-1 text-[10px] text-zinc-500 text-center italic ${theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'}`}>
+                            <span>Period: {(row.leads as any).rangeStr || row.currentRangeStr} (Real-Time)</span>
+                          </div>
                         </div>
                       }>
                         <div
-                          className="space-y-1 cursor-pointer select-none"
-                          onDoubleClick={() => setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() })}
+                          className="space-y-1 cursor-pointer select-none group/lead"
+                          onClick={() => setSelectedLeadsModal({
+                            client: row.client,
+                            legit: row.leads.legit,
+                            total: row.leads.current,
+                            prevLegit: row.leads.prevLegit,
+                            currentRangeStr: (row.leads as any).rangeStr || row.currentRangeStr,
+                            leads: (row.leads as any).details || []
+                          })}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingLeads({ clientId: row.client.id, value: row.leads.legit.toString() });
+                          }}
                         >
-                          <div className="flex flex-col items-center">
-                            <span className={`font-medium font-heading text-sm tracking-tighter ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>{row.leads.legit}</span>
+                          <div className="flex flex-col items-center group-hover/lead:scale-110 transition-transform">
+                            <span className={`font-semibold font-heading text-sm tracking-tight flex items-center gap-1 ${
+                              theme === 'white' ? 'text-[#082a36] group-hover/lead:text-[#76c9be]' : 'text-white group-hover/lead:text-blue-400'
+                            }`}>
+                              {row.leads.legit}
+                              {(row.leads as any).details?.length > 0 && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" title="View individual customer inquiries" />
+                              )}
+                            </span>
                             <TrendIndicator value={row.leads.change} theme={theme} />
                           </div>
                         </div>
@@ -990,37 +1364,95 @@ export default function MasterDashboard() {
                     </Tooltip>
                   </td>
                   <td className="px-4 py-2 text-center relative hover:z-[50]">
-                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} content={
-                      <div className="space-y-1.5 p-1 min-w-[200px] text-left">
-                        <div className={`font-medium border-b pb-1.5   text-sm text-center ${
-                          theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[310px]" content={
+                      <div className="space-y-2 p-1 text-left">
+                        <div className={`font-semibold border-b pb-1.5 text-xs flex justify-between items-center ${
+                          theme === 'white' ? 'border-zinc-200 text-zinc-600' : 'border-zinc-700/50 text-zinc-300'
                         }`}>
-                          GA4 Traffic Breakdown
+                          <span className="font-bold">GA4 Traffic Breakdown</span>
+                          <span className="text-[10px] font-normal opacity-70">vs previous period</span>
                         </div>
-                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 && <div className="text-red-500 text-sm font-medium text-center mb-1">NO DATA</div>}
-                        <div className="space-y-1.5 text-sm font-medium  tracking-[0.05em]">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[#607a80]">Total Sessions:</span>
-                            <span className={theme === 'white' ? 'text-zinc-900' : 'text-white'}>{row.ga4Traffic.current.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-emerald-500 font-medium">Organic Search:</span>
-                            <div className="flex gap-1.5 items-center">
-                              <span className="text-emerald-400 font-heading tracking-tighter">{row.ga4Traffic.organic.toLocaleString()}</span>
-                              <span className="text-sm opacity-70">
-                                ({row.ga4Traffic.current > 0 ? ((row.ga4Traffic.organic / row.ga4Traffic.current) * 100).toFixed(0) : 0}%)
+                        {row.ga4Traffic.current === 0 && row.ga4Traffic.previous === 0 ? (
+                          <div className="text-red-500 text-xs font-medium text-center py-1">NO DATA RECORDED</div>
+                        ) : (
+                          <div className="space-y-2 text-xs">
+                            {/* Total Sessions */}
+                            <div className="flex justify-between items-center">
+                              <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Total Sessions:</span>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
+                                  {row.ga4Traffic.current.toLocaleString()}
+                                </span>
+                                <span className="text-[11px] text-zinc-500 font-normal">/ {row.ga4Traffic.previous.toLocaleString()}</span>
+                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                  row.ga4Traffic.change > 0 
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                    : row.ga4Traffic.change < 0 
+                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                      : 'bg-zinc-500/10 text-zinc-500'
+                                }`}>
+                                  {row.ga4Traffic.change > 0 ? `▲ +${row.ga4Traffic.change.toFixed(1)}%` : row.ga4Traffic.change < 0 ? `▼ ${row.ga4Traffic.change.toFixed(1)}%` : '• 0%'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Organic Search */}
+                            <div className={`flex justify-between items-center border-t pt-1.5 ${
+                              theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                            }`}>
+                              <span className="text-emerald-500 font-semibold">Organic Search:</span>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="text-emerald-400 font-bold">
+                                  {row.ga4Traffic.organic.toLocaleString()}
+                                </span>
+                                <span className="text-[11px] text-zinc-500 font-normal">/ {row.ga4Traffic.prevOrganic.toLocaleString()}</span>
+                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                  row.ga4Traffic.organicChange > 0 
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                    : row.ga4Traffic.organicChange < 0 
+                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                      : 'bg-zinc-500/10 text-zinc-500'
+                                }`}>
+                                  {row.ga4Traffic.organicChange > 0 ? `▲ +${row.ga4Traffic.organicChange.toFixed(1)}%` : row.ga4Traffic.organicChange < 0 ? `▼ ${row.ga4Traffic.organicChange.toFixed(1)}%` : '• 0%'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Organic Share (%) */}
+                            <div className="flex justify-between items-center pl-2">
+                              <span className="text-[11px] text-zinc-500">Organic Share (%):</span>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className={`font-semibold text-[11px] ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                  {row.ga4Traffic.currentOrganicPct.toFixed(1)}%
+                                </span>
+                                <span className="text-[10px] text-zinc-500">
+                                  (prev {row.ga4Traffic.prevOrganicPct.toFixed(1)}%)
+                                </span>
+                                <span className={`text-[10px] font-bold ${
+                                  row.ga4Traffic.organicShareDiff > 0 
+                                    ? 'text-emerald-500' 
+                                    : row.ga4Traffic.organicShareDiff < 0 
+                                      ? 'text-red-500' 
+                                      : 'text-zinc-500'
+                                }`}>
+                                  {row.ga4Traffic.organicShareDiff > 0 ? `+${row.ga4Traffic.organicShareDiff.toFixed(1)}%` : `${row.ga4Traffic.organicShareDiff.toFixed(1)}%`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Other Channels */}
+                            <div className={`flex justify-between items-center border-t pt-1.5 ${
+                              theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                            }`}>
+                              <span className="text-zinc-500">Other Channels:</span>
+                              <span className="opacity-80 text-zinc-400 font-medium font-mono">
+                                {Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}
                               </span>
                             </div>
                           </div>
-                          <div className={`flex justify-between items-center border-t pt-1 ${
-                            theme === 'white' ? 'border-zinc-200' : 'border-white/5'
-                          }`}>
-                            <span className="text-zinc-500">Other Channels:</span>
-                            <span className="opacity-80 text-zinc-400">{Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}</span>
-                          </div>
-                        </div>
-                        <div className={`border-t pt-1 text-sm text-zinc-500 text-center   italic ${
-                          theme === 'white' ? 'border-zinc-200' : 'border-white/5'
+                        )}
+                        <div className={`border-t pt-1 text-[11px] text-zinc-500 text-center italic ${
+                          theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'
                         }`}>
                           <span>Period: {row.currentRangeStr}</span>
                         </div>
@@ -1035,111 +1467,126 @@ export default function MasterDashboard() {
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-4 py-2 text-center relative hover:z-[50]">
-                    <Tooltip content={
-                      <div className="space-y-1.5 p-0.5">
-                        <div className={`font-medium border-b pb-1.5   text-sm flex justify-between items-center gap-4 ${
-                          theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-400'
+                  <td className="px-4 py-2 text-center relative hover:z-[50] min-w-[130px]">
+                    <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[330px]" content={
+                      <div className="space-y-2.5 p-1 text-left">
+                        {/* Popover Header */}
+                        <div className={`font-semibold border-b pb-2 text-xs flex justify-between items-center ${
+                          theme === 'white' ? 'border-zinc-200 text-zinc-700' : 'border-zinc-700/50 text-zinc-200'
                         }`}>
-                          <span>Ahrefs Comparison</span>
-                          <span className="text-sm font-normal lowercase tracking-normal opacity-80">
-                            ({row.ahrefs.hasPrev ? 'vs previous period' : 'no previous data'})
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                            <span className="font-bold">Ahrefs Domain Authority</span>
+                          </div>
+                          <span className="text-[10px] font-normal opacity-70">
+                            {row.ahrefs.hasPrev ? 'vs previous period' : 'no previous record'}
                           </span>
                         </div>
-                        <div className="space-y-1 text-left min-w-[180px]">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating:</span>
+
+
+
+                        {/* 3-Metric Comparison Grid */}
+                        <div className="space-y-1.5 text-xs font-mono">
+                          {/* Domain Rating */}
+                          <div className="flex justify-between items-center py-1">
+                            <span className={`font-sans font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Domain Rating (DR):</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
+                              <span className={`font-bold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.dr || '-'}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-sm font-medium ${
-                                  row.ahrefs.dr - row.ahrefs.prevDr > 0 
-                                    ? 'text-emerald-500' 
-                                    : row.ahrefs.dr - row.ahrefs.prevDr < 0 
-                                      ? 'text-red-500' 
-                                      : 'text-zinc-500'
-                                }`}>
-                                  {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className="flex justify-between items-center text-sm">
-                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Backlinks:</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
-                              {row.ahrefs.hasPrev && (
-                                <span className={`text-sm font-medium ${
-                                  row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
-                                    ? 'text-emerald-500' 
-                                    : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
-                                      ? 'text-red-500' 
-                                      : 'text-zinc-500'
-                                }`}>
-                                  {row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
-                                    ? `▲ +${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` 
-                                    : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
-                                      ? `▼ ${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` 
-                                      : '• 0'}
-                                </span>
+                                <>
+                                  <span className="text-[11px] text-zinc-500 font-normal">/ {row.ahrefs.prevDr || '-'}</span>
+                                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                    row.ahrefs.dr - row.ahrefs.prevDr > 0 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                      : row.ahrefs.dr - row.ahrefs.prevDr < 0 
+                                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                        : 'bg-zinc-500/10 text-zinc-500'
+                                  }`}>
+                                    {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
+                                  </span>
+                                </>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex justify-between items-center text-sm">
-                            <span className={`font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Referring Domains:</span>
+                          {/* Referring Domains */}
+                          <div className={`flex justify-between items-center py-1 border-t ${
+                            theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                          }`}>
+                            <span className={`font-sans font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Ref Domains:</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-medium ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
+                              <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.refDomains.toLocaleString()}</span>
                               {row.ahrefs.hasPrev && (
-                                <span className={`text-sm font-medium ${
-                                  row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
-                                    ? 'text-emerald-500' 
-                                    : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
-                                      ? 'text-red-500' 
-                                      : 'text-zinc-500'
-                                }`}>
-                                  {row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
-                                    ? `▲ +${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` 
-                                    : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
-                                      ? `▼ ${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` 
-                                      : '• 0'}
-                                </span>
+                                <>
+                                  <span className="text-[11px] text-zinc-500 font-normal">/ {row.ahrefs.prevRefDomains.toLocaleString()}</span>
+                                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                    row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                      : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 
+                                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                        : 'bg-zinc-500/10 text-zinc-500'
+                                  }`}>
+                                    {row.ahrefs.refDomains - row.ahrefs.prevRefDomains > 0 ? `▲ +${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` : row.ahrefs.refDomains - row.ahrefs.prevRefDomains < 0 ? `▼ ${(row.ahrefs.refDomains - row.ahrefs.prevRefDomains).toLocaleString()}` : '• 0'}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Backlinks */}
+                          <div className={`flex justify-between items-center py-1 border-t ${
+                            theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                          }`}>
+                            <span className={`font-sans font-medium ${theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}`}>Total Backlinks:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>{row.ahrefs.backlinks.toLocaleString()}</span>
+                              {row.ahrefs.hasPrev && (
+                                <>
+                                  <span className="text-[11px] text-zinc-500 font-normal">/ {row.ahrefs.prevBacklinks.toLocaleString()}</span>
+                                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                    row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                      : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 
+                                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                        : 'bg-zinc-500/10 text-zinc-500'
+                                  }`}>
+                                    {row.ahrefs.backlinks - row.ahrefs.prevBacklinks > 0 ? `▲ +${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` : row.ahrefs.backlinks - row.ahrefs.prevBacklinks < 0 ? `▼ ${(row.ahrefs.backlinks - row.ahrefs.prevBacklinks).toLocaleString()}` : '• 0'}
+                                  </span>
+                                </>
                               )}
                             </div>
                           </div>
                         </div>
+
                         {row.ahrefs.hasPrev && (
-                          <div className={`text-sm pt-1.5 border-t flex flex-col gap-0.5 ${
-                            theme === 'white' ? 'border-zinc-200 text-zinc-500' : 'border-zinc-700/50 text-zinc-500'
+                          <div className={`border-t pt-1.5 text-[11px] text-zinc-500 text-center italic ${
+                            theme === 'white' ? 'border-zinc-200' : 'border-zinc-800'
                           }`}>
-                            <div className="flex justify-between"><span>Current:</span> <span className={`font-medium ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.currentRangeStr}</span></div>
-                            <div className="flex justify-between"><span>Previous:</span> <span className={`font-medium ${theme === 'white' ? 'text-zinc-700' : 'text-zinc-400'}`}>{row.prevRangeStr}</span></div>
+                            <span>Period: {row.currentRangeStr}</span>
                           </div>
                         )}
                       </div>
-                    } position={rowIndex < 2 ? 'bottom' : 'top'}>
+                    }>
+                      {/* In-Cell Display */}
                       <div className="flex flex-col items-center gap-0.5">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className={`font-medium text-sm tracking-tighter ${theme === 'white' ? 'text-purple-600' : 'text-purple-400'}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-bold text-sm tracking-tight font-heading ${theme === 'white' ? 'text-purple-700' : 'text-purple-400'}`}>
                             DR: {row.ahrefs.dr || '-'}
-                            {row.ahrefs.hasPrev && row.ahrefs.dr - row.ahrefs.prevDr !== 0 && (
-                              <span className={`text-sm font-medium ml-1 select-none ${
-                                row.ahrefs.dr - row.ahrefs.prevDr > 0 
-                                  ? (theme === 'white' ? 'text-[#76c9be]' : 'text-emerald-500') 
-                                  : (theme === 'white' ? 'text-[#e24b4a]' : 'text-red-500')
-                              }`}>
-                                {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? '▲' : '▼'}
-                              </span>
-                            )}
                           </span>
-                          {row.ahrefs.targetDr > 0 && (
-                            <span className="text-sm font-medium text-zinc-500   opacity-80">
-                              / {row.ahrefs.targetDr}
+                          {row.ahrefs.hasPrev && (
+                            <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                              row.ahrefs.dr - row.ahrefs.prevDr > 0 
+                                ? (theme === 'white' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20') 
+                                : row.ahrefs.dr - row.ahrefs.prevDr < 0 
+                                  ? (theme === 'white' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-red-500/10 text-red-400 border border-red-500/20')
+                                  : (theme === 'white' ? 'text-zinc-400' : 'text-zinc-500')
+                            }`}>
+                              {row.ahrefs.dr - row.ahrefs.prevDr > 0 ? `▲ +${row.ahrefs.dr - row.ahrefs.prevDr}` : row.ahrefs.dr - row.ahrefs.prevDr < 0 ? `▼ ${row.ahrefs.dr - row.ahrefs.prevDr}` : '• 0'}
                             </span>
                           )}
                         </div>
-                        <div className={`flex items-center gap-1.5 text-sm font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
+
+                        <div className={`flex items-center gap-1.5 text-[11px] font-medium ${theme === 'white' ? 'text-[#607a80]' : 'text-zinc-500'}`}>
                           <span>BL: {row.ahrefs.backlinks >= 1000 ? `${(row.ahrefs.backlinks / 1000).toFixed(1)}K` : row.ahrefs.backlinks}</span>
                           <span className="opacity-30">|</span>
                           <span>RD: {row.ahrefs.refDomains}</span>
@@ -1216,6 +1663,14 @@ export default function MasterDashboard() {
           endDate={keywordModal.endDate}
           theme={theme}
           onClose={() => setKeywordModal(null)}
+        />
+      )}
+
+      {selectedLeadsModal && (
+        <LeadsDetailModal
+          modalData={selectedLeadsModal}
+          onClose={() => setSelectedLeadsModal(null)}
+          theme={theme}
         />
       )}
 
@@ -2209,6 +2664,151 @@ function KeywordDetailsModal({ clientId, clientName, type, startDate, endDate, t
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeadsDetailModal({ modalData, onClose, theme }: { modalData: any; onClose: () => void; theme: string }) {
+  const { client, legit, total, prevLegit, currentRangeStr, leads } = modalData;
+
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 md:p-12 animate-in fade-in duration-200">
+      <div 
+        className="absolute inset-0 bg-zinc-950/80 backdrop-blur-md"
+        onClick={onClose}
+      />
+      
+      <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-[36px] border shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 ${
+        theme === 'white' ? 'bg-white border-[#163f4d]/10' : 'bg-zinc-900 border-white/10'
+      }`}>
+        <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm ${
+              theme === 'white' ? 'bg-[#76c9be]/10 text-[#082a36]' : 'bg-blue-600/20 text-blue-400'
+            }`}>
+              {client.short_code || client.name.substring(0, 3)}
+            </div>
+            <div>
+              <h2 className={`text-xl font-bold font-heading tracking-tight ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                {client.name}
+              </h2>
+              <p className={`text-xs font-medium ${theme === 'white' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                Inbound Genuine Leads • {currentRangeStr}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              {legit} Legit / {total} Total
+            </span>
+            <button 
+              onClick={onClose}
+              className={`p-2.5 rounded-2xl transition-colors ${theme === 'white' ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          {(!leads || leads.length === 0) ? (
+            <div className="text-center py-12 space-y-3">
+              <ShieldCheck size={40} className="mx-auto text-emerald-500 opacity-60" />
+              <div>
+                <p className={`font-bold text-base ${theme === 'white' ? 'text-[#082a36]' : 'text-white'}`}>
+                  {legit} Verified Legit Leads
+                </p>
+                <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                  Leads recorded for {currentRangeStr}. (Detailed customer inquiries appear automatically when received via live webhooks).
+                </p>
+              </div>
+            </div>
+          ) : (
+            leads.map((lead: any, idx: number) => {
+              const formData = lead.form_data?.body || lead.form_data || {};
+              const name = formData['your-name'] || formData['name'] || formData['first-name'] || formData['fist-name'] || 'Customer';
+              const email = formData['your-email'] || formData['email'] || '';
+              const phone = formData['contact-number'] || formData['phone'] || '';
+              const message = formData['your-comments'] || formData['your-message'] || formData['message'] || formData['your-size'] || '';
+              
+              let dateFormatted = '';
+              try {
+                const d = new Date(lead.created_at || lead.lead_date);
+                if (!isNaN(d.getTime())) {
+                  dateFormatted = format(d, 'dd MMM yyyy, h:mm a');
+                } else {
+                  dateFormatted = lead.created_at || 'Recent';
+                }
+              } catch (e) {
+                dateFormatted = lead.created_at || 'Recent';
+              }
+
+              return (
+                <div 
+                  key={lead.id || idx} 
+                  className={`p-5 rounded-2xl border transition-all space-y-2.5 ${
+                    theme === 'white' ? 'bg-zinc-50/70 border-zinc-200 hover:bg-zinc-50' : 'bg-zinc-800/40 border-white/5 hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-slate-800 dark:text-zinc-100 flex items-center gap-1.5">
+                      <User size={15} className="text-emerald-500" />
+                      {name}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {lead.channel && (
+                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${
+                          (lead.channel.toLowerCase().includes('google') || lead.channel.toLowerCase().includes('adwords'))
+                            ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                            : (lead.channel.toLowerCase().includes('meta') || lead.channel.toLowerCase().includes('facebook') || lead.channel.toLowerCase().includes('instagram'))
+                              ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+                              : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                        }`}>
+                          {lead.channel}
+                        </span>
+                      )}
+                      <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        {lead.status || 'GENUINE'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(email || phone) && (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600 dark:text-zinc-400 font-mono">
+                      {email && (
+                        <span className="flex items-center gap-1">
+                          <Mail size={12} className="text-zinc-400" />
+                          {email}
+                        </span>
+                      )}
+                      {phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone size={12} className="text-zinc-400" />
+                          {phone}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {message && (
+                    <div className="text-xs text-zinc-600 dark:text-zinc-300 italic bg-white dark:bg-zinc-900/80 p-3 rounded-xl border border-zinc-200/60 dark:border-white/5 max-h-32 overflow-y-auto custom-scrollbar leading-relaxed whitespace-pre-wrap">
+                      "{message}"
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Clock size={11} />
+                      {dateFormatted}
+                    </span>
+                    <span className="capitalize">{lead.channel || 'website form'}</span>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

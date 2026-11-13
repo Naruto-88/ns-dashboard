@@ -365,15 +365,67 @@ export const aggregateMetrics = async (clientId: string, current: DateRange, pre
 
 export const updateLegitLeads = async (clientId: string, weekStartDate: string, legitLeads: number): Promise<void> => {
   try {
+    // 1. Fetch existing weekly_data record to ensure leads_total isn't smaller than legitLeads
+    const { data: existingW } = await supabase
+      .from('weekly_data')
+      .select('leads_total')
+      .eq('client_id', clientId)
+      .eq('week_start_date', weekStartDate)
+      .maybeSingle();
+
+    const currentTotal = existingW?.leads_total ?? 0;
+    const resolvedTotal = Math.max(currentTotal, legitLeads);
+
     const { error } = await supabase
       .from('weekly_data')
       .upsert({ 
         client_id: clientId, 
         week_start_date: weekStartDate, 
-        leads_legit: legitLeads 
+        leads_legit: legitLeads,
+        leads_total: resolvedTotal
       }, { onConflict: 'client_id, week_start_date' });
     
     if (error) throw error;
+
+    // 2. Also update live dashboard_cache tables for this client so cache immediately reflects the edited leads
+    const cacheTables = ['dashboard_cache', 'dashboard_cache_weekly', 'dashboard_cache_monthly', 'dashboard_cache_3m'];
+    for (const tbl of cacheTables) {
+      try {
+        const { data: cacheRows } = await supabase
+          .from(tbl)
+          .select('id, current_data')
+          .eq('client_id', clientId);
+
+        if (cacheRows && cacheRows.length > 0) {
+          for (const cRow of cacheRows) {
+            const updatedCurrent = {
+              ...(cRow.current_data || {}),
+              leads_legit: legitLeads,
+              leads_total: resolvedTotal
+            };
+            await supabase
+              .from(tbl)
+              .update({ current_data: updatedCurrent, last_updated: new Date().toISOString() })
+              .eq('id', cRow.id);
+          }
+        }
+      } catch (cacheErr) {
+        // Non-blocking cache sync
+        console.warn(`[CACHE SYNC] Non-blocking update on ${tbl} for client ${clientId}:`, cacheErr);
+      }
+    }
+
+    // 3. Clear any client-side session caches
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const keysToRemove = [];
+        for (let i = 0; i < window.sessionStorage.length; i++) {
+          const k = window.sessionStorage.key(i);
+          if (k && k.includes(clientId)) keysToRemove.push(k);
+        }
+        keysToRemove.forEach(k => window.sessionStorage.removeItem(k));
+      }
+    } catch (_) {}
   } catch (error) {
     console.error('Error updating legit leads:', error);
     throw error;
@@ -592,6 +644,45 @@ export const syncWeeklyData = async (clientId: string, data: Partial<WeeklyData>
       }
       throw result.error;
     }
+
+    // Immediately reflect saved leads/metrics into dashboard_cache tables
+    if (saveData.leads_legit !== undefined || saveData.leads_total !== undefined) {
+      const cacheTables = ['dashboard_cache', 'dashboard_cache_weekly', 'dashboard_cache_monthly', 'dashboard_cache_3m'];
+      for (const tbl of cacheTables) {
+        try {
+          const { data: cacheRows } = await supabase
+            .from(tbl)
+            .select('id, current_data')
+            .eq('client_id', clientId);
+
+          if (cacheRows && cacheRows.length > 0) {
+            for (const cRow of cacheRows) {
+              const updatedCurrent = {
+                ...(cRow.current_data || {}),
+                ...(saveData.leads_legit !== undefined ? { leads_legit: saveData.leads_legit } : {}),
+                ...(saveData.leads_total !== undefined ? { leads_total: saveData.leads_total } : {})
+              };
+              await supabase
+                .from(tbl)
+                .update({ current_data: updatedCurrent, last_updated: new Date().toISOString() })
+                .eq('id', cRow.id);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Invalidate client-side sessionStorage
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const keysToRemove = [];
+        for (let i = 0; i < window.sessionStorage.length; i++) {
+          const k = window.sessionStorage.key(i);
+          if (k && k.includes(clientId)) keysToRemove.push(k);
+        }
+        keysToRemove.forEach(k => window.sessionStorage.removeItem(k));
+      }
+    } catch (_) {}
   } catch (error: any) {
     console.error('Error saving weekly data:', error);
     if (typeof window !== 'undefined') {
@@ -999,3 +1090,43 @@ export const saveSeoPageOptimization = async (params: {
     return { success: false, error: error.message };
   }
 };
+
+export const syncLeadShieldLeads = async (): Promise<{ success: boolean; totalLeads?: number; updatedWeeklyRecords?: number; error?: string }> => {
+  try {
+    const res = await fetch('/api/leads/sync-lead-shield', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Failed to sync Lead Shield leads' };
+    }
+    return data;
+  } catch (err: any) {
+    console.error('Error syncing Lead Shield leads:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+export const getLeadStatsByRange = async (startDate?: string, endDate?: string, clientId?: string): Promise<{
+  success: boolean;
+  clients: Record<string, { genuine: number; spam: number; total: number }>;
+  error?: string;
+}> => {
+  try {
+    let url = '/api/leads/stats-by-range';
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    if (clientId) params.append('clientId', clientId);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, clients: {}, error: data.error };
+    }
+    return data;
+  } catch (err: any) {
+    console.error('Error getting lead stats by range:', err);
+    return { success: false, clients: {}, error: err.message };
+  }
+};
+

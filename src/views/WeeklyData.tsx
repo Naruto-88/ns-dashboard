@@ -8,11 +8,12 @@ import {
   WeeklyData as IWeeklyData,
   Keyword,
   KeywordHistory,
-  getKeywordHistory 
+  getKeywordHistory,
+  getLeadStatsByRange
 } from '../services/dataService';
 import { supabase } from '../lib/supabase';
 import { startOfWeek, endOfWeek, format, parseISO, subDays } from 'date-fns';
-import { Save, AlertCircle, CheckCircle2, Download, Search, Info, ExternalLink, X, Maximize2 } from 'lucide-react';
+import { Save, AlertCircle, CheckCircle2, Download, Search, Info, ExternalLink, X, Maximize2, ShieldCheck } from 'lucide-react';
 import ClientSelector from '../components/ClientSelector';
 import Tooltip from '../components/Tooltip';
 import { useTheme } from '../contexts/ThemeContext';
@@ -74,8 +75,23 @@ export default function WeeklyData() {
 
       if (error) throw error;
 
+      // Fetch the latest known Ahrefs snapshot across historical records as fallback
+      const { data: latestAhrefs } = await supabase
+        .from('weekly_data')
+        .select('ahrefs_dr, ahrefs_backlinks, ahrefs_ref_domains')
+        .eq('client_id', selectedClient)
+        .or('ahrefs_dr.gt.0,ahrefs_backlinks.gt.0')
+        .order('week_start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       if (weeklyData) {
-        setData(weeklyData as IWeeklyData);
+        setData({
+          ...weeklyData,
+          ahrefs_dr: (weeklyData.ahrefs_dr && weeklyData.ahrefs_dr > 0) ? weeklyData.ahrefs_dr : (latestAhrefs?.ahrefs_dr ?? 0),
+          ahrefs_backlinks: (weeklyData.ahrefs_backlinks && weeklyData.ahrefs_backlinks > 0) ? weeklyData.ahrefs_backlinks : (latestAhrefs?.ahrefs_backlinks ?? 0),
+          ahrefs_ref_domains: (weeklyData.ahrefs_ref_domains && weeklyData.ahrefs_ref_domains > 0) ? weeklyData.ahrefs_ref_domains : (latestAhrefs?.ahrefs_ref_domains ?? 0),
+        } as IWeeklyData);
       } else {
         setData({
           week_start_date: selectedWeek,
@@ -91,9 +107,9 @@ export default function WeeklyData() {
           leads_legit: 0,
           target_leads: 0,
           phone_calls: 0,
-          ahrefs_dr: 0,
-          ahrefs_backlinks: 0,
-          ahrefs_ref_domains: 0,
+          ahrefs_dr: latestAhrefs?.ahrefs_dr ?? 0,
+          ahrefs_backlinks: latestAhrefs?.ahrefs_backlinks ?? 0,
+          ahrefs_ref_domains: latestAhrefs?.ahrefs_ref_domains ?? 0,
           technical_score: 90,
           primary_issue_type: '',
           primary_insight: '',
@@ -202,6 +218,37 @@ export default function WeeklyData() {
       setMessage({ type: 'error', text: `Ahrefs Sync failed: ${e.message}` });
     } finally {
       setSyncingAhrefs(false);
+    }
+  };
+
+  const handleSyncLeadShieldForClient = async () => {
+    if (!selectedClient) return;
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const weekStart = selectedWeek;
+      const weekEnd = format(endOfWeek(parseISO(selectedWeek), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      
+      const statsRes = await getLeadStatsByRange(weekStart, weekEnd, selectedClient);
+      const clientStats = statsRes.clients?.[selectedClient];
+      
+      if (clientStats && clientStats.total > 0) {
+        setData(prev => ({
+          ...prev,
+          leads_legit: clientStats.genuine,
+          leads_total: clientStats.total
+        }));
+        setMessage({ 
+          type: 'success', 
+          text: `Auto-filled from Lead Shield: ${clientStats.genuine} Genuine / ${clientStats.total} Total leads for this week!` 
+        });
+      } else {
+        setMessage({ type: 'error', text: 'No Lead Shield leads found for this client and date range.' });
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: `Lead Shield sync failed: ${e.message}` });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -478,6 +525,17 @@ export default function WeeklyData() {
             }`}
           >
             {syncing ? 'Scanning...' : 'Auto-fill Intelligence'}
+          </button>
+          <button 
+            onClick={handleSyncLeadShieldForClient}
+            disabled={syncing || !selectedClient}
+            className={`mt-5 flex items-center gap-2 px-6 py-2.5 border rounded-2xl text-sm font-medium transition-all shadow-xl disabled:opacity-50 ${
+              theme === 'white' ? 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100' : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:bg-purple-900/40'
+            }`}
+            title="Auto-fill genuine and total leads from Lead Shield API for this week"
+          >
+            <ShieldCheck size={16} />
+            Sync Leads
           </button>
           <button 
             onClick={handleSyncAllAhrefs}
