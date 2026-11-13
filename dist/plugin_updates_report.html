@@ -1,0 +1,2232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordPress Plugin Updates Audit Report - NetStripes</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; color: black !important; padding: 0 !important; }
+      .site-card { break-inside: avoid; border: 1px solid #ddd !important; box-shadow: none !important; margin-bottom: 24px; color: black !important; }
+      .site-header { background: #f8fafc !important; color: black !important; border-bottom: 1px solid #eee !important; }
+      th { background: #f1f5f9 !important; color: #475569 !important; }
+      td { color: #1e293b !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased p-4 sm:p-8 font-sans min-h-screen">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+      <div>
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Live System Audit</span>
+          <span class="text-xs text-slate-400">Generated on 02 Oct 2026</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">WordPress Plugin Updates Audit Report</h1>
+        <p class="text-sm text-slate-400 mt-1">Site-by-site status, 1-click safe update eligibility, and staging-required plugins.</p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-3 no-print">
+        <button onclick="window.print()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Print or Save as PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Stats Metric Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Audited Sites</div>
+        <div class="text-2xl font-black text-white mt-1">21</div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-amber-400 uppercase tracking-wider font-semibold">Sites Requiring Updates</div>
+        <div class="text-2xl font-black text-amber-400 mt-1">14</div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-emerald-400 uppercase tracking-wider font-semibold">Safe 1-Click Updates</div>
+        <div class="text-2xl font-black text-emerald-400 mt-1">66</div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div class="text-xs text-rose-400 uppercase tracking-wider font-semibold">Staging / Tech Review</div>
+        <div class="text-2xl font-black text-rose-400 mt-1">27</div>
+      </div>
+    </div>
+
+    <!-- Filter Buttons (no-print) -->
+    <div class="flex flex-wrap items-center gap-2 no-print pb-2">
+      <button onclick="filterCards('all')" id="btn-all" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white border border-slate-700 hover:bg-slate-700 cursor-pointer ring-2 ring-indigo-500">All Sites (14)</button>
+      <button onclick="filterCards('critical')" id="btn-critical" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/80 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 cursor-pointer">Has Staging Required Only</button>
+      <button onclick="filterCards('safe-only')" id="btn-safe" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/80 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 cursor-pointer">Safe Updates Only</button>
+    </div>
+
+    <!-- Site by Site Breakdown -->
+    <div class="space-y-6" id="sites-container">
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Australian Accountants</h2>
+            <a href="https://www.australianaccountants.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              www.australianaccountants.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.4.25</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">40 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            9 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">All-in-One WP Migration and Backup</span>
+            <span class="text-[11px] text-slate-500 font-mono">all-in-one-wp-migration/all-in-one-wp-migration.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">7.110</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">7.111</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Jetpack</span>
+            <span class="text-[11px] text-slate-500 font-mono">jetpack/jetpack.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">16.1.3</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">16.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Max Mega Menu</span>
+            <span class="text-[11px] text-slate-500 font-mono">megamenu/megamenu.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.10.7</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.10.8</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Newsletter</span>
+            <span class="text-[11px] text-slate-500 font-mono">newsletter/plugin.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">9.3.5</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">9.3.9</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">NitroPack</span>
+            <span class="text-[11px] text-slate-500 font-mono">nitropack/main.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.20.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.20.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Popup Maker</span>
+            <span class="text-[11px] text-slate-500 font-mono">popup-maker/popup-maker.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.24.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.25.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Redirection for Contact Form 7</span>
+            <span class="text-[11px] text-slate-500 font-mono">wpcf7-redirect/wpcf7-redirect.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.2.11</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.2.12</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Seraphinite Accelerator (Extended, limited)</span>
+            <span class="text-[11px] text-slate-500 font-mono">seraphinite-accelerator-ext/plugin_root.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.29.22</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.29.26</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WPBakery Page Builder</span>
+            <span class="text-[11px] text-slate-500 font-mono">js_composer/js_composer.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Page Builder</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.10.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">9.0.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Charter Boat Central</h2>
+            <a href="https://charterboatcentral.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              charterboatcentral.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.4.25</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">44 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            21 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.7</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">All-in-One WP Migration and Backup</span>
+            <span class="text-[11px] text-slate-500 font-mono">all-in-one-wp-migration/all-in-one-wp-migration.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">7.110</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">7.111</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Avada Builder</span>
+            <span class="text-[11px] text-slate-500 font-mono">fusion-builder-dis/fusion-builder.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Page Builder</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.15.4</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.16.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Avada Core</span>
+            <span class="text-[11px] text-slate-500 font-mono">fusion-core-dis/fusion-core.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">5.15.4</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.16.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Avada Custom Branding</span>
+            <span class="text-[11px] text-slate-500 font-mono">fusion-white-label-branding-dis/fusion-white-label-branding.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.3.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Booking Calendar</span>
+            <span class="text-[11px] text-slate-500 font-mono">booking/wpdev-booking.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">11.5</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">11.8.4</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Booking Package</span>
+            <span class="text-[11px] text-slate-500 font-mono">booking-package/index.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.7.22</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.7.28</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Duplicator</span>
+            <span class="text-[11px] text-slate-500 font-mono">duplicator/duplicator.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.5.16.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.0.4</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Feeds for YouTube</span>
+            <span class="text-[11px] text-slate-500 font-mono">feeds-for-youtube/youtube-feed.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.7.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.9.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">FluentSMTP</span>
+            <span class="text-[11px] text-slate-500 font-mono">fluent-smtp/fluent-smtp.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.2.95</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.4.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Formidable Forms</span>
+            <span class="text-[11px] text-slate-500 font-mono">formidable/formidable.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.33.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.35</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Imagify</span>
+            <span class="text-[11px] text-slate-500 font-mono">imagify/imagify.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.3.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.3.4</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Jetpack</span>
+            <span class="text-[11px] text-slate-500 font-mono">jetpack/jetpack.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">16.0.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">16.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Popup Maker</span>
+            <span class="text-[11px] text-slate-500 font-mono">popup-maker/popup-maker.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.24.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.25.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Rank Math SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">seo-by-rank-math/rank-math.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.0.275</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.0.279</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Redirection</span>
+            <span class="text-[11px] text-slate-500 font-mono">redirection/redirection.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">5.9.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.10.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Smash Balloon Instagram Feed</span>
+            <span class="text-[11px] text-slate-500 font-mono">instagram-feed/instagram-feed.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.11.4</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.13.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Widgets for Google Reviews</span>
+            <span class="text-[11px] text-slate-500 font-mono">wp-reviews-plugin-for-google/wp-reviews-plugin-for-google.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">13.3.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">14.1.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WPCode Lite</span>
+            <span class="text-[11px] text-slate-500 font-mono">insert-headers-and-footers/ihaf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.3.8</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.3.9</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WP STAGING WordPress Backup Plugin - Backup Duplicator & Migration</span>
+            <span class="text-[11px] text-slate-500 font-mono">wp-staging/wp-staging.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">4.9.5</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">4.15.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Yoast SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">wordpress-seo/wp-seo.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">28.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">28.5</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Custom Solutions Group</h2>
+            <a href="http://customsolutionsgroup.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              customsolutionsgroup.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.4.25</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">21 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            9 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">All-in-One WP Migration and Backup</span>
+            <span class="text-[11px] text-slate-500 font-mono">all-in-one-wp-migration/all-in-one-wp-migration.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">7.110</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">7.111</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Limit Login Attempts Reloaded</span>
+            <span class="text-[11px] text-slate-500 font-mono">limit-login-attempts-reloaded/limit-login-attempts-reloaded.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.3.7</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.3.9</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Rank Math SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">seo-by-rank-math/rank-math.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.0.277.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.0.279</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Redirection</span>
+            <span class="text-[11px] text-slate-500 font-mono">redirection/redirection.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">5.10.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.10.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Seraphinite Accelerator (Extended, limited)</span>
+            <span class="text-[11px] text-slate-500 font-mono">seraphinite-accelerator-ext/plugin_root.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.29.22</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.29.26</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">UserFeedback Lite</span>
+            <span class="text-[11px] text-slate-500 font-mono">userfeedback-lite/userfeedback.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.11.4</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.12.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Widgets for Google Reviews</span>
+            <span class="text-[11px] text-slate-500 font-mono">wp-reviews-plugin-for-google/wp-reviews-plugin-for-google.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">14.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">14.1.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Wordfence Security</span>
+            <span class="text-[11px] text-slate-500 font-mono">wordfence/wordfence.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Security / Firewall</td>
+        <td class="py-3 px-4 font-mono text-slate-400">9.0.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">9.0.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Dream Boats</h2>
+            <a href="https://dreamboats.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              dreamboats.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.31</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">43 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            6 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">All-In-One Security (AIOS)</span>
+            <span class="text-[11px] text-slate-500 font-mono">all-in-one-wp-security-and-firewall/wp-security.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Security / Firewall</td>
+        <td class="py-3 px-4 font-mono text-slate-400">5.4.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.4.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Duplicator</span>
+            <span class="text-[11px] text-slate-500 font-mono">duplicator/duplicator.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">5.0.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.0.4</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Kadence Security Basic</span>
+            <span class="text-[11px] text-slate-500 font-mono">better-wp-security/better-wp-security.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Security / Firewall</td>
+        <td class="py-3 px-4 font-mono text-slate-400">10.0.3</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">10.0.4</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Microsoft Clarity</span>
+            <span class="text-[11px] text-slate-500 font-mono">microsoft-clarity/clarity.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">0.10.31</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">0.10.32</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Post Types Order</span>
+            <span class="text-[11px] text-slate-500 font-mono">post-types-order/post-types-order.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.5.3</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.5.5</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Rank Math SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">seo-by-rank-math/rank-math.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.0.278</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.0.279</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="false" data-safe-only="true">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Extend a home</h2>
+            <a href="https://extendahome.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              extendahome.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">40 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            1 Pending Update
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">100% Safe to Update</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Safe SVG</span>
+            <span class="text-[11px] text-slate-500 font-mono">safe-svg/safe-svg.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.5.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.5.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Fast Track Home Loans</h2>
+            <a href="https://fasttrackhomeloans.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              fasttrackhomeloans.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.1</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.1.34</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">25 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            2 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Rank Math SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">seo-by-rank-math/rank-math.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.0.278</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.0.279</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Seraphinite Accelerator (Extended, limited)</span>
+            <span class="text-[11px] text-slate-500 font-mono">seraphinite-accelerator-ext1/plugin_root.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.29.16</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.29.26</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">goldspar</h2>
+            <a href="https://goldspar.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              goldspar.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">28 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            6 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Limit Login Attempts Reloaded</span>
+            <span class="text-[11px] text-slate-500 font-mono">limit-login-attempts-reloaded/limit-login-attempts-reloaded.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.3.6</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.3.9</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Microsoft Clarity</span>
+            <span class="text-[11px] text-slate-500 font-mono">microsoft-clarity/clarity.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">0.10.28</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">0.10.32</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Real Testimonials</span>
+            <span class="text-[11px] text-slate-500 font-mono">testimonial-free/testimonial-free.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.1.17</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">4.0.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Seraphinite Accelerator (Extended, limited)</span>
+            <span class="text-[11px] text-slate-500 font-mono">seraphinite-accelerator-ext/plugin_root.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.29.21</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.29.26</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Site Kit by Google</span>
+            <span class="text-[11px] text-slate-500 font-mono">google-site-kit/google-site-kit.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.186.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.188.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">InoTec</h2>
+            <a href="https://inotec.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              inotec.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">36 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            11 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">FiboSearch - AJAX Search for WooCommerce</span>
+            <span class="text-[11px] text-slate-500 font-mono">ajax-search-for-woocommerce/ajax-search-for-woocommerce.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">E-Commerce & Payments</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.34.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.34.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Limit Login Attempts Reloaded</span>
+            <span class="text-[11px] text-slate-500 font-mono">limit-login-attempts-reloaded/limit-login-attempts-reloaded.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.3.7</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.3.9</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Max Mega Menu</span>
+            <span class="text-[11px] text-slate-500 font-mono">megamenu/megamenu.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.10.7</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.10.8</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Popup Maker</span>
+            <span class="text-[11px] text-slate-500 font-mono">popup-maker/popup-maker.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.24.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.25.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Post Types Order</span>
+            <span class="text-[11px] text-slate-500 font-mono">post-types-order/post-types-order.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.5.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.5.5</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Rank Math SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">seo-by-rank-math/rank-math.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.0.277.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.0.279</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Seraphinite Accelerator (Extended, limited)</span>
+            <span class="text-[11px] text-slate-500 font-mono">seraphinite-accelerator-ext/plugin_root.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.29.22</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.29.26</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Site Kit by Google</span>
+            <span class="text-[11px] text-slate-500 font-mono">google-site-kit/google-site-kit.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.186.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.188.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Social Media and Share Icons (Ultimate Social Media)</span>
+            <span class="text-[11px] text-slate-500 font-mono">ultimate-social-media-icons/ultimate_social_media_icons.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.0.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.0.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WooCommerce</span>
+            <span class="text-[11px] text-slate-500 font-mono">woocommerce/woocommerce.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">E-Commerce & Payments</td>
+        <td class="py-3 px-4 font-mono text-slate-400">11.1.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">11.1.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Multihull Central</h2>
+            <a href="https://multihullcentral.com" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              multihullcentral.com
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.3.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">43 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            10 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">All-in-One WP Migration and Backup</span>
+            <span class="text-[11px] text-slate-500 font-mono">all-in-one-wp-migration/all-in-one-wp-migration.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">7.110</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">7.111</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Envira Gallery - Image Photo Gallery, Albums, Video Gallery, Slideshows & More</span>
+            <span class="text-[11px] text-slate-500 font-mono">envira-gallery-lite/envira-gallery-lite.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.15.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.16.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Google Analytics for WordPress by MonsterInsights</span>
+            <span class="text-[11px] text-slate-500 font-mono">google-analytics-for-wordpress/googleanalytics.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">11.2.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">11.3.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WooCommerce</span>
+            <span class="text-[11px] text-slate-500 font-mono">woocommerce/woocommerce.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">E-Commerce & Payments</td>
+        <td class="py-3 px-4 font-mono text-slate-400">11.1.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">11.1.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WooCommerce Stripe Gateway</span>
+            <span class="text-[11px] text-slate-500 font-mono">woocommerce-gateway-stripe/woocommerce-gateway-stripe.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">E-Commerce & Payments</td>
+        <td class="py-3 px-4 font-mono text-slate-400">10.9.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">11.0.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Wordfence Security</span>
+            <span class="text-[11px] text-slate-500 font-mono">wordfence/wordfence.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Security / Firewall</td>
+        <td class="py-3 px-4 font-mono text-slate-400">9.0.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">9.0.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WP Duplicate Page</span>
+            <span class="text-[11px] text-slate-500 font-mono">wp-duplicate-page/wp-duplicate-page.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.8.6</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.8.7</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WPForms Lite</span>
+            <span class="text-[11px] text-slate-500 font-mono">wpforms-lite/wpforms.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.0.1.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.0.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Yoast SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">wordpress-seo/wp-seo.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">28.4</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">28.5</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Multipole</h2>
+            <a href="https://multipole.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              multipole.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">33 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            2 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Popup Maker</span>
+            <span class="text-[11px] text-slate-500 font-mono">popup-maker/popup-maker.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.24.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.25.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">netstripes</h2>
+            <a href="https://netstripes.com" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              netstripes.com
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">25 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            10 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Advanced Custom Fields PRO</span>
+            <span class="text-[11px] text-slate-500 font-mono">advanced-custom-fields-pro/acf.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Dynamic Data & Meta</td>
+        <td class="py-3 px-4 font-mono text-slate-400">6.8.9</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">6.8.10</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">All-in-One WP Migration and Backup</span>
+            <span class="text-[11px] text-slate-500 font-mono">all-in-one-wp-migration/all-in-one-wp-migration.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">7.110</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">7.111</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Limit Login Attempts Reloaded</span>
+            <span class="text-[11px] text-slate-500 font-mono">limit-login-attempts-reloaded/limit-login-attempts-reloaded.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.3.7</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.3.9</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Rank Math SEO</span>
+            <span class="text-[11px] text-slate-500 font-mono">seo-by-rank-math/rank-math.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.0.277.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.0.279</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Redirection</span>
+            <span class="text-[11px] text-slate-500 font-mono">redirection/redirection.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">5.10.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">5.10.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Redirection for Contact Form 7</span>
+            <span class="text-[11px] text-slate-500 font-mono">wpcf7-redirect/wpcf7-redirect.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.2.11</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.2.12</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Safe SVG</span>
+            <span class="text-[11px] text-slate-500 font-mono">safe-svg/safe-svg.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.4.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.5.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Site Kit by Google</span>
+            <span class="text-[11px] text-slate-500 font-mono">google-site-kit/google-site-kit.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">1.186.0</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">1.188.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Widgets for Google Reviews</span>
+            <span class="text-[11px] text-slate-500 font-mono">wp-reviews-plugin-for-google/wp-reviews-plugin-for-google.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">13.3.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">14.1.1</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WPForms Lite</span>
+            <span class="text-[11px] text-slate-500 font-mono">wpforms-lite/wpforms.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.0.1.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.0.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Stickman Wealth</h2>
+            <a href="https://www.stickmanwealth.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              www.stickmanwealth.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.1.34</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">24 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            3 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Redirection for Contact Form 7</span>
+            <span class="text-[11px] text-slate-500 font-mono">wpcf7-redirect/wpcf7-redirect.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.2.10</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">3.2.12</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Seraphinite Accelerator (Extended, limited)</span>
+            <span class="text-[11px] text-slate-500 font-mono">seraphinite-accelerator-ext/plugin_root.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Cache / Speed Optimizer</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.29.22</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.29.26</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (HIGH)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">WPForms Lite</span>
+            <span class="text-[11px] text-slate-500 font-mono">wpforms-lite/wpforms.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Standard Utility</td>
+        <td class="py-3 px-4 font-mono text-slate-400">2.0.1.1</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">2.0.2</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                ✓ 1-Click Safe Update
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Sydney Decking Solutions</h2>
+            <a href="https://sydneydeckingsolutions.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              sydneydeckingsolutions.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.2.33</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">40 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            2 Pending Updates
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Elementor</span>
+            <span class="text-[11px] text-slate-500 font-mono">elementor/elementor.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Page Builder</td>
+        <td class="py-3 px-4 font-mono text-slate-400">4.2.4</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">4.3.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Elementor Pro</span>
+            <span class="text-[11px] text-slate-500 font-mono">elementor-pro-dis/elementor-pro.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Page Builder</td>
+        <td class="py-3 px-4 font-mono text-slate-400">3.20.2</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">4.3.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="site-card bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all" data-has-critical="true" data-safe-only="false">
+      <!-- Card Header -->
+      <div class="site-header p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h2 class="text-lg font-bold text-white tracking-wide">Village Chef</h2>
+            <a href="https://villagechef.com.au" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 font-mono">
+              villagechef.com.au
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+            <span>WP: <b class="text-slate-200">7.1.2</b></span>
+            <span>•</span>
+            <span>PHP: <b class="text-slate-200">8.4.25</b></span>
+            <span>•</span>
+            <span>Total Installed: <b class="text-slate-200">21 plugins</b></span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            1 Pending Update
+          </span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Staging Required</span>
+        </div>
+      </div>
+
+      <!-- Plugins Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-5">Plugin Name</th>
+              <th class="py-3 px-4">Category</th>
+              <th class="py-3 px-4">Current Version</th>
+              <th class="py-3 px-4">Available Version</th>
+              <th class="py-3 px-5 text-right">Safety Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80">
+      <tr class="hover:bg-slate-800/40 transition-colors">
+        <td class="py-3 px-5 font-medium text-white">
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-100">Elementor Pro</span>
+            <span class="text-[11px] text-slate-500 font-mono">elementor-pro/elementor-pro.php</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-slate-300">Page Builder</td>
+        <td class="py-3 px-4 font-mono text-slate-400">4.2.3</td>
+        <td class="py-3 px-4 font-mono font-bold text-amber-400">4.3.0</td>
+        <td class="py-3 px-5 text-right">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                🔒 Staging Required (CRITICAL)
+              </span>
+        </td>
+      </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+
+    <!-- Footer Note -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+      <div>
+        <p class="font-semibold text-slate-300">NetStripes SEO & Mission Control Safety Engine</p>
+        <p class="text-slate-500 mt-0.5">Critical and High-Risk plugins (Page Builders, WooCommerce, Caching, Firewalls) require staging environment verification before updates.</p>
+      </div>
+      <div class="text-slate-500 font-mono text-[11px]">
+        Source: WordPress Remote Bridge System
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function filterCards(type) {
+      const cards = document.querySelectorAll('.site-card');
+      cards.forEach(card => {
+        if (type === 'all') {
+          card.style.display = 'block';
+        } else if (type === 'critical') {
+          card.style.display = card.dataset.hasCritical === 'true' ? 'block' : 'none';
+        } else if (type === 'safe-only') {
+          card.style.display = card.dataset.safeOnly === 'true' ? 'block' : 'none';
+        }
+      });
+
+      ['all', 'critical', 'safe'].forEach(k => {
+        const btn = document.getElementById('btn-' + k);
+        if (btn) {
+          if ((k === 'all' && type === 'all') || (k === 'critical' && type === 'critical') || (k === 'safe' && type === 'safe-only')) {
+            btn.classList.add('ring-2', 'ring-indigo-500');
+            btn.classList.add('bg-slate-800');
+          } else {
+            btn.classList.remove('ring-2', 'ring-indigo-500');
+            btn.classList.remove('bg-slate-800');
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
