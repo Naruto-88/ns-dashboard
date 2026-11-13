@@ -5667,13 +5667,6 @@ var LEAD_SHIELD_CLIENT_MAP = {
   "multipole": "ec64c5bc-57df-4c99-a07f-f5f9e243fcfe",
   "sydney_decking_solutions": "77d52cff-404f-44bd-a861-76d981f4e01b",
   "sydney_decking": "77d52cff-404f-44bd-a861-76d981f4e01b",
-  "extend_a_home": "97609694-7a52-458f-b1a7-3640814c4d85",
-  "extenda_home": "97609694-7a52-458f-b1a7-3640814c4d85",
-  "extendahome": "97609694-7a52-458f-b1a7-3640814c4d85",
-  "dream_boats": "61ccad52-8b3a-4c84-87df-c263a7441573",
-  "dreamboats": "61ccad52-8b3a-4c84-87df-c263a7441573",
-  "reverse_mortagage": "4b48ff10-bb43-4fcd-90d6-6872597d569f",
-  "reverse_mortgage": "4b48ff10-bb43-4fcd-90d6-6872597d569f",
   // Common Sheet Aliases for our existing dashboard clients
   "w adv": "c24c7b15-e429-4b4f-946e-e3aebb07303b",
   "w_adv": "c24c7b15-e429-4b4f-946e-e3aebb07303b",
@@ -5683,10 +5676,7 @@ var LEAD_SHIELD_CLIENT_MAP = {
 var REVERSE_LEAD_SHIELD_MAP = {
   "2fed0918-c029-4ba1-aaee-511a2aa68273": "gold_spar",
   "ec64c5bc-57df-4c99-a07f-f5f9e243fcfe": "multipole",
-  "77d52cff-404f-44bd-a861-76d981f4e01b": "sydney_decking_solutions",
-  "97609694-7a52-458f-b1a7-3640814c4d85": "extend_a_home",
-  "61ccad52-8b3a-4c84-87df-c263a7441573": "dream_boats",
-  "4b48ff10-bb43-4fcd-90d6-6872597d569f": "reverse_mortagage"
+  "77d52cff-404f-44bd-a861-76d981f4e01b": "sydney_decking_solutions"
 };
 async function fetchLeadShieldStats(startDate, endDate, clientIdFilter) {
   let url = "https://lead-shield.vercel.app/api/leads/stats?api_key=shield_lead_key_2026_secure";
