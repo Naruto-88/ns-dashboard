@@ -308,27 +308,29 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-const getAppUrl = (req: express.Request) => {
-  const host = req.get('host') || '';
-  const protocol = req.protocol || (req.secure ? 'https' : 'http');
-
+const getAppUrl = (req?: express.Request) => {
   // If APP_URL is set and is a valid http/https URL (not a dummy placeholder like 'MY_APP_URL')
   if (process.env.APP_URL && process.env.APP_URL.startsWith('http')) {
     return process.env.APP_URL.replace(/\/$/, '');
   }
 
+  const host = (req && typeof req.get === 'function' ? req.get('host') : '') || '';
+
   if (host.includes('localhost') || host.includes('127.0.0.1')) {
     return `http://${host}`;
   }
 
-  // On live production servers, dynamically force HTTPS and use the actual host header
-  const appUrl = `https://${host}`;
-  console.log('[DEBUG] Calculated Live App URL:', appUrl);
-  return appUrl;
+  if (host) {
+    const appUrl = `https://${host}`;
+    return appUrl;
+  }
+
+  // Fallback for background cron jobs / system scripts where req is not a standard HTTP request
+  return 'https://seodashboard.netstripes.au';
 };
 
 // Helper to create a fresh OAuth client for each request
-const getOAuthClient = (req: express.Request) => {
+const getOAuthClient = (req?: express.Request) => {
   const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '').trim();
   const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET || '').trim();
 
@@ -429,7 +431,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 });
 
 // GA4 and GSC Data Fetchers
-async function getAuthenticatedClient(req: express.Request, clientId?: string) {
+async function getAuthenticatedClient(req?: express.Request, clientId?: string) {
   const client = getOAuthClient(req);
   if (!client) throw new Error('Google OAuth client not configured');
 
