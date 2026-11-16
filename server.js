@@ -4404,19 +4404,30 @@ var executeDashboardCacheSync = async (targetMode) => {
       return `${year}-${month}-${day}`;
     };
     const modesToSync = targetMode && periods[targetMode] ? [targetMode] : Object.keys(periods);
+    const getClientAuth = async (client) => {
+      let currentAuth = null;
+      try {
+        const { data: clientToken } = await supabase2.from("google_tokens").select("*").eq("id", client.id).maybeSingle();
+        if (clientToken && clientToken.refresh_token) {
+          const cliOAuth = getOAuthClient({});
+          if (cliOAuth) {
+            cliOAuth.setCredentials(clientToken);
+            currentAuth = cliOAuth;
+          }
+        }
+      } catch (tokenErr) {
+        console.warn(`[CRON] Could not load client token for ${client.name}:`, tokenErr);
+      }
+      if (!currentAuth) {
+        currentAuth = auth;
+      }
+      return currentAuth;
+    };
     const fetchGscLive = async (client, startDate, endDate) => {
       let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
       if (!client.gsc_site_url) return gsc;
       try {
-        let currentAuth = null;
-        const { data: creds } = await supabase2.from("google_credentials").select("tokens").eq("client_id", client.id).maybeSingle();
-        if (creds && creds.tokens) {
-          const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
-          oAuth2Client.setCredentials(creds.tokens);
-          currentAuth = oAuth2Client;
-        } else if (auth) {
-          currentAuth = auth;
-        }
+        const currentAuth = await getClientAuth(client);
         if (!currentAuth) return gsc;
         const searchconsole = google.searchconsole({ version: "v1", auth: currentAuth });
         const { response: totalsRes } = await fetchGscWithSelfHeal(
@@ -4460,15 +4471,7 @@ var executeDashboardCacheSync = async (targetMode) => {
       let ga4 = { traffic: 0, organic_traffic: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
       if (!client.ga4_property_id) return ga4;
       try {
-        let currentAuth = null;
-        const { data: creds } = await supabase2.from("google_credentials").select("tokens").eq("client_id", client.id).maybeSingle();
-        if (creds && creds.tokens) {
-          const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
-          oAuth2Client.setCredentials(creds.tokens);
-          currentAuth = oAuth2Client;
-        } else if (auth) {
-          currentAuth = auth;
-        }
+        const currentAuth = await getClientAuth(client);
         if (!currentAuth) return ga4;
         const analytics = google.analyticsdata({ version: "v1beta", auth: currentAuth });
         const res = await analytics.properties.runReport({

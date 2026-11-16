@@ -4193,22 +4193,34 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
 
     const modesToSync = targetMode && periods[targetMode] ? [targetMode] : Object.keys(periods);
 
+    // Helper to get authenticated Google client (client-specific token or central account)
+    const getClientAuth = async (client: any) => {
+      let currentAuth: any = null;
+      try {
+        const { data: clientToken } = await supabase.from('google_tokens').select('*').eq('id', client.id).maybeSingle();
+        if (clientToken && clientToken.refresh_token) {
+          const cliOAuth = getOAuthClient({} as any);
+          if (cliOAuth) {
+            cliOAuth.setCredentials(clientToken);
+            currentAuth = cliOAuth;
+          }
+        }
+      } catch (tokenErr) {
+        console.warn(`[CRON] Could not load client token for ${client.name}:`, tokenErr);
+      }
+
+      if (!currentAuth) {
+        currentAuth = auth;
+      }
+      return currentAuth;
+    };
+
     // Minimal GSC fetching helper with client credentials or central fallback
     const fetchGscLive = async (client, startDate, endDate) => {
       let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
       if (!client.gsc_site_url) return gsc;
       try {
-        let currentAuth: any = null;
-        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', client.id).maybeSingle();
-        
-        if (creds && creds.tokens) {
-          const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
-          oAuth2Client.setCredentials(creds.tokens);
-          currentAuth = oAuth2Client;
-        } else if (auth) {
-          currentAuth = auth;
-        }
-        
+        const currentAuth = await getClientAuth(client);
         if (!currentAuth) return gsc;
         const searchconsole = google.searchconsole({ version: 'v1', auth: currentAuth });
         
@@ -4247,7 +4259,7 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
           if (r.position <= 3) gsc.top3++;
           if (r.position <= 10) gsc.top10++;
         }
-      } catch(e) { console.error("GSC error for", client.name, e.message); }
+      } catch(e: any) { console.error("GSC error for", client.name, e.message); }
       return gsc;
     };
 
@@ -4256,17 +4268,7 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
       let ga4 = { traffic: 0, organic_traffic: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
       if (!client.ga4_property_id) return ga4;
       try {
-        let currentAuth: any = null;
-        const { data: creds } = await supabase.from('google_credentials').select('tokens').eq('client_id', client.id).maybeSingle();
-        
-        if (creds && creds.tokens) {
-          const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
-          oAuth2Client.setCredentials(creds.tokens);
-          currentAuth = oAuth2Client;
-        } else if (auth) {
-          currentAuth = auth;
-        }
-        
+        const currentAuth = await getClientAuth(client);
         if (!currentAuth) return ga4;
         const analytics = google.analyticsdata({ version: 'v1beta', auth: currentAuth });
         
@@ -4295,7 +4297,7 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
           }
         });
         ga4.phone_calls = extractPhoneCallsFromEvents(eventsRes.data.rows || []);
-      } catch(e) { console.error("GA4 error for", client.name, e.message); }
+      } catch(e: any) { console.error("GA4 error for", client.name, e.message); }
       return ga4;
     };
 
