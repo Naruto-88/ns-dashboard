@@ -41,6 +41,7 @@ export default function ClientManagement() {
   const initialFormState = {
     name: '',
     short_code: '',
+    started_date: '',
     ga4_property_id: '',
     google_ads_customer_id: '',
     meta_ad_account_id: '',
@@ -626,7 +627,11 @@ NOTIFY pgrst, 'reload schema';
     e.preventDefault();
     try {
       let clientId = '';
-      const { initial_keywords, ...submitData } = formData as any;
+      const { initial_keywords, started_date, ...submitData } = formData as any;
+
+      if (started_date && started_date.trim()) {
+        submitData.created_at = new Date(started_date + 'T00:00:00.000Z').toISOString();
+      }
 
       if (showModal === 'edit' && editingClient) {
         await updateClient(editingClient.id, submitData);
@@ -634,7 +639,7 @@ NOTIFY pgrst, 'reload schema';
       } else {
         clientId = await addClient({
           ...submitData,
-          created_at: new Date().toISOString()
+          created_at: submitData.created_at || new Date().toISOString()
         });
       }
 
@@ -668,6 +673,7 @@ NOTIFY pgrst, 'reload schema';
     setFormData({
       name: client.name || '',
       short_code: client.short_code || '',
+      started_date: client.created_at ? client.created_at.substring(0, 10) : '',
       ga4_property_id: client.ga4_property_id || '',
       google_ads_customer_id: client.google_ads_customer_id || '',
       meta_ad_account_id: client.meta_ad_account_id || '',
@@ -1217,6 +1223,22 @@ NOTIFY pgrst, 'reload schema';
                     <option value="UTC">UTC</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Tooltip content="The date the client started campaign, completed onboarding, or submitted project details (shown on dashboard shortcode tooltip)" className="w-full">
+                  <div className="space-y-2">
+                    <label className={`text-sm font-medium   ml-1 ${theme === 'white' ? 'text-[#082a36]' : 'text-zinc-500'}`}>Campaign Started Date (Payment / Onboarding)</label>
+                    <input 
+                      type="date" 
+                      value={formData.started_date}
+                      onChange={(e) => setFormData({...formData, started_date: e.target.value})}
+                      className={`w-full px-5 py-3 border rounded-2xl text-sm font-medium outline-none focus:border-blue-500 font-mono ${
+                        theme === 'white' ? 'bg-zinc-50 border-zinc-200 text-zinc-900' : 'bg-zinc-900 border-white/5 text-white'
+                      }`} 
+                    />
+                  </div>
+                </Tooltip>
               </div>
 
               <div className="space-y-2">

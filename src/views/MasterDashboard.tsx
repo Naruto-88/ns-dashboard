@@ -1104,7 +1104,19 @@ export default function MasterDashboard() {
                 <tr key={row.client.id} className={`transition-colors group ${theme === 'white' ? 'hover:bg-zinc-50' : 'hover:bg-white/5'}`}>
                   <td className={`px-6 py-2 sticky left-0 z-[19] hover:z-[50] border-r transition-colors ${theme === 'white' ? 'bg-white border-zinc-100 group-hover:bg-zinc-50' : 'bg-zinc-900 group-hover:bg-zinc-800 border-white/5 shadow-[2px_0_10px_rgba(3,7,18,0.5)]'
                     }`}>
-                    <Tooltip content={row.client.name} position="right">
+                    <Tooltip 
+                      position="right"
+                      content={
+                        <div className="flex flex-col gap-1 py-0.5">
+                          <span className="font-semibold text-sm leading-tight">{row.client.name}</span>
+                          {row.client.created_at && (
+                            <span className="text-xs text-zinc-400 font-mono">
+                              Started: {new Date(row.client.created_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                      }
+                    >
                       <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-medium text-sm  ring-1 transition-all ${theme === 'white'
                           ? 'bg-[#76c9be]/10 text-[#76c9be] ring-[#76c9be]/20 group-hover:bg-[#082a36] group-hover:text-white'
                           : 'bg-blue-600/10 text-blue-500 ring-blue-500/20 group-hover:bg-blue-600 group-hover:text-white'
