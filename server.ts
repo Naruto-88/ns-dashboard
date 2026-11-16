@@ -4122,11 +4122,21 @@ CRITICAL INTEGRITY RULES:
 // ==========================================
 // BACKGROUND CRON JOB: SYNC DASHBOARD CACHE
 // ==========================================
-app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
-  console.log('[CRON] Starting Dashboard Cache Sync for all clients...');
-  
+let isDashboardCacheSyncing = false;
+let lastDashboardSyncStatus: { status: 'idle' | 'running' | 'completed' | 'error', startedAt?: string, completedAt?: string, progress?: string, error?: string } = { status: 'idle' };
+
+const executeDashboardCacheSync = async (targetMode?: string) => {
+  if (isDashboardCacheSyncing) {
+    console.log('[CRON] Sync already running in background. Skipping duplicate trigger.');
+    return;
+  }
+  isDashboardCacheSyncing = true;
+  const startedAt = new Date().toISOString();
+  lastDashboardSyncStatus = { status: 'running', startedAt, progress: 'Starting cache synchronization...' };
+  console.log(`[CRON] Starting Dashboard Cache Sync in background (mode: ${targetMode || 'all'})...`);
+
   try {
-    const auth = await getAuthenticatedClient(req).catch(() => null);
+    const auth = await getAuthenticatedClient({} as any).catch(() => null);
     if (!auth) {
       console.log("[CRON] Central Google Account not connected, using fallbacks where needed...");
     }
@@ -4143,7 +4153,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
     const subDays = (d, days) => new Date(d.getTime() - days * 24 * 60 * 60 * 1000);
 
     const today = new Date();
-    const periods = {};
+    const periods: Record<string, any> = {};
     
     // 1. Rolling 7D (3-day delay to match GSC browser exactly)
     let rCurEnd = subDays(today, 3); rCurEnd.setHours(23,59,59,999);
@@ -4181,10 +4191,7 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
       return `${year}-${month}-${day}`;
     };
 
-    // Determine target modes to sync
-    const targetMode = req.query.mode as string;
     const modesToSync = targetMode && periods[targetMode] ? [targetMode] : Object.keys(periods);
-    console.log(`[CRON] Modes to sync:`, modesToSync);
 
     // Minimal GSC fetching helper with client credentials or central fallback
     const fetchGscLive = async (client, startDate, endDate) => {
@@ -4205,7 +4212,6 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
         if (!currentAuth) return gsc;
         const searchconsole = google.searchconsole({ version: 'v1', auth: currentAuth });
         
-        // Fetch GSC data
         const { response: totalsRes } = await fetchGscWithSelfHeal(
           searchconsole,
           client.id,
@@ -4225,7 +4231,6 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
            gsc.position = row.position || 0;
         }
 
-        // Fetch queries for top3/top10 counts
         const { response: queriesRes } = await fetchGscWithSelfHeal(
           searchconsole,
           client.id,
@@ -4294,131 +4299,162 @@ app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
       return ga4;
     };
 
-    // Sequential to avoid rate limits
-    for (const client of clients || []) {
-      for (const mode of modesToSync) {
-        const p = periods[mode];
-        const [cStart, cEnd, pStart, pEnd] = [formatDate(p.curStart), formatDate(p.curEnd), formatDate(p.prevStart), formatDate(p.prevEnd)];
-        
-        console.log(`Syncing ${client.name} [${mode}]: ${cStart} - ${cEnd}`);
-        let curGsc = await fetchGscLive(client, cStart, cEnd);
-        let prevGsc = await fetchGscLive(client, pStart, pEnd);
-        let curGa4 = await fetchGa4Live(client, cStart, cEnd);
-        let prevGa4 = await fetchGa4Live(client, pStart, pEnd);
+    // Process clients in parallel chunks of 4 to be fast and safe
+    const clientList = clients || [];
+    const chunkSize = 4;
+    for (let i = 0; i < clientList.length; i += chunkSize) {
+      const chunk = clientList.slice(i, i + chunkSize);
+      lastDashboardSyncStatus.progress = `Syncing clients ${i + 1}-${Math.min(i + chunkSize, clientList.length)} of ${clientList.length}...`;
 
-        // Preserve user-edited and verified leads from weekly_data table
-        let curWeeklyLeads = { leads_total: 0, leads_legit: 0 };
-        let prevWeeklyLeads = { leads_total: 0, leads_legit: 0 };
-        try {
-          const { data: wCurRows } = await supabase
-            .from('weekly_data')
-            .select('leads_total, leads_legit, week_start_date')
-            .eq('client_id', client.id)
-            .gte('week_start_date', cStart)
-            .lte('week_start_date', cEnd);
+      await Promise.allSettled(chunk.map(async (client) => {
+        for (const mode of modesToSync) {
+          const p = periods[mode];
+          const [cStart, cEnd, pStart, pEnd] = [formatDate(p.curStart), formatDate(p.curEnd), formatDate(p.prevStart), formatDate(p.prevEnd)];
+          
+          let curGsc = await fetchGscLive(client, cStart, cEnd);
+          let prevGsc = await fetchGscLive(client, pStart, pEnd);
+          let curGa4 = await fetchGa4Live(client, cStart, cEnd);
+          let prevGa4 = await fetchGa4Live(client, pStart, pEnd);
 
-          if (wCurRows && wCurRows.length > 0) {
-            curWeeklyLeads.leads_total = wCurRows.reduce((sum, r) => sum + (Number(r.leads_total) || 0), 0);
-            curWeeklyLeads.leads_legit = wCurRows.reduce((sum, r) => sum + (Number(r.leads_legit) || 0), 0);
-          } else {
-            // Fallback: If no records directly in range, grab the latest known weekly record for this client
-            const { data: latestW } = await supabase
+          let curWeeklyLeads = { leads_total: 0, leads_legit: 0 };
+          let prevWeeklyLeads = { leads_total: 0, leads_legit: 0 };
+          try {
+            const { data: wCurRows } = await supabase
+              .from('weekly_data')
+              .select('leads_total, leads_legit, week_start_date')
+              .eq('client_id', client.id)
+              .gte('week_start_date', cStart)
+              .lte('week_start_date', cEnd);
+
+            if (wCurRows && wCurRows.length > 0) {
+              curWeeklyLeads.leads_total = wCurRows.reduce((sum, r) => sum + (Number(r.leads_total) || 0), 0);
+              curWeeklyLeads.leads_legit = wCurRows.reduce((sum, r) => sum + (Number(r.leads_legit) || 0), 0);
+            } else {
+              const { data: latestW } = await supabase
+                .from('weekly_data')
+                .select('leads_total, leads_legit')
+                .eq('client_id', client.id)
+                .order('week_start_date', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (latestW) {
+                curWeeklyLeads.leads_total = Number(latestW.leads_total) || 0;
+                curWeeklyLeads.leads_legit = Number(latestW.leads_legit) || 0;
+              }
+            }
+
+            const { data: wPrevRows } = await supabase
               .from('weekly_data')
               .select('leads_total, leads_legit')
               .eq('client_id', client.id)
-              .order('week_start_date', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (latestW) {
-              curWeeklyLeads.leads_total = Number(latestW.leads_total) || 0;
-              curWeeklyLeads.leads_legit = Number(latestW.leads_legit) || 0;
+              .gte('week_start_date', pStart)
+              .lte('week_start_date', pEnd);
+
+            if (wPrevRows && wPrevRows.length > 0) {
+              prevWeeklyLeads.leads_total = wPrevRows.reduce((sum, r) => sum + (Number(r.leads_total) || 0), 0);
+              prevWeeklyLeads.leads_legit = wPrevRows.reduce((sum, r) => sum + (Number(r.leads_legit) || 0), 0);
             }
+          } catch (leadFetchErr: any) {
+            console.warn(`[CACHE SYNC] Could not fetch saved weekly leads for ${client.name}:`, leadFetchErr.message);
           }
 
-          const { data: wPrevRows } = await supabase
-            .from('weekly_data')
-            .select('leads_total, leads_legit')
-            .eq('client_id', client.id)
-            .gte('week_start_date', pStart)
-            .lte('week_start_date', pEnd);
+          const current_data = {
+            week_start_date: cStart,
+            gsc_clicks: curGsc.clicks,
+            gsc_impressions: curGsc.impressions,
+            gsc_position: curGsc.position,
+            gsc_ctr: curGsc.ctr,
+            gsc_top3: curGsc.top3,
+            gsc_top10: curGsc.top10,
+            ga4_traffic: curGa4.traffic,
+            ga4_organic_traffic: curGa4.organic_traffic,
+            phone_calls: curGa4.phone_calls,
+            leads_total: curWeeklyLeads.leads_total || curGa4.leads_total,
+            leads_legit: curWeeklyLeads.leads_legit || curGa4.leads_total 
+          };
 
-          if (wPrevRows && wPrevRows.length > 0) {
-            prevWeeklyLeads.leads_total = wPrevRows.reduce((sum, r) => sum + (Number(r.leads_total) || 0), 0);
-            prevWeeklyLeads.leads_legit = wPrevRows.reduce((sum, r) => sum + (Number(r.leads_legit) || 0), 0);
+          const prev_data = {
+            week_start_date: pStart,
+            gsc_clicks: prevGsc.clicks,
+            gsc_impressions: prevGsc.impressions,
+            gsc_position: prevGsc.position,
+            gsc_ctr: prevGsc.ctr,
+            gsc_top3: prevGsc.top3,
+            gsc_top10: prevGsc.top10,
+            ga4_traffic: prevGa4.traffic,
+            ga4_organic_traffic: prevGa4.organic_traffic,
+            phone_calls: prevGa4.phone_calls,
+            leads_total: prevWeeklyLeads.leads_total || prevGa4.leads_total,
+            leads_legit: prevWeeklyLeads.leads_legit || prevGa4.leads_total
+          };
+
+          let tableName = 'dashboard_cache';
+          let conflictTarget = 'client_id,view_mode';
+          let upsertPayload: any = {
+            client_id: client.id,
+            current_data,
+            prev_data,
+            last_updated: new Date().toISOString()
+          };
+
+          if (mode === 'rolling') {
+            tableName = 'dashboard_cache';
+            upsertPayload.view_mode = 'rolling';
+            conflictTarget = 'client_id,view_mode';
+          } else if (mode === '28days') {
+            tableName = 'dashboard_cache_weekly';
+            conflictTarget = 'client_id';
+          } else if (mode === 'monthly') {
+            tableName = 'dashboard_cache_monthly';
+            conflictTarget = 'client_id';
+          } else if (mode === '3months') {
+            tableName = 'dashboard_cache_3m';
+            conflictTarget = 'client_id';
           }
-        } catch (leadFetchErr: any) {
-          console.warn(`[CACHE SYNC] Could not fetch saved weekly leads for ${client.name}:`, leadFetchErr.message);
+
+          const { error: upsertErr } = await supabase
+            .from(tableName)
+            .upsert(upsertPayload, { onConflict: conflictTarget });
+            
+          if (upsertErr) console.error("Upsert err", upsertErr);
         }
-
-        const current_data = {
-          week_start_date: cStart,
-          gsc_clicks: curGsc.clicks,
-          gsc_impressions: curGsc.impressions,
-          gsc_position: curGsc.position,
-          gsc_ctr: curGsc.ctr,
-          gsc_top3: curGsc.top3,
-          gsc_top10: curGsc.top10,
-          ga4_traffic: curGa4.traffic,
-          ga4_organic_traffic: curGa4.organic_traffic,
-          phone_calls: curGa4.phone_calls,
-          leads_total: curWeeklyLeads.leads_total || curGa4.leads_total,
-          leads_legit: curWeeklyLeads.leads_legit || curGa4.leads_total 
-        };
-
-        const prev_data = {
-          week_start_date: pStart,
-          gsc_clicks: prevGsc.clicks,
-          gsc_impressions: prevGsc.impressions,
-          gsc_position: prevGsc.position,
-          gsc_ctr: prevGsc.ctr,
-          gsc_top3: prevGsc.top3,
-          gsc_top10: prevGsc.top10,
-          ga4_traffic: prevGa4.traffic,
-          ga4_organic_traffic: prevGa4.organic_traffic,
-          phone_calls: prevGa4.phone_calls,
-          leads_total: prevWeeklyLeads.leads_total || prevGa4.leads_total,
-          leads_legit: prevWeeklyLeads.leads_legit || prevGa4.leads_total
-        };
-
-        // UPSERT - Route to appropriate tables (rolling, 28days, monthly, 3months)
-        let tableName = 'dashboard_cache';
-        let conflictTarget = 'client_id,view_mode';
-        let upsertPayload: any = {
-          client_id: client.id,
-          current_data,
-          prev_data,
-          last_updated: new Date().toISOString()
-        };
-
-        if (mode === 'rolling') {
-          tableName = 'dashboard_cache';
-          upsertPayload.view_mode = 'rolling';
-          conflictTarget = 'client_id,view_mode';
-        } else if (mode === '28days') {
-          tableName = 'dashboard_cache_weekly';
-          conflictTarget = 'client_id';
-        } else if (mode === 'monthly') {
-          tableName = 'dashboard_cache_monthly';
-          conflictTarget = 'client_id';
-        } else if (mode === '3months') {
-          tableName = 'dashboard_cache_3m';
-          conflictTarget = 'client_id';
-        }
-
-        const { error: upsertErr } = await supabase
-          .from(tableName)
-          .upsert(upsertPayload, { onConflict: conflictTarget });
-          
-        if (upsertErr) console.error("Upsert err", upsertErr);
-      }
+      }));
     }
 
-    console.log('[CRON] Sync Complete!');
-    res.json({ success: true });
-  } catch(e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+    lastDashboardSyncStatus = { status: 'completed', startedAt, completedAt: new Date().toISOString(), progress: 'Sync completed successfully!' };
+    console.log('[CRON] Dashboard Cache Sync Completed successfully in background!');
+  } catch(e: any) {
+    lastDashboardSyncStatus = { status: 'error', startedAt, completedAt: new Date().toISOString(), error: e.message };
+    console.error('[CRON] Dashboard Cache Sync Error:', e);
+  } finally {
+    isDashboardCacheSyncing = false;
   }
+};
+
+app.get('/api/cron/sync-dashboard-cache', async (req, res) => {
+  const targetMode = req.query.mode as string;
+  const isAsync = req.query.async !== 'false'; // default to async to avoid Cloudflare 524 timeouts
+
+  if (isAsync) {
+    // Run in background and return immediate HTTP 200 response
+    executeDashboardCacheSync(targetMode).catch(err => console.error('[ASYNC SYNC ERROR]', err));
+    return res.json({ 
+      success: true, 
+      message: 'Dashboard cache sync initiated in background', 
+      status: isDashboardCacheSyncing ? 'running' : 'initiated' 
+    });
+  }
+
+  // Synchronous execution fallback if specifically requested
+  await executeDashboardCacheSync(targetMode);
+  res.json({ success: true, status: lastDashboardSyncStatus });
+});
+
+app.get('/api/cron/sync-dashboard-cache/status', (req, res) => {
+  res.json({
+    isSyncing: isDashboardCacheSyncing,
+    ...lastDashboardSyncStatus
+  });
 });
 
 // ==========================================

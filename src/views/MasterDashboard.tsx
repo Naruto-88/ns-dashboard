@@ -172,12 +172,18 @@ export default function MasterDashboard() {
 
   const handleLiveSync = async () => {
     setIsLiveSyncing(true);
+    setSuccessMsg("Live Sync initiated! Updating metrics in the background...");
     try {
-      const res = await fetch(`/api/cron/sync-dashboard-cache?mode=${viewMode}`, { method: 'GET' });
+      const res = await fetch(`/api/cron/sync-dashboard-cache?mode=${viewMode}&async=true`, { method: 'GET' });
       if(!res.ok) throw new Error('Live Sync failed');
-      await fetchData(true);
-      setSuccessMsg("Live Google metrics successfully synchronized and cached in database!");
-      setTimeout(() => setSuccessMsg(null), 5000);
+      
+      // Wait a few moments to allow first batch to commit, then reload cached data
+      setTimeout(async () => {
+        await fetchData(true);
+      }, 4000);
+
+      setSuccessMsg("Live Google metrics synchronization running! Fresh data is being cached.");
+      setTimeout(() => setSuccessMsg(null), 6000);
     } catch (err) {
       console.error(err);
       alert('Live sync failed');
