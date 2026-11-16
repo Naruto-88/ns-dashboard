@@ -5,6 +5,7 @@ export interface Client {
   id: string;
   name: string;
   short_code: string;
+  created_at?: string;
   ga4_property_id: string;
   gsc_site_url: string;
   lead_event_names: string;
