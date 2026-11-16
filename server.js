@@ -1148,17 +1148,18 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
 var getAppUrl = (req) => {
-  const host = req.get("host") || "";
-  const protocol = req.protocol || (req.secure ? "https" : "http");
   if (process.env.APP_URL && process.env.APP_URL.startsWith("http")) {
     return process.env.APP_URL.replace(/\/$/, "");
   }
+  const host = (req && typeof req.get === "function" ? req.get("host") : "") || "";
   if (host.includes("localhost") || host.includes("127.0.0.1")) {
     return `http://${host}`;
   }
-  const appUrl = `https://${host}`;
-  console.log("[DEBUG] Calculated Live App URL:", appUrl);
-  return appUrl;
+  if (host) {
+    const appUrl = `https://${host}`;
+    return appUrl;
+  }
+  return "https://seodashboard.netstripes.au";
 };
 var getOAuthClient = (req) => {
   const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "").trim();
