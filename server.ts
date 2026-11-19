@@ -4267,7 +4267,7 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
 
     // Minimal GA4 fetching helper with client credentials or central fallback
     const fetchGa4Live = async (client, startDate, endDate) => {
-      let ga4 = { traffic: 0, organic_traffic: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
+      let ga4 = { traffic: 0, users: 0, organic_traffic: 0, organic_users: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
       if (!client.ga4_property_id) return ga4;
       try {
         const currentAuth = await getClientAuth(client);
@@ -4279,15 +4279,23 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
           requestBody: {
             dateRanges: [{ startDate, endDate }],
             dimensions: [{ name: 'sessionDefaultChannelGroup' }],
-            metrics: [{ name: 'sessions' }]
+            metrics: [
+              { name: 'sessions' },
+              { name: 'totalUsers' }
+            ]
           }
         });
         const rows = res.data.rows || [];
         for (const r of rows) {
           const ch = (r.dimensionValues?.[0]?.value || '').toLowerCase();
           const sess = parseInt(r.metricValues?.[0]?.value || '0');
+          const usr = parseInt(r.metricValues?.[1]?.value || '0');
           ga4.traffic += sess;
-          if (ch === 'organic search') ga4.organic_traffic += sess;
+          ga4.users += usr;
+          if (ch === 'organic search') {
+            ga4.organic_traffic += sess;
+            ga4.organic_users += usr;
+          }
         }
 
         const eventsRes = await analytics.properties.runReport({
@@ -4371,7 +4379,9 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
             gsc_top3: curGsc.top3,
             gsc_top10: curGsc.top10,
             ga4_traffic: curGa4.traffic,
+            ga4_users: curGa4.users,
             ga4_organic_traffic: curGa4.organic_traffic,
+            ga4_organic_users: curGa4.organic_users,
             phone_calls: curGa4.phone_calls,
             leads_total: curWeeklyLeads.leads_total || curGa4.leads_total,
             leads_legit: curWeeklyLeads.leads_legit || curGa4.leads_total 
@@ -4386,7 +4396,9 @@ const executeDashboardCacheSync = async (targetMode?: string) => {
             gsc_top3: prevGsc.top3,
             gsc_top10: prevGsc.top10,
             ga4_traffic: prevGa4.traffic,
+            ga4_users: prevGa4.users,
             ga4_organic_traffic: prevGa4.organic_traffic,
+            ga4_organic_users: prevGa4.organic_users,
             phone_calls: prevGa4.phone_calls,
             leads_total: prevWeeklyLeads.leads_total || prevGa4.leads_total,
             leads_legit: prevWeeklyLeads.leads_legit || prevGa4.leads_total

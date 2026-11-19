@@ -53,7 +53,19 @@ interface DashboardRow {
     top3: number;
     top10: number;
   };
-  ga4Traffic: { current: number; previous: number; change: number; organic: number; prevOrganic: number };
+  ga4Traffic: { 
+    current: number; 
+    previous: number; 
+    change: number; 
+    organic: number; 
+    prevOrganic: number;
+    currentUsers?: number;
+    prevUsers?: number;
+    usersChange?: number;
+    organicUsers?: number;
+    prevOrganicUsers?: number;
+    organicUsersChange?: number;
+  };
   leads: { current: number; change: number; legit: number; prevLegit: number };
   phoneCalls: { current: number; previous: number; change: number };
   ahrefs: { 
@@ -406,6 +418,11 @@ export default function MasterDashboard() {
         const resolvedCurrentOrganic = currentWeekData?.ga4_organic_traffic ?? 0;
         const resolvedPreviousOrganic = previousWeekData?.ga4_organic_traffic ?? 0;
 
+        const resolvedCurrentUsers = currentWeekData?.ga4_users ?? 0;
+        const resolvedPreviousUsers = previousWeekData?.ga4_users ?? 0;
+        const resolvedCurrentOrganicUsers = currentWeekData?.ga4_organic_users ?? 0;
+        const resolvedPreviousOrganicUsers = previousWeekData?.ga4_organic_users ?? 0;
+
         const currentOrganicPct = resolvedCurrentTraffic > 0 
           ? (resolvedCurrentOrganic / resolvedCurrentTraffic) * 100 
           : 0;
@@ -424,7 +441,13 @@ export default function MasterDashboard() {
           organicChange,
           currentOrganicPct,
           prevOrganicPct,
-          organicShareDiff
+          organicShareDiff,
+          currentUsers: resolvedCurrentUsers,
+          prevUsers: resolvedPreviousUsers,
+          usersChange: calculateChange(resolvedCurrentUsers, resolvedPreviousUsers),
+          organicUsers: resolvedCurrentOrganicUsers,
+          prevOrganicUsers: resolvedPreviousOrganicUsers,
+          organicUsersChange: calculateChange(resolvedCurrentOrganicUsers, resolvedPreviousOrganicUsers)
         };
 
         // Breakdown channels for individual leads if available
@@ -1061,7 +1084,7 @@ export default function MasterDashboard() {
                   isScrolled ? 'py-1.5' : 'py-5'
                 } ${theme === 'white' ? 'text-white' : 'text-[#607a80]'}`} onClick={() => handleSort('ga4')}>
                   <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Current vs Previous GA4 Users" position="bottom">GA4 Traffic (C/P)</Tooltip>
+                    <Tooltip content="Current vs Previous GA4 Traffic (Sessions & Users)" position="bottom">GA4 Traffic (C/P)</Tooltip>
                     {sortConfig?.key === 'ga4' && (sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </div>
                 </th>
@@ -1467,6 +1490,46 @@ export default function MasterDashboard() {
                                 {Math.max(0, row.ga4Traffic.current - row.ga4Traffic.organic).toLocaleString()}
                               </span>
                             </div>
+
+                            {/* Users Breakdown (Total & Organic Users) */}
+                            {((row.ga4Traffic.currentUsers ?? 0) > 0 || (row.ga4Traffic.prevUsers ?? 0) > 0) && (
+                              <div className={`border-t pt-1.5 space-y-1.5 ${
+                                theme === 'white' ? 'border-zinc-100' : 'border-zinc-800'
+                              }`}>
+                                <div className="flex justify-between items-center">
+                                  <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Total Users:</span>
+                                  <div className="flex items-center gap-1.5 font-mono">
+                                    <span className={`font-semibold ${theme === 'white' ? 'text-zinc-900' : 'text-white'}`}>
+                                      {(row.ga4Traffic.currentUsers ?? 0).toLocaleString()}
+                                    </span>
+                                    <span className="text-[11px] text-zinc-500 font-normal">/ {(row.ga4Traffic.prevUsers ?? 0).toLocaleString()}</span>
+                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                      (row.ga4Traffic.usersChange ?? 0) > 0 
+                                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                        : (row.ga4Traffic.usersChange ?? 0) < 0 
+                                          ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                          : 'bg-zinc-500/10 text-zinc-500'
+                                    }`}>
+                                      {(row.ga4Traffic.usersChange ?? 0) > 0 ? `▲ +${(row.ga4Traffic.usersChange ?? 0).toFixed(1)}%` : (row.ga4Traffic.usersChange ?? 0) < 0 ? `▼ ${(row.ga4Traffic.usersChange ?? 0).toFixed(1)}%` : '• 0%'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {(row.ga4Traffic.organicUsers ?? 0) > 0 && (
+                                  <div className="flex justify-between items-center pl-2">
+                                    <span className="text-[11px] text-zinc-500">Organic Users:</span>
+                                    <div className="flex items-center gap-1.5 font-mono">
+                                      <span className={`font-semibold text-[11px] ${theme === 'white' ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                                        {(row.ga4Traffic.organicUsers ?? 0).toLocaleString()}
+                                      </span>
+                                      <span className="text-[10px] text-zinc-500">
+                                        / {(row.ga4Traffic.prevOrganicUsers ?? 0).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className={`border-t pt-1 text-[11px] text-zinc-500 text-center italic ${
