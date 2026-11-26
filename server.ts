@@ -5642,6 +5642,7 @@ app.get('/api/leads/stream', (req, res) => {
 
 // GET /api/leads/recent - Return REAL genuine leads for active clients sorted newest first
 app.get('/api/leads/recent', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   try {
     // 1. Fetch real genuine leads from Lead Shield API for active Lead Shield clients (SDS, MP, GS)
     const rawLeads = await fetchLeadShieldStats();
@@ -5728,6 +5729,7 @@ app.get('/api/leads/recent', async (req, res) => {
 
 // GET /api/leads/stats-by-range - Fetch exact genuine & spam leads per client for ANY custom date range
 app.get('/api/leads/stats-by-range', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   const { startDate, endDate, clientId } = req.query as { startDate?: string; endDate?: string; clientId?: string };
   try {
     const rawLeads = await fetchLeadShieldStats(startDate, endDate, clientId);

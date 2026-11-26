@@ -6286,6 +6286,7 @@ app.get("/api/leads/stream", (req, res) => {
   });
 });
 app.get("/api/leads/recent", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   try {
     const rawLeads = await fetchLeadShieldStats();
     const { data: activeLeadClients } = await supabase2.from("clients").select("id, name, lead_api_url").not("lead_api_url", "is", null);
@@ -6347,6 +6348,7 @@ app.get("/api/leads/recent", async (req, res) => {
   }
 });
 app.get("/api/leads/stats-by-range", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   const { startDate, endDate, clientId } = req.query;
   try {
     const rawLeads = await fetchLeadShieldStats(startDate, endDate, clientId);

@@ -1118,9 +1118,10 @@ export const getLeadStatsByRange = async (startDate?: string, endDate?: string, 
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     if (clientId) params.append('clientId', clientId);
+    params.append('_t', String(Date.now()));
     if (params.toString()) url += `?${params.toString()}`;
 
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     const data = await res.json();
     if (!res.ok) {
       return { success: false, clients: {}, error: data.error };
