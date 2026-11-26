@@ -25,29 +25,29 @@ import {
   Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import Dashboard from './views/Dashboard';
-import ClientScoreboard from './views/ClientScoreboard';
-import KeywordDashboard from './views/KeywordDashboard';
-import WeeklyData from './views/WeeklyData';
-import ClientManagement from './views/ClientManagement';
-import GlobalSettings from './views/GlobalSettings';
-import GoalsAndTargets from './views/GoalsAndTargets';
-import AiStrategicAnalysis from './views/AiStrategicAnalysis';
-import LeadGenPlaybook from './views/LeadGenPlaybook';
-import ActionCenter from './views/ActionCenter';
 import Tooltip from './components/Tooltip';
-import AdsDashboard from './views/AdsDashboard';
-import AdsMasterDashboard from './views/AdsMasterDashboard';
-import AdsWeeklyInputs from './views/AdsWeeklyInputs';
-import SiteHealth from './views/SiteHealth';
-import StrategicReviewHub from './views/StrategicReviewHub';
-import OnPageSeoAutopilot from './views/OnPageSeoAutopilot';
-import AiBlogStudio from './views/AiBlogStudio';
-import { PenTool, Sparkles } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import React from 'react';
 import { auth, supabase } from './lib/supabase';
 import { useTheme } from './contexts/ThemeContext';
+
+// Route-level code splitting: only load each view chunk when navigated to
+const MasterDashboard = lazy(() => import('./views/MasterDashboard'));
+const Dashboard = lazy(() => import('./views/Dashboard'));
+const ClientScoreboard = lazy(() => import('./views/ClientScoreboard'));
+const KeywordDashboard = lazy(() => import('./views/KeywordDashboard'));
+const WeeklyData = lazy(() => import('./views/WeeklyData'));
+const ClientManagement = lazy(() => import('./views/ClientManagement'));
+const GlobalSettings = lazy(() => import('./views/GlobalSettings'));
+const GoalsAndTargets = lazy(() => import('./views/GoalsAndTargets'));
+const AiStrategicAnalysis = lazy(() => import('./views/AiStrategicAnalysis'));
+const LeadGenPlaybook = lazy(() => import('./views/LeadGenPlaybook'));
+const ActionCenter = lazy(() => import('./views/ActionCenter'));
+const AdsDashboard = lazy(() => import('./views/AdsDashboard'));
+const AdsMasterDashboard = lazy(() => import('./views/AdsMasterDashboard'));
+const AdsWeeklyInputs = lazy(() => import('./views/AdsWeeklyInputs'));
+const SiteHealth = lazy(() => import('./views/SiteHealth'));
+const StrategicReviewHub = lazy(() => import('./views/StrategicReviewHub'));
 
 function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onToggle: () => void; user: any }) {
   const location = useLocation();
@@ -68,8 +68,6 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
     { name: 'Weekly Ads Entry', icon: Calendar, path: '/ads-inputs' },
     { name: 'Site Health & Plugins', icon: ShieldCheck, path: '/site-health' },
     { name: 'Strategic Review Hub', icon: Compass, path: '/strategic-review' },
-    { name: 'On-Page SEO Autopilot', icon: Sparkles, path: '/seo-autopilot' },
-    { name: 'AI Blog Studio', icon: PenTool, path: '/blog-studio' },
   ];
 
   const adminNavItems = [
@@ -80,13 +78,7 @@ function Sidebar({ isCollapsed, onToggle, user }: { isCollapsed: boolean; onTogg
   const isWriter = user?.email?.includes('writer') || user?.email?.includes('editor');
   const isAdmin = user?.email === 'weerasinghemelaka1@gmail.com' || user?.email === 'melaka@team.com';
 
-  // If Content Writer, only show AI Blog Studio & On-Page SEO
-  const writerNavItems = [
-    { name: 'AI Blog Studio', icon: PenTool, path: '/blog-studio' },
-    { name: 'On-Page SEO Autopilot', icon: Sparkles, path: '/seo-autopilot' },
-  ];
-
-  const visibleItems = isWriter ? writerNavItems : (isAdmin ? [...navItems, ...adminNavItems] : navItems);
+  const visibleItems = isWriter ? navItems : (isAdmin ? [...navItems, ...adminNavItems] : navItems);
 
   return (
     <aside className={`${isCollapsed ? 'w-20' : 'w-64'} ${
@@ -335,8 +327,6 @@ function Login() {
   );
 }
 
-import MasterDashboard from './views/MasterDashboard';
-
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -364,33 +354,37 @@ export default function App() {
   return (
     <BrowserRouter>
       <Layout user={user}>
-        <Routes>
-          <Route path="/" element={<MasterDashboard />} />
-          <Route path="/agency" element={<Dashboard />} />
-          <Route path="/scoreboard" element={<ClientScoreboard />} />
-          <Route path="/goals-targets" element={<GoalsAndTargets />} />
-          <Route path="/strategic-analysis" element={<AiStrategicAnalysis />} />
-          <Route path="/lead-playbook" element={<LeadGenPlaybook />} />
-          <Route path="/action-center" element={<ActionCenter />} />
-          <Route path="/keywords" element={<KeywordDashboard />} />
-          <Route path="/weekly" element={<WeeklyData />} />
-          <Route path="/ads-master" element={<AdsMasterDashboard />} />
-          <Route path="/ads-growth" element={<AdsDashboard />} />
-          <Route path="/ads-inputs" element={<AdsWeeklyInputs />} />
-          <Route path="/site-health" element={<SiteHealth />} />
-          <Route path="/strategic-review" element={<StrategicReviewHub />} />
-          <Route path="/seo-autopilot" element={<OnPageSeoAutopilot />} />
-          <Route path="/blog-studio" element={<AiBlogStudio />} />
-          {isAdmin && (
-            <>
-              <Route path="/clients" element={<ClientManagement />} />
-              <Route path="/settings" element={<GlobalSettings />} />
-            </>
-          )}
-          {/* Support for back-compatibility or alternative access */}
-          {!isAdmin && <Route path="/clients" element={<MasterDashboard />} />}
-          {!isAdmin && <Route path="/settings" element={<MasterDashboard />} />}
-        </Routes>
+        <Suspense fallback={
+          <div className="flex items-center justify-center h-[60vh] text-zinc-400 text-sm font-medium animate-pulse">
+            Loading module...
+          </div>
+        }>
+          <Routes>
+            <Route path="/" element={<MasterDashboard />} />
+            <Route path="/agency" element={<Dashboard />} />
+            <Route path="/scoreboard" element={<ClientScoreboard />} />
+            <Route path="/goals-targets" element={<GoalsAndTargets />} />
+            <Route path="/strategic-analysis" element={<AiStrategicAnalysis />} />
+            <Route path="/lead-playbook" element={<LeadGenPlaybook />} />
+            <Route path="/action-center" element={<ActionCenter />} />
+            <Route path="/keywords" element={<KeywordDashboard />} />
+            <Route path="/weekly" element={<WeeklyData />} />
+            <Route path="/ads-master" element={<AdsMasterDashboard />} />
+            <Route path="/ads-growth" element={<AdsDashboard />} />
+            <Route path="/ads-inputs" element={<AdsWeeklyInputs />} />
+            <Route path="/site-health" element={<SiteHealth />} />
+            <Route path="/strategic-review" element={<StrategicReviewHub />} />
+            {isAdmin && (
+              <>
+                <Route path="/clients" element={<ClientManagement />} />
+                <Route path="/settings" element={<GlobalSettings />} />
+              </>
+            )}
+            {/* Support for back-compatibility or alternative access */}
+            {!isAdmin && <Route path="/clients" element={<MasterDashboard />} />}
+            {!isAdmin && <Route path="/settings" element={<MasterDashboard />} />}
+          </Routes>
+        </Suspense>
       </Layout>
     </BrowserRouter>
   );

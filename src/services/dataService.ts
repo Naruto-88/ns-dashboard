@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { authFetch } from '../utils/authFetch';
 import { DateRange, ComparisonResult, calculateMetricComparison, calculatePositionComparison } from '../lib/seoUtils';
 
 export interface Client {
@@ -722,7 +723,7 @@ export const updateKeyword = async (clientId: string, id: string, updates: Parti
 
 export const getApiKeys = async (): Promise<any[]> => {
   try {
-    const response = await fetch('/api/admin/keys');
+    const response = await authFetch('/api/admin/keys');
     if (!response.ok) {
       throw new Error(`Server returned status ${response.status}: ${response.statusText}`);
     }
@@ -742,7 +743,7 @@ export const getApiKeys = async (): Promise<any[]> => {
 
 export const saveApiKey = async (id: string, keyValue: string): Promise<void> => {
   try {
-    const response = await fetch('/api/admin/keys', {
+    const response = await authFetch('/api/admin/keys', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, key_value: keyValue })

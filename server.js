@@ -4,10 +4,9 @@ import "dotenv/config";
 import { createServer as createViteServer } from "vite";
 import path2 from "path";
 import { fileURLToPath } from "url";
-import { google } from "googleapis";
+import { google as google2 } from "googleapis";
 import cookieParser from "cookie-parser";
 import { createClient as createClient2 } from "@supabase/supabase-js";
-import { format } from "date-fns";
 
 // src/services/siteHealth/healthScanner.ts
 import tls from "tls";
@@ -341,63 +340,6 @@ async function auditSingleClient(client) {
     issues,
     scannedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-}
-
-// src/services/siteHealth/strategicReviewService.ts
-function buildStrategicReviewPrompt(client, metrics, health) {
-  return `
-You are the Chief SEO Strategist & Executive Auditor for an elite digital growth agency.
-Your task is to generate a brutally honest, rigorous, and operational "Weekly Strategic Review" for client: ${client.name} (${client.short_code}).
-
-CLIENT & SITE CONTEXT:
-- Client Name: ${client.name}
-- Domain / GSC URL: ${client.gsc_site_url || "N/A"}
-- Live Website URL: ${health?.siteUrl || "N/A"}
-- Project Owner (PM): ${client.project_owner_name} (${client.project_owner_code})
-- Lead Monthly Target: ${client.lead_target_monthly || 0}
-- Target Domain Rating (DR): ${client.target_dr || 0}
-
-RECENT METRICS (Past Period):
-- Genuine Leads (Legit): ${metrics?.leads_legit ?? 0} (Target: ${client.lead_target_monthly ? Math.round(client.lead_target_monthly / 4) : "N/A"} per week)
-- Phone Calls Tracked: ${metrics?.phone_calls ?? 0}
-- GSC Organic Clicks: ${metrics?.gsc_clicks ?? 0}
-- Impressions: ${metrics?.gsc_impressions ?? 0}
-- Average Position: ${metrics?.tracked_keywords_avg_position || metrics?.gsc_position || "N/A"}
-- Ahrefs DR: ${metrics?.ahrefs_dr ?? 0}
-
-LIVE SITE TECHNICAL HEALTH AUDIT (Today):
-- HTTP Status: ${health?.httpStatus || 200} (Online: ${health?.isOnline ? "YES" : "NO"})
-- Response Time: ${health?.responseTimeMs || 0}ms
-- SSL Certificate: ${health?.sslValid ? `Valid (${health?.sslDaysLeft} days left)` : "INVALID/EXPIRED"}
-- XML Sitemap: ${health?.sitemapStatus || "OK"} (${health?.sitemapCount || 0} URLs detected at ${health?.sitemapUrl || "sitemap.xml"})
-- Indexability / Robots: ${health?.hasNoindex ? "ALERT: NOINDEX TAG FOUND ON HOMEPAGE" : "Indexable"} | Robots: ${health?.robotsStatus || "OK"}
-- WordPress Plugins: ${health?.wpConnected ? `${health?.pluginsOutdated} updates pending out of ${health?.pluginsTotal} total` : "Not linked via bridge"}
-- Specific Detected Issues: ${JSON.stringify(health?.issues || [])}
-
-RULES:
-1. "Site Reality": Do not accept fluffy claims. Describe exactly what happens on the live money pages (forms, quote buttons, redirects, 403 crawl blocks, popups vs native fields).
-2. "Conversion Gaps": Pinpoint why traffic fails to convert to calls/leads or where crawlers fail to index.
-3. "Action \u2014 Why \u2014 Who": Every action MUST state:
-   - Action: Exactly what to build, fix or prune.
-   - Why: Business and lead-flow reason.
-   - Who: Assign strictly to realistic roles: ${client.project_owner_name} (PM), Shihab (Web Developer), Nia (Copy/Content), or Gia (Local SEO/Maps).
-
-OUTPUT FORMAT:
-Return strictly valid JSON with no markdown wrapping and no backticks:
-{
-  "siteReality": "Detailed technical truth of the site, forms and crawl state",
-  "conversionGaps": "Core conversion barriers, missing forms, or trust cracks",
-  "actionsFortnight": [
-    { "id": "act-1", "action": "Exact task description", "why": "Why it matters", "who": "${client.project_owner_name} / Shihab", "priority": "Must-Do", "status": "Pending" }
-  ],
-  "actionsNext": [
-    { "id": "act-2", "action": "Secondary task", "why": "Why it matters", "who": "Nia / ${client.project_owner_name}", "priority": "Secondary", "status": "Pending" }
-  ],
-  "actionsLater": [
-    { "id": "act-3", "action": "Backlog task", "why": "Why it matters", "who": "${client.project_owner_name}", "priority": "Backlog", "status": "Pending" }
-  ]
-}
-`;
 }
 
 // src/services/storage/supabaseStore.ts
@@ -927,6 +869,843 @@ function checkPluginSafety(slug, name) {
   return { isRestricted: false };
 }
 
+// server/utils/googleRetry.ts
+function isRetryableGoogleError(err) {
+  if (!err) return false;
+  const status = err.code || err.status || err.response?.status;
+  const message = String(err.message || err.response?.data?.error?.message || "").toLowerCase();
+  if (status === 429 || typeof status === "number" && status >= 500 && status < 600) {
+    return true;
+  }
+  if (status === 403 && (message.includes("rate limit") || message.includes("ratelimit") || message.includes("quota") || message.includes("too many requests"))) {
+    return true;
+  }
+  if (message.includes("econnreset") || message.includes("etimedout") || message.includes("socket hang up") || message.includes("fetch failed") || message.includes("network") || message.includes("temporarily unavailable")) {
+    return true;
+  }
+  return false;
+}
+async function withGoogleRetry(fn, options = {}) {
+  const {
+    maxRetries = 3,
+    baseDelayMs = 1e3,
+    maxDelayMs = 1e4,
+    label = "Google API"
+  } = options;
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const shouldRetry = attempt < maxRetries && isRetryableGoogleError(err);
+      if (!shouldRetry) {
+        throw err;
+      }
+      const expDelay = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, attempt));
+      const jitter = Math.floor(Math.random() * 400);
+      const waitMs = expDelay + jitter;
+      console.warn(
+        `[RETRY] ${label} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${err?.message || err}. Retrying in ${waitMs}ms...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw lastError;
+}
+
+// server/utils/leadFilter.ts
+function isInternalTestLead(lead) {
+  if (!lead) return false;
+  const formData = lead.form_data?.body || lead.form_data || {};
+  const email = String(
+    formData["your-email"] || formData["email"] || lead.email || ""
+  ).trim().toLowerCase();
+  const name = String(
+    formData["your-name"] || formData["name"] || formData["first-name"] || formData["fist-name"] || lead.customerName || lead.name || ""
+  ).trim().toLowerCase();
+  const message = String(
+    formData["your-comments"] || formData["your-message"] || formData["message"] || lead.message || ""
+  ).trim().toLowerCase();
+  if (email) {
+    if (email.endsWith("@netstripes.com") || email.endsWith("@netstripes.com.au") || email.startsWith("test@") || email.startsWith("test-leadcheck@") || email === "testing@gmail.com" || email === "test@example.com") {
+      return true;
+    }
+  }
+  if (name) {
+    if (/^test+s?(\s+test+s?\d*|\d*)?$/i.test(name) || /\btest\b/i.test(name) || name.includes("netstripes lead check") || name.includes("shihab netstripes")) {
+      return true;
+    }
+  }
+  if (message) {
+    if (message === "test" || message === "testing" || message.includes("test submission by netstripes") || message.includes("test enquiry to confirm the contact form")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// server/middleware/auth.ts
+var DEFAULT_ADMIN_EMAILS = [
+  "weerasinghemelaka1@gmail.com",
+  "melaka@team.com"
+];
+function getAdminEmailAllowlist() {
+  const envAdmins = (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return /* @__PURE__ */ new Set([...DEFAULT_ADMIN_EMAILS, ...envAdmins]);
+}
+function createAuthMiddleware(supabase3) {
+  const requireAuth2 = async (req, res, next) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      if (!token) {
+        return res.status(401).json({ error: "Authentication required. Missing Bearer token." });
+      }
+      const { data, error } = await supabase3.auth.getUser(token);
+      if (error || !data?.user) {
+        return res.status(401).json({ error: "Invalid or expired authentication token." });
+      }
+      req.user = data.user;
+      return next();
+    } catch (err) {
+      console.error("[AUTH MIDDLEWARE] Error verifying token:", err?.message || err);
+      return res.status(500).json({ error: "Authentication verification failed." });
+    }
+  };
+  const requireAdmin2 = async (req, res, next) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      if (!token) {
+        return res.status(401).json({ error: "Admin authentication required." });
+      }
+      const { data, error } = await supabase3.auth.getUser(token);
+      if (error || !data?.user) {
+        return res.status(401).json({ error: "Invalid or expired authentication token." });
+      }
+      const email = (data.user.email || "").toLowerCase();
+      const allowlist = getAdminEmailAllowlist();
+      if (!allowlist.has(email)) {
+        console.warn(`[RBAC] Blocked non-admin access attempt by ${email} to ${req.method} ${req.path}`);
+        return res.status(403).json({ error: "Forbidden: Admin privileges required." });
+      }
+      req.user = data.user;
+      return next();
+    } catch (err) {
+      console.error("[RBAC MIDDLEWARE] Error verifying admin:", err?.message || err);
+      return res.status(500).json({ error: "Admin verification failed." });
+    }
+  };
+  return { requireAuth: requireAuth2, requireAdmin: requireAdmin2 };
+}
+
+// server/routes/keywordRoutes.ts
+function registerKeywordRoutes(app2) {
+  app2.get("/api/keywords/metrics", async (req, res) => {
+    const clientId = req.query.clientId;
+    if (!clientId) return res.status(400).json({ error: "clientId is required" });
+    try {
+      const metrics = await getKeywordMetricsStore(clientId);
+      res.json({ success: true, metrics });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app2.post("/api/keywords/ahrefs-sync", async (req, res) => {
+    const { clientId, queries } = req.body;
+    if (!clientId || !Array.isArray(queries) || queries.length === 0) {
+      return res.status(400).json({ error: "clientId and queries array are required" });
+    }
+    try {
+      const ahrefsKey = (process.env.AHREFS_API_KEY || "").trim();
+      const existingMetrics = await getKeywordMetricsStore(clientId);
+      const updatedMap = {};
+      for (const q of queries) {
+        const cleanKw = q.trim().toLowerCase();
+        if (!cleanKw) continue;
+        if (existingMetrics[cleanKw] && existingMetrics[cleanKw].volume > 0) {
+          updatedMap[cleanKw] = existingMetrics[cleanKw];
+          continue;
+        }
+        if (ahrefsKey) {
+          try {
+            const ahrefsRes = await fetch(
+              `https://api.ahrefs.com/v3/keywords-explorer/overview?country=au&keywords=${encodeURIComponent(cleanKw)}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${ahrefsKey}`,
+                  Accept: "application/json"
+                }
+              }
+            );
+            if (ahrefsRes.ok) {
+              const data = await ahrefsRes.json();
+              const kwData = data.keywords?.[0] || data[0];
+              if (kwData) {
+                updatedMap[cleanKw] = {
+                  volume: kwData.volume || 0,
+                  difficulty: kwData.difficulty || kwData.kd || 0,
+                  cpc: kwData.cpc || 0,
+                  syncedAt: (/* @__PURE__ */ new Date()).toISOString()
+                };
+                continue;
+              }
+            }
+          } catch (ahrefsErr) {
+            console.warn("[AHREFS API] query warning:", ahrefsErr);
+          }
+        }
+        const wordCount = cleanKw.split(" ").length;
+        let estVolume = 100;
+        let estDifficulty = 15;
+        if (cleanKw.includes("australia") || cleanKw.includes("sydney") || cleanKw.includes("melbourne") || cleanKw.includes("brisbane")) {
+          estVolume = Math.floor(Math.random() * 400) + 150;
+          estDifficulty = Math.floor(Math.random() * 25) + 20;
+        } else if (wordCount <= 2) {
+          estVolume = Math.floor(Math.random() * 1200) + 400;
+          estDifficulty = Math.floor(Math.random() * 40) + 35;
+        } else if (wordCount === 3) {
+          estVolume = Math.floor(Math.random() * 500) + 200;
+          estDifficulty = Math.floor(Math.random() * 20) + 15;
+        } else {
+          estVolume = Math.floor(Math.random() * 250) + 70;
+          estDifficulty = Math.floor(Math.random() * 15) + 10;
+        }
+        updatedMap[cleanKw] = {
+          volume: estVolume,
+          difficulty: estDifficulty,
+          cpc: Number((Math.random() * 4 + 1).toFixed(2)),
+          syncedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+      }
+      await saveKeywordMetricsStore(clientId, updatedMap);
+      const finalStored = await getKeywordMetricsStore(clientId);
+      res.json({
+        success: true,
+        count: Object.keys(updatedMap).length,
+        metrics: finalStored
+      });
+    } catch (err) {
+      console.error("Ahrefs sync error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
+// server/routes/strategicReviewRoutes.ts
+import { format } from "date-fns";
+
+// src/services/siteHealth/strategicReviewService.ts
+function buildStrategicReviewPrompt(client, metrics, health) {
+  return `
+You are the Chief SEO Strategist & Executive Auditor for an elite digital growth agency.
+Your task is to generate a brutally honest, rigorous, and operational "Weekly Strategic Review" for client: ${client.name} (${client.short_code}).
+
+CLIENT & SITE CONTEXT:
+- Client Name: ${client.name}
+- Domain / GSC URL: ${client.gsc_site_url || "N/A"}
+- Live Website URL: ${health?.siteUrl || "N/A"}
+- Project Owner (PM): ${client.project_owner_name} (${client.project_owner_code})
+- Lead Monthly Target: ${client.lead_target_monthly || 0}
+- Target Domain Rating (DR): ${client.target_dr || 0}
+
+RECENT METRICS (Past Period):
+- Genuine Leads (Legit): ${metrics?.leads_legit ?? 0} (Target: ${client.lead_target_monthly ? Math.round(client.lead_target_monthly / 4) : "N/A"} per week)
+- Phone Calls Tracked: ${metrics?.phone_calls ?? 0}
+- GSC Organic Clicks: ${metrics?.gsc_clicks ?? 0}
+- Impressions: ${metrics?.gsc_impressions ?? 0}
+- Average Position: ${metrics?.tracked_keywords_avg_position || metrics?.gsc_position || "N/A"}
+- Ahrefs DR: ${metrics?.ahrefs_dr ?? 0}
+
+LIVE SITE TECHNICAL HEALTH AUDIT (Today):
+- HTTP Status: ${health?.httpStatus || 200} (Online: ${health?.isOnline ? "YES" : "NO"})
+- Response Time: ${health?.responseTimeMs || 0}ms
+- SSL Certificate: ${health?.sslValid ? `Valid (${health?.sslDaysLeft} days left)` : "INVALID/EXPIRED"}
+- XML Sitemap: ${health?.sitemapStatus || "OK"} (${health?.sitemapCount || 0} URLs detected at ${health?.sitemapUrl || "sitemap.xml"})
+- Indexability / Robots: ${health?.hasNoindex ? "ALERT: NOINDEX TAG FOUND ON HOMEPAGE" : "Indexable"} | Robots: ${health?.robotsStatus || "OK"}
+- WordPress Plugins: ${health?.wpConnected ? `${health?.pluginsOutdated} updates pending out of ${health?.pluginsTotal} total` : "Not linked via bridge"}
+- Specific Detected Issues: ${JSON.stringify(health?.issues || [])}
+
+RULES:
+1. "Site Reality": Do not accept fluffy claims. Describe exactly what happens on the live money pages (forms, quote buttons, redirects, 403 crawl blocks, popups vs native fields).
+2. "Conversion Gaps": Pinpoint why traffic fails to convert to calls/leads or where crawlers fail to index.
+3. "Action \u2014 Why \u2014 Who": Every action MUST state:
+   - Action: Exactly what to build, fix or prune.
+   - Why: Business and lead-flow reason.
+   - Who: Assign strictly to realistic roles: ${client.project_owner_name} (PM), Shihab (Web Developer), Nia (Copy/Content), or Gia (Local SEO/Maps).
+
+OUTPUT FORMAT:
+Return strictly valid JSON with no markdown wrapping and no backticks:
+{
+  "siteReality": "Detailed technical truth of the site, forms and crawl state",
+  "conversionGaps": "Core conversion barriers, missing forms, or trust cracks",
+  "actionsFortnight": [
+    { "id": "act-1", "action": "Exact task description", "why": "Why it matters", "who": "${client.project_owner_name} / Shihab", "priority": "Must-Do", "status": "Pending" }
+  ],
+  "actionsNext": [
+    { "id": "act-2", "action": "Secondary task", "why": "Why it matters", "who": "Nia / ${client.project_owner_name}", "priority": "Secondary", "status": "Pending" }
+  ],
+  "actionsLater": [
+    { "id": "act-3", "action": "Backlog task", "why": "Why it matters", "who": "${client.project_owner_name}", "priority": "Backlog", "status": "Pending" }
+  ]
+}
+`;
+}
+
+// server/routes/strategicReviewRoutes.ts
+function registerStrategicReviewRoutes(app2, deps) {
+  const { supabase: supabase3, strategicReviewMemoryCache: strategicReviewMemoryCache2, executeStrategicAiModel: executeStrategicAiModel2, cleanJsonString: cleanJsonString2 } = deps;
+  app2.get("/api/strategic-reviews/all", async (req, res) => {
+    try {
+      const { data: clients, error: clientErr } = await supabase3.from("clients").select("id, name, short_code, project_owner_name, project_owner_code, lead_target_monthly, target_dr, gsc_site_url, wordpress_url, api_import_enabled").order("name");
+      if (clientErr) throw clientErr;
+      const activeClients = (clients || []).filter((c) => c.api_import_enabled !== false);
+      let dbReviews = [];
+      try {
+        const { data } = await supabase3.from("strategic_reviews").select("*");
+        if (data) dbReviews = data;
+      } catch {
+      }
+      const reviews = activeClients.map((c) => {
+        const dbRow = dbReviews.find((r) => r.client_id === c.id);
+        const memRow = strategicReviewMemoryCache2.get(c.id);
+        const item = dbRow || memRow;
+        if (item) {
+          return {
+            id: item.id || c.id,
+            clientId: c.id,
+            clientName: c.name,
+            shortCode: c.short_code,
+            projectOwner: c.project_owner_name || "Melaka",
+            projectOwnerCode: c.project_owner_code || "MW",
+            siteUrl: item.site_url || extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
+            periodStart: item.period_start || format(/* @__PURE__ */ new Date(), "yyyy-MM-01"),
+            periodEnd: item.period_end || format(/* @__PURE__ */ new Date(), "yyyy-MM-dd"),
+            clicks: item.clicks ?? 0,
+            phones: item.phones ?? 0,
+            leadsActual: item.leads_actual ?? 0,
+            leadsTarget: item.leads_target ?? (c.lead_target_monthly ? Math.round(c.lead_target_monthly / 4) : 0),
+            drActual: item.dr_actual ?? 0,
+            siteReality: item.site_reality || "Pending first review generation.",
+            conversionGaps: item.conversion_gaps || "Pending first review generation.",
+            actionsFortnight: item.actions_fortnight || [],
+            actionsNext: item.actions_next || [],
+            actionsLater: item.actions_later || [],
+            teamFeedback: item.team_feedback || [],
+            overallStatus: item.overall_status || "PENDING_REVIEW",
+            generatedByModel: item.generated_by_model || "System",
+            lastGeneratedAt: item.last_generated_at || null
+          };
+        }
+        return {
+          id: c.id,
+          clientId: c.id,
+          clientName: c.name,
+          shortCode: c.short_code,
+          projectOwner: c.project_owner_name || "Melaka",
+          projectOwnerCode: c.project_owner_code || "MW",
+          siteUrl: extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
+          periodStart: format(/* @__PURE__ */ new Date(), "yyyy-MM-01"),
+          periodEnd: format(/* @__PURE__ */ new Date(), "yyyy-MM-dd"),
+          clicks: 0,
+          phones: 0,
+          leadsActual: 0,
+          leadsTarget: c.lead_target_monthly ? Math.round(c.lead_target_monthly / 4) : 0,
+          drActual: 0,
+          siteReality: 'Click "Generate Review" to analyze real site against dashboard data.',
+          conversionGaps: "Awaiting synthesis.",
+          actionsFortnight: [],
+          actionsNext: [],
+          actionsLater: [],
+          teamFeedback: [],
+          overallStatus: "PENDING_REVIEW",
+          generatedByModel: "None",
+          lastGeneratedAt: null
+        };
+      });
+      res.json({ success: true, count: reviews.length, data: reviews });
+    } catch (error) {
+      console.error("Strategic Reviews Fetch Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  app2.post("/api/strategic-reviews/generate/:clientId", async (req, res) => {
+    const { clientId } = req.params;
+    const { model } = req.body || {};
+    try {
+      const { data: client, error: cErr } = await supabase3.from("clients").select("*").eq("id", clientId).single();
+      if (cErr || !client) return res.status(404).json({ error: "Client not found" });
+      const { data: weekly } = await supabase3.from("weekly_data").select("*").eq("client_id", clientId).order("week_start_date", { ascending: false }).limit(1).maybeSingle();
+      const healthAudit = await auditSingleClient(client);
+      const prompt = buildStrategicReviewPrompt(client, weekly || {}, healthAudit);
+      const { text, modelUsed } = await executeStrategicAiModel2(prompt, model);
+      let parsedAi = {};
+      try {
+        const cleaned = cleanJsonString2(text);
+        parsedAi = JSON.parse(cleaned);
+      } catch {
+        parsedAi = {
+          siteReality: text.slice(0, 500),
+          conversionGaps: "Parsed from summary stream.",
+          actionsFortnight: [
+            {
+              id: "act-1",
+              action: "Inspect and fix technical lead flows",
+              why: "Conversion barrier",
+              who: client.project_owner_name,
+              priority: "Must-Do",
+              status: "Pending"
+            }
+          ]
+        };
+      }
+      const reviewRecord = {
+        client_id: client.id,
+        period_start: format(/* @__PURE__ */ new Date(), "yyyy-MM-01"),
+        period_end: format(/* @__PURE__ */ new Date(), "yyyy-MM-dd"),
+        clicks: weekly?.gsc_clicks ?? 0,
+        phones: weekly?.phone_calls ?? 0,
+        leads_actual: weekly?.leads_legit ?? 0,
+        leads_target: client.lead_target_monthly ? Math.round(client.lead_target_monthly / 4) : 0,
+        dr_actual: weekly?.ahrefs_dr ?? 0,
+        site_reality: parsedAi.siteReality || "Analyzed live site.",
+        conversion_gaps: parsedAi.conversionGaps || "Identified conversion barriers.",
+        actions_fortnight: parsedAi.actionsFortnight || [],
+        actions_next: parsedAi.actionsNext || [],
+        actions_later: parsedAi.actionsLater || [],
+        team_feedback: strategicReviewMemoryCache2.get(client.id)?.team_feedback || [],
+        overall_status: "PENDING_REVIEW",
+        generated_by_model: modelUsed,
+        last_generated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      strategicReviewMemoryCache2.set(client.id, reviewRecord);
+      try {
+        await supabase3.from("strategic_reviews").upsert(reviewRecord, { onConflict: "client_id,period_start,period_end" });
+      } catch {
+      }
+      res.json({
+        success: true,
+        message: `Strategic review generated using ${modelUsed}`,
+        data: {
+          ...reviewRecord,
+          clientId: client.id,
+          clientName: client.name,
+          shortCode: client.short_code,
+          projectOwner: client.project_owner_name,
+          siteUrl: healthAudit.siteUrl
+        }
+      });
+    } catch (err) {
+      console.error(`Strategic generation error for ${clientId}:`, err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app2.post("/api/strategic-reviews/feedback", async (req, res) => {
+    const { clientId, userName, userRole, agreement, comment } = req.body;
+    if (!clientId || !userName) {
+      return res.status(400).json({ error: "clientId and userName are required" });
+    }
+    try {
+      const existing = strategicReviewMemoryCache2.get(clientId) || {};
+      const feedbackList = existing.team_feedback || [];
+      const newFeedbackEntry = {
+        id: `fb-${Date.now()}`,
+        userName,
+        userRole: userRole || "Team Member",
+        agreement: agreement || "AGREE",
+        comment: comment || "",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const updatedFeedback = [newFeedbackEntry, ...feedbackList];
+      const newStatus = agreement === "DISAGREE" ? "HAS_OBJECTIONS" : "AGREED";
+      existing.team_feedback = updatedFeedback;
+      existing.overall_status = newStatus;
+      strategicReviewMemoryCache2.set(clientId, existing);
+      try {
+        await supabase3.from("strategic_reviews").update({
+          team_feedback: updatedFeedback,
+          overall_status: newStatus,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("client_id", clientId);
+      } catch {
+      }
+      res.json({
+        success: true,
+        message: "Feedback recorded successfully",
+        feedback: updatedFeedback,
+        overallStatus: newStatus
+      });
+    } catch (err) {
+      console.error("Feedback save error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
+// server/routes/adsRoutes.ts
+import { google } from "googleapis";
+function registerAdsRoutes(app2, deps) {
+  const { supabase: supabase3, getAuthenticatedClient: getAuthenticatedClient2 } = deps;
+  app2.get("/api/clients/:clientId/ads-growth", async (req, res) => {
+    const { clientId } = req.params;
+    try {
+      const { data, error } = await supabase3.from("weekly_ads_growth").select("*").eq("client_id", clientId).order("week_start_date", { ascending: false });
+      if (error) throw error;
+      res.json(data || []);
+    } catch (error) {
+      console.error("[ADS_GROWTH] Error fetching ads data:", error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+  app2.post("/api/clients/:clientId/ads-growth", async (req, res) => {
+    const { clientId } = req.params;
+    const payload = req.body;
+    try {
+      const { data, error } = await supabase3.from("weekly_ads_growth").upsert(
+        {
+          ...payload,
+          client_id: clientId,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        },
+        { onConflict: "client_id,week_start_date" }
+      ).select().single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("[ADS_GROWTH] Error saving ads data:", error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+  app2.post("/api/clients/:clientId/sync-ads-growth", async (req, res) => {
+    const { clientId } = req.params;
+    const { weekStart } = req.body;
+    if (!weekStart) return res.status(400).json({ error: "weekStart is required" });
+    console.log(`[ADS_SYNC_API] Triggered sync request for clientId: "${clientId}", weekStart: "${weekStart}"`);
+    try {
+      const { data: client, error: clientErr } = await supabase3.from("clients").select("*").eq("id", clientId).single();
+      if (clientErr || !client) {
+        console.error(`[ADS_SYNC_API] Client not found in database: "${clientId}"`);
+        return res.status(404).json({ error: "Client not found" });
+      }
+      const { data: weeklyData } = await supabase3.from("weekly_data").select("*").eq("client_id", clientId).eq("week_start_date", weekStart).maybeSingle();
+      let gSpend = 0;
+      let gLeads = 0;
+      let gCtr = 0;
+      let gRoas = 0;
+      let gScore = 0;
+      let gCampaigns = [];
+      let mSpend = 0;
+      let mReach = 0;
+      let mLeads = 0;
+      let mCtr = 0;
+      let mRoas = 0;
+      let mFreq = 0;
+      let webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : 0;
+      let bounceRate = 0;
+      let timeOnSite = "";
+      let topPage = "";
+      const abTests = 0;
+      const lpLive = 0;
+      if (client.ga4_property_id) {
+        try {
+          let currentAuth = null;
+          const { data: creds } = await supabase3.from("google_credentials").select("tokens").eq("client_id", clientId).maybeSingle();
+          if (creds && creds.tokens) {
+            const oAuth2Client = new google.auth.OAuth2(
+              process.env.GOOGLE_CLIENT_ID,
+              process.env.GOOGLE_CLIENT_SECRET,
+              process.env.GOOGLE_REDIRECT_URI
+            );
+            oAuth2Client.setCredentials(creds.tokens);
+            currentAuth = oAuth2Client;
+          } else {
+            currentAuth = await getAuthenticatedClient2(req).catch(() => null);
+          }
+          if (currentAuth) {
+            const analytics = google.analyticsdata({ version: "v1beta", auth: currentAuth });
+            const startDate = weekStart;
+            const start = new Date(weekStart);
+            const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1e3);
+            const endDate = end.toISOString().split("T")[0];
+            try {
+              const report = await withGoogleRetry(
+                () => analytics.properties.runReport({
+                  property: `properties/${client.ga4_property_id}`,
+                  requestBody: {
+                    dateRanges: [{ startDate, endDate }],
+                    metrics: [
+                      { name: "sessions" },
+                      { name: "bounceRate" },
+                      { name: "averageSessionDuration" },
+                      { name: "conversions" }
+                    ]
+                  }
+                }),
+                { label: `GA4 Ads Traffic (${client.name})` }
+              );
+              const metricValues = report.data.rows?.[0]?.metricValues;
+              if (metricValues) {
+                webSessions = parseInt(metricValues[0]?.value || "0") || webSessions;
+                bounceRate = parseFloat((parseFloat(metricValues[1]?.value || "0") * 100).toFixed(1)) || 0;
+                const durationSec = parseFloat(metricValues[2]?.value || "0") || 0;
+                if (durationSec > 0) {
+                  const mins = Math.floor(durationSec / 60);
+                  const secs = Math.floor(durationSec % 60);
+                  timeOnSite = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                }
+                gLeads = parseInt(metricValues[3]?.value || "0") || 0;
+              }
+            } catch (trafficErr) {
+              console.error("[ADS_SYNC_API] Failed to fetch GA4 traffic report:", trafficErr.message);
+            }
+            try {
+              const adsReport = await withGoogleRetry(
+                () => analytics.properties.runReport({
+                  property: `properties/${client.ga4_property_id}`,
+                  requestBody: {
+                    dateRanges: [{ startDate, endDate }],
+                    dimensions: [{ name: "sessionCampaignName" }],
+                    metrics: [
+                      { name: "advertiserAdCost" },
+                      { name: "advertiserAdClicks" },
+                      { name: "advertiserAdImpressions" },
+                      { name: "conversions" }
+                    ]
+                  }
+                }),
+                { label: `GA4 Campaigns (${client.name})` }
+              );
+              if (adsReport.data.rows && adsReport.data.rows.length > 0) {
+                let totalCost = 0;
+                let totalClicks = 0;
+                let totalImps = 0;
+                let totalConversions = 0;
+                const campaignsList = [];
+                for (const row of adsReport.data.rows) {
+                  const cName = row.dimensionValues?.[0]?.value || "";
+                  if (cName === "(not set)" || cName === "(direct)" || cName === "(organic)" || cName === "(referral)") continue;
+                  const cCost = parseFloat(row.metricValues?.[0]?.value || "0");
+                  const cClicks = parseInt(row.metricValues?.[1]?.value || "0");
+                  const cImps = parseInt(row.metricValues?.[2]?.value || "0");
+                  const cConvs = parseInt(row.metricValues?.[3]?.value || "0");
+                  if (cCost > 0 || cClicks > 0 || cImps > 0 || cConvs > 0) {
+                    campaignsList.push({
+                      campaignName: cName,
+                      cost: cCost,
+                      clicks: cClicks,
+                      impressions: cImps,
+                      conversions: cConvs,
+                      ctr: cImps > 0 ? parseFloat((cClicks / cImps * 100).toFixed(2)) : 0,
+                      cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
+                    });
+                  }
+                  totalCost += cCost;
+                  totalClicks += cClicks;
+                  totalImps += cImps;
+                  totalConversions += cConvs;
+                }
+                gSpend = totalCost;
+                gCtr = totalImps > 0 ? parseFloat((totalClicks / totalImps * 100).toFixed(2)) : 0;
+                gLeads = totalConversions;
+                gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
+                gScore = 8;
+                gCampaigns = campaignsList;
+              }
+            } catch (adsError) {
+              console.error("[ADS_SYNC_API] Failed to fetch separate Google Ads report:", adsError.message);
+            }
+            if (client.google_ads_customer_id && process.env.GOOGLE_ADS_DEVELOPER_TOKEN) {
+              try {
+                const cleanCustomerId = client.google_ads_customer_id.replace(/-/g, "").trim();
+                const tokens = await currentAuth.getAccessToken();
+                const accessToken = typeof tokens === "string" ? tokens : tokens?.token;
+                if (accessToken) {
+                  const adsUrl = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:searchStream`;
+                  const adsQuery = {
+                    query: `SELECT campaign.id, campaign.name, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'`
+                  };
+                  const adsRes = await fetch(adsUrl, {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${accessToken}`,
+                      "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+                      "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(adsQuery)
+                  });
+                  if (adsRes.ok) {
+                    const adsStreamData = await adsRes.json();
+                    let directCost = 0;
+                    let directClicks = 0;
+                    let directImps = 0;
+                    let directConvs = 0;
+                    const directCampaigns = [];
+                    if (Array.isArray(adsStreamData)) {
+                      for (const batch of adsStreamData) {
+                        for (const row of batch.results || []) {
+                          const cName = row.campaign?.name || "Campaign";
+                          const cCost = parseInt(row.metrics?.costMicros || "0") / 1e6;
+                          const cClicks = parseInt(row.metrics?.clicks || "0");
+                          const cImps = parseInt(row.metrics?.impressions || "0");
+                          const cConvs = parseInt(row.metrics?.conversions || "0");
+                          if (cCost > 0 || cClicks > 0 || cImps > 0 || cConvs > 0) {
+                            directCampaigns.push({
+                              campaignName: cName,
+                              cost: parseFloat(cCost.toFixed(2)),
+                              clicks: cClicks,
+                              impressions: cImps,
+                              conversions: cConvs,
+                              ctr: cImps > 0 ? parseFloat((cClicks / cImps * 100).toFixed(2)) : 0,
+                              cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
+                            });
+                          }
+                          directCost += cCost;
+                          directClicks += cClicks;
+                          directImps += cImps;
+                          directConvs += cConvs;
+                        }
+                      }
+                    }
+                    if (directCost > 0 || directClicks > 0 || directImps > 0 || directConvs > 0) {
+                      gSpend = parseFloat(directCost.toFixed(2));
+                      gCtr = directImps > 0 ? parseFloat((directClicks / directImps * 100).toFixed(2)) : 0;
+                      gLeads = directConvs;
+                      gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
+                      gScore = 9;
+                      gCampaigns = directCampaigns;
+                    }
+                  } else {
+                    const errTxt = await adsRes.text();
+                    console.error(`[ADS_SYNC_API] Direct Google Ads API returned error status ${adsRes.status}:`, errTxt);
+                  }
+                }
+              } catch (directAdsErr) {
+                console.error("[ADS_SYNC_API] Failed to fetch Direct Google Ads API:", directAdsErr.message);
+              }
+            }
+            let metaAccessToken = process.env.META_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || "";
+            if (!metaAccessToken) {
+              const { data: mKeyRow } = await supabase3.from("api_keys").select("key_value").eq("id", "meta_access_token").maybeSingle();
+              if (mKeyRow?.key_value) metaAccessToken = mKeyRow.key_value;
+            }
+            if (client.meta_ad_account_id && metaAccessToken) {
+              try {
+                let cleanMetaAccountId = client.meta_ad_account_id.trim();
+                if (!cleanMetaAccountId.startsWith("act_")) {
+                  cleanMetaAccountId = `act_${cleanMetaAccountId}`;
+                }
+                const metaUrl = `https://graph.facebook.com/v20.0/${cleanMetaAccountId}/insights?` + new URLSearchParams({
+                  access_token: metaAccessToken,
+                  time_range: JSON.stringify({ since: startDate, until: endDate }),
+                  fields: "spend,impressions,reach,clicks,ctr,actions,cost_per_action_type,frequency"
+                }).toString();
+                const metaRes = await fetch(metaUrl);
+                if (metaRes.ok) {
+                  const metaData = await metaRes.json();
+                  const insights = metaData.data?.[0];
+                  if (insights) {
+                    mSpend = parseFloat(parseFloat(insights.spend || "0").toFixed(2));
+                    mReach = parseInt(insights.reach || insights.impressions || "0");
+                    mCtr = parseFloat(parseFloat(insights.ctr || "0").toFixed(2));
+                    mFreq = parseFloat(parseFloat(insights.frequency || "0").toFixed(2));
+                    let metaLeadsCount = 0;
+                    if (Array.isArray(insights.actions)) {
+                      const primaryLeadAction = insights.actions.find((act) => act.action_type === "lead");
+                      if (primaryLeadAction) {
+                        metaLeadsCount = parseInt(primaryLeadAction.value || "0");
+                      } else {
+                        const fallbackAction = insights.actions.find(
+                          (act) => act.action_type === "offsite_conversion.fb_pixel_lead" || act.action_type === "onsite_conversion.lead_grouped"
+                        );
+                        if (fallbackAction) {
+                          metaLeadsCount = parseInt(fallbackAction.value || "0");
+                        }
+                      }
+                    }
+                    mLeads = metaLeadsCount;
+                    mRoas = 0;
+                  }
+                } else {
+                  const metaErrTxt = await metaRes.text();
+                  console.error(`[ADS_SYNC_API] Meta Marketing API error status ${metaRes.status}:`, metaErrTxt);
+                }
+              } catch (metaErr) {
+                console.error("[ADS_SYNC_API] Failed to fetch Meta Marketing API:", metaErr.message);
+              }
+            }
+            try {
+              const pagesReport = await withGoogleRetry(
+                () => analytics.properties.runReport({
+                  property: `properties/${client.ga4_property_id}`,
+                  requestBody: {
+                    dateRanges: [{ startDate, endDate }],
+                    dimensions: [{ name: "pagePath" }],
+                    metrics: [{ name: "conversions" }],
+                    orderBys: [{ metric: { metricName: "conversions" }, desc: true }],
+                    limit: "1"
+                  }
+                }),
+                { label: `GA4 Top Converting Page (${client.name})` }
+              );
+              const topRow = pagesReport.data.rows?.[0];
+              if (topRow) {
+                topPage = topRow.dimensionValues?.[0]?.value || "";
+              }
+            } catch (pagesErr) {
+              console.error("[ADS_SYNC_API] Failed to fetch GA4 pages report:", pagesErr.message);
+            }
+          }
+        } catch (e) {
+          console.error("[ADS_GROWTH] General error fetching GA4 live stats:", e.message);
+        }
+      }
+      const seoLeads = weeklyData?.leads_legit ? Number(weeklyData.leads_legit) : 0;
+      const upsertRow = {
+        client_id: clientId,
+        week_start_date: weekStart,
+        google_ads_spend: gSpend,
+        google_ads_conversions: gLeads,
+        google_ads_roas: gRoas,
+        google_ads_ctr: gCtr,
+        google_ads_quality_score: gScore,
+        google_ads_campaigns: gCampaigns,
+        meta_spend: mSpend,
+        meta_reach: mReach,
+        meta_leads: mLeads,
+        meta_roas: mRoas,
+        meta_ctr: mCtr,
+        meta_frequency: mFreq,
+        website_sessions: webSessions,
+        bounce_rate: bounceRate,
+        avg_time_on_site: timeOnSite,
+        top_converting_page: topPage,
+        active_ab_tests: abTests,
+        landing_pages_live: lpLive,
+        followers_total: 0,
+        social_impressions: 0,
+        engagement_rate: 0,
+        social_posts_published: 0,
+        organic_social_reach: 0,
+        top_platform: "",
+        blogs_written: 0,
+        avg_blog_quality: 0,
+        backlinks_created: 0,
+        social_posts_content_total: 0,
+        creatives_produced: 0,
+        emails_automation: 0,
+        seo_organic_leads: seoLeads
+      };
+      const { data, error } = await supabase3.from("weekly_ads_growth").upsert(upsertRow, { onConflict: "client_id,week_start_date" }).select().single();
+      if (error) throw error;
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("[ADS_GROWTH] Sync error:", error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+}
+
 // server.ts
 var slackAlertCooldown = /* @__PURE__ */ new Map();
 async function sendSlackTechAlert(payload) {
@@ -1069,6 +1848,7 @@ if (!supabaseUrl2 || !supabaseKey2) {
   console.warn("Backend Supabase credentials missing.");
 }
 var supabase2 = createClient2(supabaseUrl2, supabaseKey2);
+var { requireAuth, requireAdmin } = createAuthMiddleware(supabase2);
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path2.dirname(__filename);
 var app = express();
@@ -1092,7 +1872,7 @@ app.get("/api/clients/:clientId/keyword-ranking-details", async (req, res) => {
       console.log(`[DEBUG] No auth or GSC URL for client: ${clientId}`);
       return res.json({ keywords: [] });
     }
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     const { response } = await fetchGscWithSelfHeal(
       searchconsole,
       clientId,
@@ -1169,7 +1949,7 @@ var getOAuthClient = (req) => {
   }
   const APP_URL = getAppUrl(req);
   const redirect_uri = `${APP_URL}/api/auth/google/callback`;
-  return new google.auth.OAuth2(
+  return new google2.auth.OAuth2(
     clientId,
     clientSecret,
     redirect_uri
@@ -1217,7 +1997,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
     const { tokens } = await client.getToken(code);
     console.log("[DEBUG] Tokens received successfully");
     client.setCredentials(tokens);
-    const oauth2 = google.oauth2({ version: "v2", auth: client });
+    const oauth2 = google2.oauth2({ version: "v2", auth: client });
     const userInfo = await oauth2.userinfo.get();
     console.log("[DEBUG] User info retrieved:", userInfo.data.email);
     const tokenId = state === "central" ? "central_account" : state;
@@ -1335,8 +2115,8 @@ app.post("/api/clients/:clientId/test-access", async (req, res) => {
     const auth = await getAuthenticatedClient(req, clientId);
     const { data: client, error: clientError } = await supabase2.from("clients").select("*").eq("id", clientId).single();
     if (clientError || !client) return res.status(404).json({ error: "Client not found" });
-    const analytics = google.analyticsdata({ version: "v1beta", auth });
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const analytics = google2.analyticsdata({ version: "v1beta", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     let ga4Status = "Checking...";
     let gscStatus = "Checking...";
     const errors = [];
@@ -1395,10 +2175,10 @@ app.post("/api/clients/:clientId/fix-gsc-url", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-app.post("/api/admin/bulk-repair-gsc", async (req, res) => {
+app.post("/api/admin/bulk-repair-gsc", requireAdmin, async (req, res) => {
   try {
     const auth = await getAuthenticatedClient(req);
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     const { data: clients, error: clientsError } = await supabase2.from("clients").select("id, name, gsc_site_url");
     if (clientsError) throw clientsError;
     const listRes = await searchconsole.sites.list({});
@@ -1434,22 +2214,26 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
     const endDate = new Date(startUTC.getTime() + 6 * 24 * 60 * 60 * 1e3).toISOString().split("T")[0];
     let ga4Data = { traffic: 0, newUsers: 0, returningUsers: 0, organicTraffic: 0 };
     let phoneCallsCount = 0;
+    let phoneCallsSyncFailed = false;
     if (client?.ga4_property_id) {
       try {
-        const analytics = google.analyticsdata({ version: "v1beta", auth });
-        const response = await analytics.properties.runReport({
-          property: `properties/${client.ga4_property_id}`,
-          requestBody: {
-            dateRanges: [{ startDate, endDate }],
-            dimensions: [{ name: "sessionDefaultChannelGroup" }],
-            metrics: [
-              { name: "sessions" },
-              { name: "newUsers" },
-              { name: "activeUsers" }
-              // activeUsers - newUsers ~= returningUsers (approx)
-            ]
-          }
-        });
+        const analytics = google2.analyticsdata({ version: "v1beta", auth });
+        const response = await withGoogleRetry(
+          () => analytics.properties.runReport({
+            property: `properties/${client.ga4_property_id}`,
+            requestBody: {
+              dateRanges: [{ startDate, endDate }],
+              dimensions: [{ name: "sessionDefaultChannelGroup" }],
+              metrics: [
+                { name: "sessions" },
+                { name: "newUsers" },
+                { name: "activeUsers" }
+                // activeUsers - newUsers ~= returningUsers (approx)
+              ]
+            }
+          }),
+          { label: `GA4 Weekly (${client.name})` }
+        );
         let totalSessions = 0;
         let totalNewUsers = 0;
         let totalActiveUsers = 0;
@@ -1472,17 +2256,21 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
         ga4Data.returningUsers = Math.max(0, totalActiveUsers - totalNewUsers);
         ga4Data.organicTraffic = organicSessions;
         try {
-          const eventResponse = await analytics.properties.runReport({
-            property: `properties/${client.ga4_property_id}`,
-            requestBody: {
-              dateRanges: [{ startDate, endDate }],
-              dimensions: [{ name: "eventName" }],
-              metrics: [{ name: "eventCount" }]
-            }
-          });
+          const eventResponse = await withGoogleRetry(
+            () => analytics.properties.runReport({
+              property: `properties/${client.ga4_property_id}`,
+              requestBody: {
+                dateRanges: [{ startDate, endDate }],
+                dimensions: [{ name: "eventName" }],
+                metrics: [{ name: "eventCount" }]
+              }
+            }),
+            { label: `GA4 Phone Events (${client.name})` }
+          );
           const eventRows = eventResponse.data.rows || [];
           phoneCallsCount = extractPhoneCallsFromEvents(eventRows);
         } catch (eventErr) {
+          phoneCallsSyncFailed = true;
           console.error("GA4 Event Sync (phone calls) error:", eventErr);
         }
       } catch (e) {
@@ -1493,16 +2281,19 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
     let gscData = { clicks: 0, impressions: 0, ctr: 0, position: 0 };
     if (client?.gsc_site_url) {
       try {
-        const searchconsole = google.searchconsole({ version: "v1", auth });
+        const searchconsole = google2.searchconsole({ version: "v1", auth });
         const { response } = await fetchGscWithSelfHeal(
           searchconsole,
           clientId,
           client.name,
           client.gsc_site_url,
-          (url) => searchconsole.searchanalytics.query({
-            siteUrl: url,
-            requestBody: { startDate, endDate, dimensions: [], dataState: "all" }
-          })
+          (url) => withGoogleRetry(
+            () => searchconsole.searchanalytics.query({
+              siteUrl: url,
+              requestBody: { startDate, endDate, dimensions: [], dataState: "all" }
+            }),
+            { label: `GSC Weekly (${client.name})` }
+          )
         );
         const row = response.data.rows?.[0];
         if (row) {
@@ -1516,7 +2307,7 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
         throw new Error(`GSC Search Console Sync failed: ${e.message || String(e)}`);
       }
     }
-    const { error: saveError } = await supabase2.from("weekly_data").upsert({
+    const weeklyUpsertPayload = {
       client_id: clientId,
       week_start_date: startDate,
       gsc_clicks: gscData.clicks,
@@ -1527,10 +2318,13 @@ app.post("/api/clients/:clientId/sync-weekly-data", async (req, res) => {
       ga4_new_users: ga4Data.newUsers,
       ga4_returning_users: ga4Data.returningUsers,
       ga4_organic_traffic: ga4Data.organicTraffic,
-      phone_calls: phoneCallsCount,
       imported_at: (/* @__PURE__ */ new Date()).toISOString(),
       import_source: "live_sync"
-    }, { onConflict: "client_id, week_start_date" });
+    };
+    if (!phoneCallsSyncFailed) {
+      weeklyUpsertPayload.phone_calls = phoneCallsCount;
+    }
+    const { error: saveError } = await supabase2.from("weekly_data").upsert(weeklyUpsertPayload, { onConflict: "client_id, week_start_date" });
     if (saveError) {
       console.error(`[SYNC SAVE ERROR] Failed to auto-save weekly data for client ${clientId} on week ${startDate}:`, saveError.message);
       throw new Error(`Database auto-save failed: ${saveError.message}`);
@@ -1563,8 +2357,8 @@ app.get("/api/clients/:clientId/live-metrics", async (req, res) => {
     let phoneCallsCount = 0;
     let gscData = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
     if (auth) {
-      const analytics = google.analyticsdata({ version: "v1beta", auth });
-      const searchconsole = google.searchconsole({ version: "v1", auth });
+      const analytics = google2.analyticsdata({ version: "v1beta", auth });
+      const searchconsole = google2.searchconsole({ version: "v1", auth });
       if (client?.ga4_property_id) {
         try {
           const response = await analytics.properties.runReport({
@@ -1747,7 +2541,7 @@ app.get("/api/clients/:clientId/insights", async (req, res) => {
     const { data: client } = await supabase2.from("clients").select("*").eq("id", clientId).single();
     if (!client) return res.status(404).json({ error: "Client not found" });
     if (!auth || !client.gsc_site_url) return res.json({ pages: [], queries: [], countries: [], sources: [] });
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     try {
       const parseUTC = (dStr) => {
         const parts = dStr.split("-").map(Number);
@@ -1830,7 +2624,7 @@ app.get("/api/clients/:clientId/performance-trend", async (req, res) => {
     const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
     const { data: client } = await supabase2.from("clients").select("*").eq("id", clientId).single();
     if (!auth || !client?.gsc_site_url) return res.json([]);
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     try {
       const { response } = await fetchGscWithSelfHeal(
         searchconsole,
@@ -1871,7 +2665,7 @@ app.post("/api/imports/run-all", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-app.post("/api/auth/google/disconnect", async (req, res) => {
+app.post("/api/auth/google/disconnect", requireAdmin, async (req, res) => {
   try {
     const { error } = await supabase2.from("google_tokens").delete().eq("id", "central_account");
     if (error) throw error;
@@ -1917,7 +2711,7 @@ app.get("/api/auth/google/status", async (req, res) => {
 app.get("/api/auth/google/list-sites", async (req, res) => {
   try {
     const auth = await getAuthenticatedClient(req);
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     const response = await searchconsole.sites.list({});
     res.json({ sites: response.data.siteEntry || [] });
   } catch (error) {
@@ -2326,7 +3120,7 @@ function generateSimulatedAnalysis(clientName, current, previous, analysisType) 
     }
   };
 }
-app.get("/api/admin/keys", async (req, res) => {
+app.get("/api/admin/keys", requireAdmin, async (req, res) => {
   try {
     const { data, error } = await supabase2.from("api_keys").select("*");
     if (error) {
@@ -2353,7 +3147,7 @@ app.get("/api/admin/keys", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-app.post("/api/admin/keys", async (req, res) => {
+app.post("/api/admin/keys", requireAdmin, async (req, res) => {
   const { id, key_value } = req.body;
   if (!id || !key_value) {
     return res.status(400).json({ error: "id and key_value are required" });
@@ -2380,7 +3174,7 @@ app.get("/api/public/logo", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-app.post("/api/admin/sync-sheets", async (req, res) => {
+app.post("/api/admin/sync-sheets", requireAuth, async (req, res) => {
   const { weekStart, weekEnd, rows } = req.body;
   if (!weekStart || !weekEnd || !rows || !Array.isArray(rows)) {
     return res.status(400).json({ error: "weekStart, weekEnd, and rows are required" });
@@ -2397,7 +3191,7 @@ app.post("/api/admin/sync-sheets", async (req, res) => {
       if (match) sheetId = match[1];
     }
     const auth = await getAuthenticatedClient(req);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = google2.sheets({ version: "v4", auth });
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
     const sheetNames = spreadsheet.data.sheets?.map((s) => s.properties?.title).filter(Boolean) || [];
     const addSheetRequests = [];
@@ -2994,8 +3788,8 @@ app.post("/api/ai/analyze", async (req, res) => {
       console.warn("[CACHE CHECK ERROR] Failed to query or parse cached audit:", cacheErr);
     }
     const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
-    const analytics = google.analyticsdata({ version: "v1beta", auth });
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const analytics = google2.analyticsdata({ version: "v1beta", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     const parseUTC = (dStr) => {
       const parts = dStr.split("-").map(Number);
       return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
@@ -3676,8 +4470,8 @@ app.post("/api/ai/lead-playbook", async (req, res) => {
       console.warn("[CACHE CHECK ERROR] Failed to query or parse cached lead playbook:", cacheErr);
     }
     const auth = await getAuthenticatedClient(req, clientId).catch(() => null);
-    const analytics = google.analyticsdata({ version: "v1beta", auth });
-    const searchconsole = google.searchconsole({ version: "v1", auth });
+    const analytics = google2.analyticsdata({ version: "v1beta", auth });
+    const searchconsole = google2.searchconsole({ version: "v1", auth });
     const parseUTC = (dStr) => {
       const parts = dStr.split("-").map(Number);
       return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
@@ -4425,21 +5219,27 @@ var executeDashboardCacheSync = async (targetMode) => {
       return currentAuth;
     };
     const fetchGscLive = async (client, startDate, endDate) => {
-      let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0 };
+      let gsc = { clicks: 0, impressions: 0, ctr: 0, position: 0, top3: 0, top10: 0, hasError: false };
       if (!client.gsc_site_url) return gsc;
       try {
         const currentAuth = await getClientAuth(client);
-        if (!currentAuth) return gsc;
-        const searchconsole = google.searchconsole({ version: "v1", auth: currentAuth });
+        if (!currentAuth) {
+          gsc.hasError = true;
+          return gsc;
+        }
+        const searchconsole = google2.searchconsole({ version: "v1", auth: currentAuth });
         const { response: totalsRes } = await fetchGscWithSelfHeal(
           searchconsole,
           client.id,
           client.name,
           client.gsc_site_url,
-          async (url) => searchconsole.searchanalytics.query({
-            siteUrl: url,
-            requestBody: { startDate, endDate, dimensions: [], dataState: "all" }
-          })
+          async (url) => withGoogleRetry(
+            () => searchconsole.searchanalytics.query({
+              siteUrl: url,
+              requestBody: { startDate, endDate, dimensions: [], dataState: "all" }
+            }),
+            { label: `GSC Totals (${client.name})` }
+          )
         );
         if (totalsRes?.data?.rows?.[0]) {
           const row = totalsRes.data.rows[0];
@@ -4453,10 +5253,13 @@ var executeDashboardCacheSync = async (targetMode) => {
           client.id,
           client.name,
           client.gsc_site_url,
-          async (url) => searchconsole.searchanalytics.query({
-            siteUrl: url,
-            requestBody: { startDate, endDate, dimensions: ["query"], rowLimit: 1e3, dataState: "all" }
-          })
+          async (url) => withGoogleRetry(
+            () => searchconsole.searchanalytics.query({
+              siteUrl: url,
+              requestBody: { startDate, endDate, dimensions: ["query"], rowLimit: 1e3, dataState: "all" }
+            }),
+            { label: `GSC Queries (${client.name})` }
+          )
         );
         const qRows = queriesRes?.data?.rows || [];
         for (const r of qRows) {
@@ -4464,28 +5267,35 @@ var executeDashboardCacheSync = async (targetMode) => {
           if (r.position <= 10) gsc.top10++;
         }
       } catch (e) {
+        gsc.hasError = true;
         console.error("GSC error for", client.name, e.message);
       }
       return gsc;
     };
     const fetchGa4Live = async (client, startDate, endDate) => {
-      let ga4 = { traffic: 0, users: 0, organic_traffic: 0, organic_users: 0, phone_calls: 0, leads_total: 0, leads_legit: 0 };
+      let ga4 = { traffic: 0, users: 0, organic_traffic: 0, organic_users: 0, phone_calls: 0, leads_total: 0, leads_legit: 0, hasError: false };
       if (!client.ga4_property_id) return ga4;
       try {
         const currentAuth = await getClientAuth(client);
-        if (!currentAuth) return ga4;
-        const analytics = google.analyticsdata({ version: "v1beta", auth: currentAuth });
-        const res = await analytics.properties.runReport({
-          property: `properties/${client.ga4_property_id}`,
-          requestBody: {
-            dateRanges: [{ startDate, endDate }],
-            dimensions: [{ name: "sessionDefaultChannelGroup" }],
-            metrics: [
-              { name: "sessions" },
-              { name: "totalUsers" }
-            ]
-          }
-        });
+        if (!currentAuth) {
+          ga4.hasError = true;
+          return ga4;
+        }
+        const analytics = google2.analyticsdata({ version: "v1beta", auth: currentAuth });
+        const res = await withGoogleRetry(
+          () => analytics.properties.runReport({
+            property: `properties/${client.ga4_property_id}`,
+            requestBody: {
+              dateRanges: [{ startDate, endDate }],
+              dimensions: [{ name: "sessionDefaultChannelGroup" }],
+              metrics: [
+                { name: "sessions" },
+                { name: "totalUsers" }
+              ]
+            }
+          }),
+          { label: `GA4 Traffic (${client.name})` }
+        );
         const rows = res.data.rows || [];
         for (const r of rows) {
           const ch = (r.dimensionValues?.[0]?.value || "").toLowerCase();
@@ -4498,16 +5308,20 @@ var executeDashboardCacheSync = async (targetMode) => {
             ga4.organic_users += usr;
           }
         }
-        const eventsRes = await analytics.properties.runReport({
-          property: `properties/${client.ga4_property_id}`,
-          requestBody: {
-            dateRanges: [{ startDate, endDate }],
-            dimensions: [{ name: "eventName" }],
-            metrics: [{ name: "eventCount" }]
-          }
-        });
+        const eventsRes = await withGoogleRetry(
+          () => analytics.properties.runReport({
+            property: `properties/${client.ga4_property_id}`,
+            requestBody: {
+              dateRanges: [{ startDate, endDate }],
+              dimensions: [{ name: "eventName" }],
+              metrics: [{ name: "eventCount" }]
+            }
+          }),
+          { label: `GA4 Events (${client.name})` }
+        );
         ga4.phone_calls = extractPhoneCallsFromEvents(eventsRes.data.rows || []);
       } catch (e) {
+        ga4.hasError = true;
         console.error("GA4 error for", client.name, e.message);
       }
       return ga4;
@@ -4600,6 +5414,50 @@ var executeDashboardCacheSync = async (targetMode) => {
           } else if (mode === "3months") {
             tableName = "dashboard_cache_3m";
             conflictTarget = "client_id";
+          }
+          if (curGsc.hasError || prevGsc.hasError || curGa4.hasError || prevGa4.hasError) {
+            try {
+              let existingQuery = supabase2.from(tableName).select("current_data, prev_data").eq("client_id", client.id);
+              if (mode === "rolling") existingQuery = existingQuery.eq("view_mode", "rolling");
+              const { data: existingCache } = await existingQuery.maybeSingle();
+              if (existingCache) {
+                const exCur = existingCache.current_data || {};
+                const exPrev = existingCache.prev_data || {};
+                if (curGsc.hasError && exCur.gsc_clicks !== void 0) {
+                  current_data.gsc_clicks = exCur.gsc_clicks;
+                  current_data.gsc_impressions = exCur.gsc_impressions;
+                  current_data.gsc_position = exCur.gsc_position;
+                  current_data.gsc_ctr = exCur.gsc_ctr;
+                  current_data.gsc_top3 = exCur.gsc_top3;
+                  current_data.gsc_top10 = exCur.gsc_top10;
+                }
+                if (prevGsc.hasError && exPrev.gsc_clicks !== void 0) {
+                  prev_data.gsc_clicks = exPrev.gsc_clicks;
+                  prev_data.gsc_impressions = exPrev.gsc_impressions;
+                  prev_data.gsc_position = exPrev.gsc_position;
+                  prev_data.gsc_ctr = exPrev.gsc_ctr;
+                  prev_data.gsc_top3 = exPrev.gsc_top3;
+                  prev_data.gsc_top10 = exPrev.gsc_top10;
+                }
+                if (curGa4.hasError && exCur.ga4_traffic !== void 0) {
+                  current_data.ga4_traffic = exCur.ga4_traffic;
+                  current_data.ga4_users = exCur.ga4_users ?? current_data.ga4_users;
+                  current_data.ga4_organic_traffic = exCur.ga4_organic_traffic;
+                  current_data.ga4_organic_users = exCur.ga4_organic_users ?? current_data.ga4_organic_users;
+                  current_data.phone_calls = exCur.phone_calls ?? current_data.phone_calls;
+                }
+                if (prevGa4.hasError && exPrev.ga4_traffic !== void 0) {
+                  prev_data.ga4_traffic = exPrev.ga4_traffic;
+                  prev_data.ga4_users = exPrev.ga4_users ?? prev_data.ga4_users;
+                  prev_data.ga4_organic_traffic = exPrev.ga4_organic_traffic;
+                  prev_data.ga4_organic_users = exPrev.ga4_organic_users ?? prev_data.ga4_organic_users;
+                  prev_data.phone_calls = exPrev.phone_calls ?? prev_data.phone_calls;
+                }
+                console.warn(`[CACHE SYNC FAIL-SAFE] Preserved existing cached values for ${client.name} (${mode}) due to partial API failure.`);
+              }
+            } catch (failSafeErr) {
+              console.warn(`[CACHE SYNC FAIL-SAFE] Lookup failed for ${client.name}:`, failSafeErr.message);
+            }
           }
           const { error: upsertErr } = await supabase2.from(tableName).upsert(upsertPayload, { onConflict: conflictTarget });
           if (upsertErr) console.error("Upsert err", upsertErr);
@@ -4698,7 +5556,7 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
       if (clientAuth) {
         if (client.gsc_site_url) {
           try {
-            const searchconsole = google.searchconsole({ version: "v1", auth: clientAuth });
+            const searchconsole = google2.searchconsole({ version: "v1", auth: clientAuth });
             const { response: summaryRes } = await fetchGscWithSelfHeal(
               searchconsole,
               client.id,
@@ -4746,7 +5604,7 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
         }
         if (client.ga4_property_id) {
           try {
-            const analytics = google.analyticsdata({ version: "v1beta", auth: clientAuth });
+            const analytics = google2.analyticsdata({ version: "v1beta", auth: clientAuth });
             const ga4Res = await analytics.properties.runReport({
               property: `properties/${client.ga4_property_id}`,
               requestBody: {
@@ -4863,7 +5721,7 @@ app.get("/api/cron/sync-monthly-cache", async (req, res) => {
     res.status(500).json({ error: e.message || String(e) });
   }
 });
-app.post("/api/admin/seed", async (req, res) => {
+app.post("/api/admin/seed", requireAdmin, async (req, res) => {
   console.log("Seed request received. Targeting URL (redacted):", supabaseUrl2.substring(0, 15) + "...");
   try {
     const { data: { users: testUsers }, error: testError } = await supabase2.auth.admin.listUsers();
@@ -5225,371 +6083,7 @@ app.get("/api/clients/:clientId/sync-ahrefs-data", async (req, res) => {
     res.status(500).json({ error: error.message || String(error) });
   }
 });
-app.get("/api/clients/:clientId/ads-growth", async (req, res) => {
-  const { clientId } = req.params;
-  try {
-    const { data, error } = await supabase2.from("weekly_ads_growth").select("*").eq("client_id", clientId).order("week_start_date", { ascending: false });
-    if (error) throw error;
-    res.json(data || []);
-  } catch (error) {
-    console.error("[ADS_GROWTH] Error fetching ads data:", error);
-    res.status(500).json({ error: error.message || String(error) });
-  }
-});
-app.post("/api/clients/:clientId/ads-growth", async (req, res) => {
-  const { clientId } = req.params;
-  const payload = req.body;
-  try {
-    const { data, error } = await supabase2.from("weekly_ads_growth").upsert({
-      ...payload,
-      client_id: clientId,
-      updated_at: (/* @__PURE__ */ new Date()).toISOString()
-    }, { onConflict: "client_id,week_start_date" }).select().single();
-    if (error) throw error;
-    res.json({ success: true, data });
-  } catch (error) {
-    console.error("[ADS_GROWTH] Error saving ads data:", error);
-    res.status(500).json({ error: error.message || String(error) });
-  }
-});
-app.post("/api/clients/:clientId/sync-ads-growth", async (req, res) => {
-  const { clientId } = req.params;
-  const { weekStart } = req.body;
-  if (!weekStart) return res.status(400).json({ error: "weekStart is required" });
-  console.log(`[ADS_SYNC_API] Triggered sync request for clientId: "${clientId}", weekStart: "${weekStart}"`);
-  try {
-    const { data: client, error: clientErr } = await supabase2.from("clients").select("*").eq("id", clientId).single();
-    if (clientErr || !client) {
-      console.error(`[ADS_SYNC_API] Client not found in database: "${clientId}"`);
-      return res.status(404).json({ error: "Client not found" });
-    }
-    console.log(`[ADS_SYNC_API] Found client: "${client.name}" (GA4 ID: "${client.ga4_property_id}")`);
-    const { data: weeklyData } = await supabase2.from("weekly_data").select("*").eq("client_id", clientId).eq("week_start_date", weekStart).maybeSingle();
-    let gSpend = 0;
-    const gClicks = 0;
-    let gLeads = 0;
-    let gCtr = 0;
-    let gRoas = 0;
-    let gScore = 0;
-    let gCampaigns = [];
-    let mSpend = 0;
-    let mReach = 0;
-    let mLeads = 0;
-    let mCtr = 0;
-    let mRoas = 0;
-    let mFreq = 0;
-    let webSessions = weeklyData?.ga4_traffic ? Number(weeklyData.ga4_traffic) : 0;
-    let bounceRate = 0;
-    let timeOnSite = "";
-    let topPage = "";
-    const abTests = 0;
-    const lpLive = 0;
-    if (client.ga4_property_id) {
-      try {
-        let currentAuth = null;
-        const { data: creds } = await supabase2.from("google_credentials").select("tokens").eq("client_id", clientId).maybeSingle();
-        if (creds && creds.tokens) {
-          console.log(`[ADS_SYNC_API] Found client-specific google credentials for: "${client.name}"`);
-          const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
-          oAuth2Client.setCredentials(creds.tokens);
-          currentAuth = oAuth2Client;
-        } else {
-          console.log(`[ADS_SYNC_API] No client-specific credentials. Fetching central authenticated client...`);
-          currentAuth = await getAuthenticatedClient(req).catch(() => null);
-        }
-        if (currentAuth) {
-          console.log(`[ADS_SYNC_API] Authenticated client successfully instantiated. Querying GA4 property report...`);
-          const analytics = google.analyticsdata({ version: "v1beta", auth: currentAuth });
-          const startDate = weekStart;
-          const start = new Date(weekStart);
-          const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1e3);
-          const endDate = end.toISOString().split("T")[0];
-          try {
-            const report = await analytics.properties.runReport({
-              property: `properties/${client.ga4_property_id}`,
-              requestBody: {
-                dateRanges: [{ startDate, endDate }],
-                metrics: [
-                  { name: "sessions" },
-                  { name: "bounceRate" },
-                  { name: "averageSessionDuration" },
-                  { name: "conversions" }
-                ]
-              }
-            });
-            console.log(`[ADS_SYNC_API] GA4 traffic report rows fetched:`, JSON.stringify(report.data.rows, null, 2));
-            const metricValues = report.data.rows?.[0]?.metricValues;
-            if (metricValues) {
-              webSessions = parseInt(metricValues[0]?.value || "0") || webSessions;
-              bounceRate = parseFloat((parseFloat(metricValues[1]?.value || "0") * 100).toFixed(1)) || 0;
-              const durationSec = parseFloat(metricValues[2]?.value || "0") || 0;
-              if (durationSec > 0) {
-                const mins = Math.floor(durationSec / 60);
-                const secs = Math.floor(durationSec % 60);
-                timeOnSite = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-              }
-              gLeads = parseInt(metricValues[3]?.value || "0") || 0;
-            }
-          } catch (trafficErr) {
-            console.error("[ADS_SYNC_API] Failed to fetch GA4 traffic report:", trafficErr.message);
-          }
-          try {
-            const adsReport = await analytics.properties.runReport({
-              property: `properties/${client.ga4_property_id}`,
-              requestBody: {
-                dateRanges: [{ startDate, endDate }],
-                dimensions: [{ name: "sessionCampaignName" }],
-                metrics: [
-                  { name: "advertiserAdCost" },
-                  { name: "advertiserAdClicks" },
-                  { name: "advertiserAdImpressions" },
-                  { name: "conversions" }
-                ]
-              }
-            });
-            console.log(`[ADS_SYNC_API] GA4 ads report rows fetched:`, JSON.stringify(adsReport.data.rows, null, 2));
-            if (adsReport.data.rows && adsReport.data.rows.length > 0) {
-              let totalCost = 0;
-              let totalClicks = 0;
-              let totalImps = 0;
-              let totalConversions = 0;
-              const campaignsList = [];
-              for (const row of adsReport.data.rows) {
-                const cName = row.dimensionValues?.[0]?.value || "";
-                if (cName === "(not set)" || cName === "(direct)" || cName === "(organic)" || cName === "(referral)") continue;
-                const cCost = parseFloat(row.metricValues?.[0]?.value || "0");
-                const cClicks = parseInt(row.metricValues?.[1]?.value || "0");
-                const cImps = parseInt(row.metricValues?.[2]?.value || "0");
-                const cConvs = parseInt(row.metricValues?.[3]?.value || "0");
-                if (cCost > 0 || cClicks > 0 || cImps > 0 || cConvs > 0) {
-                  campaignsList.push({
-                    campaignName: cName,
-                    cost: cCost,
-                    clicks: cClicks,
-                    impressions: cImps,
-                    conversions: cConvs,
-                    ctr: cImps > 0 ? parseFloat((cClicks / cImps * 100).toFixed(2)) : 0,
-                    cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
-                  });
-                }
-                totalCost += cCost;
-                totalClicks += cClicks;
-                totalImps += cImps;
-                totalConversions += cConvs;
-              }
-              gSpend = totalCost;
-              gCtr = totalImps > 0 ? parseFloat((totalClicks / totalImps * 100).toFixed(2)) : 0;
-              gLeads = totalConversions;
-              gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
-              gScore = 8;
-              gCampaigns = campaignsList;
-            }
-          } catch (adsError) {
-            console.error("[ADS_SYNC_API] Failed to fetch separate Google Ads report:", adsError.message);
-          }
-          if (client.google_ads_customer_id && process.env.GOOGLE_ADS_DEVELOPER_TOKEN) {
-            try {
-              const cleanCustomerId = client.google_ads_customer_id.replace(/-/g, "").trim();
-              const tokens = await currentAuth.getAccessToken();
-              const accessToken = typeof tokens === "string" ? tokens : tokens?.token;
-              if (accessToken) {
-                console.log(`[ADS_SYNC_API] Fetching Direct Google Ads API for customer: "${cleanCustomerId}"...`);
-                const adsUrl = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:searchStream`;
-                const adsQuery = {
-                  query: `SELECT campaign.id, campaign.name, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'`
-                };
-                const adsRes = await fetch(adsUrl, {
-                  method: "POST",
-                  headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify(adsQuery)
-                });
-                if (adsRes.ok) {
-                  const adsStreamData = await adsRes.json();
-                  console.log(`[ADS_SYNC_API] Direct Google Ads API response received!`);
-                  let directCost = 0;
-                  let directClicks = 0;
-                  let directImps = 0;
-                  let directConvs = 0;
-                  const directCampaigns = [];
-                  if (Array.isArray(adsStreamData)) {
-                    for (const batch of adsStreamData) {
-                      for (const row of batch.results || []) {
-                        const cName = row.campaign?.name || "Campaign";
-                        const cCost = parseInt(row.metrics?.costMicros || "0") / 1e6;
-                        const cClicks = parseInt(row.metrics?.clicks || "0");
-                        const cImps = parseInt(row.metrics?.impressions || "0");
-                        const cConvs = parseInt(row.metrics?.conversions || "0");
-                        if (cCost > 0 || cClicks > 0 || cImps > 0 || cConvs > 0) {
-                          directCampaigns.push({
-                            campaignName: cName,
-                            cost: parseFloat(cCost.toFixed(2)),
-                            clicks: cClicks,
-                            impressions: cImps,
-                            conversions: cConvs,
-                            ctr: cImps > 0 ? parseFloat((cClicks / cImps * 100).toFixed(2)) : 0,
-                            cpc: cClicks > 0 ? parseFloat((cCost / cClicks).toFixed(2)) : 0
-                          });
-                        }
-                        directCost += cCost;
-                        directClicks += cClicks;
-                        directImps += cImps;
-                        directConvs += cConvs;
-                      }
-                    }
-                  }
-                  if (directCost > 0 || directClicks > 0 || directImps > 0 || directConvs > 0) {
-                    gSpend = parseFloat(directCost.toFixed(2));
-                    gCtr = directImps > 0 ? parseFloat((directClicks / directImps * 100).toFixed(2)) : 0;
-                    gLeads = directConvs;
-                    gRoas = gSpend > 0 ? parseFloat((gLeads / gSpend).toFixed(2)) : 0;
-                    gScore = 9;
-                    gCampaigns = directCampaigns;
-                    console.log(`[ADS_SYNC_API] Applied Direct Google Ads API metrics: Spend=$${gSpend}, Clicks=${directClicks}, Conversions=${gLeads}`);
-                  }
-                } else {
-                  const errTxt = await adsRes.text();
-                  console.error(`[ADS_SYNC_API] Direct Google Ads API returned error status ${adsRes.status}:`, errTxt);
-                }
-              }
-            } catch (directAdsErr) {
-              console.error("[ADS_SYNC_API] Failed to fetch Direct Google Ads API:", directAdsErr.message);
-            }
-          }
-          let metaAccessToken = process.env.META_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || "";
-          if (!metaAccessToken) {
-            const { data: mKeyRow } = await supabase2.from("api_keys").select("key_value").eq("id", "meta_access_token").maybeSingle();
-            if (mKeyRow?.key_value) metaAccessToken = mKeyRow.key_value;
-          }
-          if (client.meta_ad_account_id && metaAccessToken) {
-            try {
-              let cleanMetaAccountId = client.meta_ad_account_id.trim();
-              if (!cleanMetaAccountId.startsWith("act_")) {
-                cleanMetaAccountId = `act_${cleanMetaAccountId}`;
-              }
-              console.log(`[ADS_SYNC_API] Fetching Meta Marketing API for account: "${cleanMetaAccountId}" (${startDate} to ${endDate})...`);
-              const metaUrl = `https://graph.facebook.com/v20.0/${cleanMetaAccountId}/insights?` + new URLSearchParams({
-                access_token: metaAccessToken,
-                time_range: JSON.stringify({ since: startDate, until: endDate }),
-                fields: "spend,impressions,reach,clicks,ctr,actions,cost_per_action_type,frequency"
-              }).toString();
-              const metaRes = await fetch(metaUrl);
-              if (metaRes.ok) {
-                const metaData = await metaRes.json();
-                console.log(`[ADS_SYNC_API] Meta Marketing API response received!`);
-                const insights = metaData.data?.[0];
-                if (insights) {
-                  mSpend = parseFloat(parseFloat(insights.spend || "0").toFixed(2));
-                  mReach = parseInt(insights.reach || insights.impressions || "0");
-                  mCtr = parseFloat(parseFloat(insights.ctr || "0").toFixed(2));
-                  mFreq = parseFloat(parseFloat(insights.frequency || "0").toFixed(2));
-                  let metaLeadsCount = 0;
-                  if (Array.isArray(insights.actions)) {
-                    const primaryLeadAction = insights.actions.find((act) => act.action_type === "lead");
-                    if (primaryLeadAction) {
-                      metaLeadsCount = parseInt(primaryLeadAction.value || "0");
-                    } else {
-                      const fallbackAction = insights.actions.find(
-                        (act) => act.action_type === "offsite_conversion.fb_pixel_lead" || act.action_type === "onsite_conversion.lead_grouped"
-                      );
-                      if (fallbackAction) {
-                        metaLeadsCount = parseInt(fallbackAction.value || "0");
-                      }
-                    }
-                  }
-                  mLeads = metaLeadsCount;
-                  mRoas = 0;
-                }
-              } else {
-                const metaErrTxt = await metaRes.text();
-                console.error(`[ADS_SYNC_API] Meta Marketing API error status ${metaRes.status}:`, metaErrTxt);
-              }
-            } catch (metaErr) {
-              console.error("[ADS_SYNC_API] Failed to fetch Meta Marketing API:", metaErr.message);
-            }
-          }
-          try {
-            const pagesReport = await analytics.properties.runReport({
-              property: `properties/${client.ga4_property_id}`,
-              requestBody: {
-                dateRanges: [{ startDate, endDate }],
-                dimensions: [{ name: "pagePath" }],
-                metrics: [{ name: "conversions" }],
-                orderBys: [{ metric: { metricName: "conversions" }, desc: true }],
-                limit: "1"
-              }
-            });
-            const topRow = pagesReport.data.rows?.[0];
-            if (topRow) {
-              topPage = topRow.dimensionValues?.[0]?.value || "";
-            }
-          } catch (pagesErr) {
-            console.error("[ADS_SYNC_API] Failed to fetch GA4 pages report:", pagesErr.message);
-          }
-        }
-      } catch (e) {
-        console.error("[ADS_GROWTH] General error fetching GA4 live stats:", e.message);
-      }
-    }
-    const followers = 0;
-    const socialImps = 0;
-    const socialEng = 0;
-    const socialPosts = 0;
-    const socialReach = 0;
-    const topPlatform = "";
-    const blogs = 0;
-    const blogQual = 0;
-    const backlinks = 0;
-    const socTotal = 0;
-    const creatives = 0;
-    const emails = 0;
-    const seoLeads = weeklyData?.leads_legit ? Number(weeklyData.leads_legit) : 0;
-    const upsertRow = {
-      client_id: clientId,
-      week_start_date: weekStart,
-      google_ads_spend: gSpend,
-      google_ads_conversions: gLeads,
-      google_ads_roas: gRoas,
-      google_ads_ctr: gCtr,
-      google_ads_quality_score: gScore,
-      google_ads_campaigns: gCampaigns,
-      meta_spend: mSpend,
-      meta_reach: mReach,
-      meta_leads: mLeads,
-      meta_roas: mRoas,
-      meta_ctr: mCtr,
-      meta_frequency: mFreq,
-      website_sessions: webSessions,
-      bounce_rate: bounceRate,
-      avg_time_on_site: timeOnSite,
-      top_converting_page: topPage,
-      active_ab_tests: abTests,
-      landing_pages_live: lpLive,
-      followers_total: followers,
-      social_impressions: socialImps,
-      engagement_rate: socialEng,
-      social_posts_published: socialPosts,
-      organic_social_reach: socialReach,
-      top_platform: topPlatform,
-      blogs_written: blogs,
-      avg_blog_quality: blogQual,
-      backlinks_created: backlinks,
-      social_posts_content_total: socTotal,
-      creatives_produced: creatives,
-      emails_automation: emails,
-      seo_organic_leads: seoLeads
-    };
-    const { data, error } = await supabase2.from("weekly_ads_growth").upsert(upsertRow, { onConflict: "client_id,week_start_date" }).select().single();
-    if (error) throw error;
-    res.json({ success: true, data });
-  } catch (error) {
-    console.error("[ADS_GROWTH] Sync simulation error:", error);
-    res.status(500).json({ error: error.message || String(error) });
-  }
-});
+registerAdsRoutes(app, { supabase: supabase2, getAuthenticatedClient });
 async function getLiveSiteMetadata(url) {
   try {
     const cacheBustUrl = url.includes("?") ? `${url}&nocache=${Date.now()}` : `${url}?nocache=${Date.now()}`;
@@ -5728,6 +6222,8 @@ var REVERSE_LEAD_SHIELD_MAP = {
   "ec64c5bc-57df-4c99-a07f-f5f9e243fcfe": "multipole",
   "77d52cff-404f-44bd-a861-76d981f4e01b": "sydney_decking_solutions"
 };
+var leadShieldCache = /* @__PURE__ */ new Map();
+var LEAD_SHIELD_CACHE_TTL_MS = 60 * 1e3;
 async function fetchLeadShieldStats(startDate, endDate, clientIdFilter) {
   let url = "https://lead-shield.vercel.app/api/leads/stats?api_key=shield_lead_key_2026_secure";
   let targetSlug = clientIdFilter;
@@ -5737,16 +6233,23 @@ async function fetchLeadShieldStats(startDate, endDate, clientIdFilter) {
   if (targetSlug) url += `&client_id=${encodeURIComponent(targetSlug)}`;
   if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
   if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+  const cached = leadShieldCache.get(url);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.leads;
+  }
   const res = await fetch(url, { headers: { "Accept": "application/json" } });
   if (!res.ok) {
     throw new Error(`Lead Shield API error: status ${res.status}`);
   }
   const data = await res.json();
-  return Array.isArray(data.leads) ? data.leads : [];
+  const leads = Array.isArray(data.leads) ? data.leads : [];
+  leadShieldCache.set(url, { expiresAt: Date.now() + LEAD_SHIELD_CACHE_TTL_MS, leads });
+  return leads;
 }
 var leadSseClients = /* @__PURE__ */ new Set();
 var recentLeadsNotificationBuffer = [];
 function broadcastLeadNotification(leadData) {
+  leadShieldCache.clear();
   recentLeadsNotificationBuffer.unshift(leadData);
   if (recentLeadsNotificationBuffer.length > 50) recentLeadsNotificationBuffer.pop();
   const payload = `data: ${JSON.stringify(leadData)}
@@ -5788,6 +6291,7 @@ app.get("/api/leads/recent", async (req, res) => {
     const { data: activeLeadClients } = await supabase2.from("clients").select("id, name, lead_api_url").not("lead_api_url", "is", null);
     const activeMap = new Map((activeLeadClients || []).map((c) => [c.id, c.name]));
     const formattedLeadShield = rawLeads.filter((l) => {
+      if (isInternalTestLead(l)) return false;
       const shieldId = (l.client_id || "").toLowerCase().trim();
       const mappedId = LEAD_SHIELD_CLIENT_MAP[shieldId];
       return mappedId && activeMap.has(mappedId) && (l.status || "").toUpperCase() === "GENUINE";
@@ -5812,7 +6316,7 @@ app.get("/api/leads/recent", async (req, res) => {
     try {
       const { data: dbLeads, error: dbErr } = await supabase2.from("client_leads").select("*").eq("status", "GENUINE").order("created_at", { ascending: false }).limit(30);
       if (!dbErr && Array.isArray(dbLeads)) {
-        formattedDbLeads = dbLeads.map((dl) => {
+        formattedDbLeads = dbLeads.filter((dl) => !isInternalTestLead(dl)).map((dl) => {
           const formData = dl.form_data?.body || dl.form_data || {};
           return {
             id: String(dl.id || Math.random()),
@@ -5831,7 +6335,11 @@ app.get("/api/leads/recent", async (req, res) => {
     } catch (e) {
       console.warn("[LEADS RECENT] Warning reading client_leads for recent list:", e);
     }
-    const combined = [...formattedLeadShield, ...formattedDbLeads].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 25);
+    const dedupedDbLeads = formattedDbLeads.filter((dl) => {
+      const dlMs = new Date(dl.createdAt).getTime();
+      return !formattedLeadShield.some((ls) => ls.clientId === dl.clientId && Math.abs(new Date(ls.createdAt).getTime() - dlMs) <= 5e3);
+    });
+    const combined = [...formattedLeadShield, ...dedupedDbLeads].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 25);
     res.json({ success: true, leads: combined });
   } catch (err) {
     console.error("Error fetching recent leads:", err);
@@ -5844,8 +6352,14 @@ app.get("/api/leads/stats-by-range", async (req, res) => {
     const rawLeads = await fetchLeadShieldStats(startDate, endDate, clientId);
     const { data: activeLeadClients } = await supabase2.from("clients").select("id, lead_api_url").not("lead_api_url", "is", null);
     const activeClientIds = new Set((activeLeadClients || []).map((c) => c.id));
+    const leadShieldManagedClients = new Set(
+      (activeLeadClients || []).filter((c) => String(c.lead_api_url || "").toLowerCase().includes("lead-shield")).map((c) => c.id)
+    );
     const statsByClient = {};
+    const lsSeenIds = {};
+    const lsSeenTimes = {};
     for (const lead of rawLeads) {
+      if (isInternalTestLead(lead)) continue;
       const shieldId = (lead.client_id || "").toLowerCase().trim();
       const mappedClientId = LEAD_SHIELD_CLIENT_MAP[shieldId] || shieldId;
       if (!clientId && !activeClientIds.has(mappedClientId)) {
@@ -5853,6 +6367,15 @@ app.get("/api/leads/stats-by-range", async (req, res) => {
       }
       if (!statsByClient[mappedClientId]) {
         statsByClient[mappedClientId] = { genuine: 0, spam: 0, total: 0, leads: [] };
+      }
+      if (!lsSeenIds[mappedClientId]) lsSeenIds[mappedClientId] = /* @__PURE__ */ new Set();
+      if (!lsSeenTimes[mappedClientId]) lsSeenTimes[mappedClientId] = [];
+      if (lead.id !== void 0 && lead.id !== null) {
+        lsSeenIds[mappedClientId].add(String(lead.id));
+      }
+      const leadMs = lead.created_at ? new Date(lead.created_at).getTime() : NaN;
+      if (!isNaN(leadMs)) {
+        lsSeenTimes[mappedClientId].push(leadMs);
       }
       statsByClient[mappedClientId].total += 1;
       const isGenuine = (lead.status || "").toUpperCase() === "GENUINE";
@@ -5879,8 +6402,16 @@ app.get("/api/leads/stats-by-range", async (req, res) => {
       const { data: dbLeads, error: dbLeadsErr } = await clientLeadsQuery;
       if (!dbLeadsErr && Array.isArray(dbLeads)) {
         for (const dl of dbLeads) {
+          if (isInternalTestLead(dl)) continue;
           const cId = dl.client_id;
           if (!cId || !clientId && !activeClientIds.has(cId)) continue;
+          const dlMs = dl.created_at ? new Date(dl.created_at).getTime() : NaN;
+          const hasMatchingLsId = dl.lead_shield_lead_id && lsSeenIds[cId]?.has(String(dl.lead_shield_lead_id));
+          const hasMatchingLsTime = !isNaN(dlMs) && (lsSeenTimes[cId] || []).some((t) => Math.abs(t - dlMs) <= 5e3);
+          const isEmptyFormPayload = !dl.form_data || Object.keys(dl.form_data).length === 0;
+          if (hasMatchingLsId || hasMatchingLsTime || leadShieldManagedClients.has(cId) && isEmptyFormPayload) {
+            continue;
+          }
           if (!statsByClient[cId]) {
             statsByClient[cId] = { genuine: 0, spam: 0, total: 0, leads: [] };
           }
@@ -6960,181 +7491,11 @@ async function executeStrategicAiModel(prompt, requestedModel, responseFormat = 
   }
   throw new Error(`Configured AI model "${targetModel}" could not complete the request. Please verify API keys in Global Settings.`);
 }
-app.get("/api/strategic-reviews/all", async (req, res) => {
-  try {
-    const { data: clients, error: clientErr } = await supabase2.from("clients").select("id, name, short_code, project_owner_name, project_owner_code, lead_target_monthly, target_dr, gsc_site_url, wordpress_url, api_import_enabled").order("name");
-    if (clientErr) throw clientErr;
-    const activeClients = (clients || []).filter((c) => c.api_import_enabled !== false);
-    let dbReviews = [];
-    try {
-      const { data } = await supabase2.from("strategic_reviews").select("*");
-      if (data) dbReviews = data;
-    } catch {
-    }
-    const reviews = activeClients.map((c) => {
-      const dbRow = dbReviews.find((r) => r.client_id === c.id);
-      const memRow = strategicReviewMemoryCache.get(c.id);
-      const item = dbRow || memRow;
-      if (item) {
-        return {
-          id: item.id || c.id,
-          clientId: c.id,
-          clientName: c.name,
-          shortCode: c.short_code,
-          projectOwner: c.project_owner_name || "Melaka",
-          projectOwnerCode: c.project_owner_code || "MW",
-          siteUrl: item.site_url || extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
-          periodStart: item.period_start || format(/* @__PURE__ */ new Date(), "yyyy-MM-01"),
-          periodEnd: item.period_end || format(/* @__PURE__ */ new Date(), "yyyy-MM-dd"),
-          clicks: item.clicks ?? 0,
-          phones: item.phones ?? 0,
-          leadsActual: item.leads_actual ?? 0,
-          leadsTarget: item.leads_target ?? (c.lead_target_monthly ? Math.round(c.lead_target_monthly / 4) : 0),
-          drActual: item.dr_actual ?? 0,
-          siteReality: item.site_reality || "Pending first review generation.",
-          conversionGaps: item.conversion_gaps || "Pending first review generation.",
-          actionsFortnight: item.actions_fortnight || [],
-          actionsNext: item.actions_next || [],
-          actionsLater: item.actions_later || [],
-          teamFeedback: item.team_feedback || [],
-          overallStatus: item.overall_status || "PENDING_REVIEW",
-          generatedByModel: item.generated_by_model || "System",
-          lastGeneratedAt: item.last_generated_at || null
-        };
-      }
-      return {
-        id: c.id,
-        clientId: c.id,
-        clientName: c.name,
-        shortCode: c.short_code,
-        projectOwner: c.project_owner_name || "Melaka",
-        projectOwnerCode: c.project_owner_code || "MW",
-        siteUrl: extractCleanBaseUrl(c.gsc_site_url, c.wordpress_url),
-        periodStart: format(/* @__PURE__ */ new Date(), "yyyy-MM-01"),
-        periodEnd: format(/* @__PURE__ */ new Date(), "yyyy-MM-dd"),
-        clicks: 0,
-        phones: 0,
-        leadsActual: 0,
-        leadsTarget: c.lead_target_monthly ? Math.round(c.lead_target_monthly / 4) : 0,
-        drActual: 0,
-        siteReality: 'Click "Generate Review" to analyze real site against dashboard data.',
-        conversionGaps: "Awaiting synthesis.",
-        actionsFortnight: [],
-        actionsNext: [],
-        actionsLater: [],
-        teamFeedback: [],
-        overallStatus: "PENDING_REVIEW",
-        generatedByModel: "None",
-        lastGeneratedAt: null
-      };
-    });
-    res.json({ success: true, count: reviews.length, data: reviews });
-  } catch (error) {
-    console.error("Strategic Reviews Fetch Error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-app.post("/api/strategic-reviews/generate/:clientId", async (req, res) => {
-  const { clientId } = req.params;
-  const { model } = req.body || {};
-  try {
-    const { data: client, error: cErr } = await supabase2.from("clients").select("*").eq("id", clientId).single();
-    if (cErr || !client) return res.status(404).json({ error: "Client not found" });
-    const { data: weekly } = await supabase2.from("weekly_data").select("*").eq("client_id", clientId).order("week_start_date", { ascending: false }).limit(1).maybeSingle();
-    const healthAudit = await auditSingleClient(client);
-    const prompt = buildStrategicReviewPrompt(client, weekly || {}, healthAudit);
-    const { text, modelUsed } = await executeStrategicAiModel(prompt, model);
-    let parsedAi = {};
-    try {
-      const cleaned = cleanJsonString(text);
-      parsedAi = JSON.parse(cleaned);
-    } catch {
-      parsedAi = {
-        siteReality: text.slice(0, 500),
-        conversionGaps: "Parsed from summary stream.",
-        actionsFortnight: [{ id: "act-1", action: "Inspect and fix technical lead flows", why: "Conversion barrier", who: client.project_owner_name, priority: "Must-Do", status: "Pending" }]
-      };
-    }
-    const reviewRecord = {
-      client_id: client.id,
-      period_start: format(/* @__PURE__ */ new Date(), "yyyy-MM-01"),
-      period_end: format(/* @__PURE__ */ new Date(), "yyyy-MM-dd"),
-      clicks: weekly?.gsc_clicks ?? 0,
-      phones: weekly?.phone_calls ?? 0,
-      leads_actual: weekly?.leads_legit ?? 0,
-      leads_target: client.lead_target_monthly ? Math.round(client.lead_target_monthly / 4) : 0,
-      dr_actual: weekly?.ahrefs_dr ?? 0,
-      site_reality: parsedAi.siteReality || "Analyzed live site.",
-      conversion_gaps: parsedAi.conversionGaps || "Identified conversion barriers.",
-      actions_fortnight: parsedAi.actionsFortnight || [],
-      actions_next: parsedAi.actionsNext || [],
-      actions_later: parsedAi.actionsLater || [],
-      team_feedback: strategicReviewMemoryCache.get(client.id)?.team_feedback || [],
-      overall_status: "PENDING_REVIEW",
-      generated_by_model: modelUsed,
-      last_generated_at: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    strategicReviewMemoryCache.set(client.id, reviewRecord);
-    try {
-      await supabase2.from("strategic_reviews").upsert(reviewRecord, { onConflict: "client_id,period_start,period_end" });
-    } catch {
-    }
-    res.json({
-      success: true,
-      message: `Strategic review generated using ${modelUsed}`,
-      data: {
-        ...reviewRecord,
-        clientId: client.id,
-        clientName: client.name,
-        shortCode: client.short_code,
-        projectOwner: client.project_owner_name,
-        siteUrl: healthAudit.siteUrl
-      }
-    });
-  } catch (err) {
-    console.error(`Strategic generation error for ${clientId}:`, err);
-    res.status(500).json({ error: err.message });
-  }
-});
-app.post("/api/strategic-reviews/feedback", async (req, res) => {
-  const { clientId, userName, userRole, agreement, comment } = req.body;
-  if (!clientId || !userName) {
-    return res.status(400).json({ error: "clientId and userName are required" });
-  }
-  try {
-    const existing = strategicReviewMemoryCache.get(clientId) || {};
-    const feedbackList = existing.team_feedback || [];
-    const newFeedbackEntry = {
-      id: `fb-${Date.now()}`,
-      userName,
-      userRole: userRole || "Team Member",
-      agreement: agreement || "AGREE",
-      comment: comment || "",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const updatedFeedback = [newFeedbackEntry, ...feedbackList];
-    const newStatus = agreement === "DISAGREE" ? "HAS_OBJECTIONS" : "AGREED";
-    existing.team_feedback = updatedFeedback;
-    existing.overall_status = newStatus;
-    strategicReviewMemoryCache.set(clientId, existing);
-    try {
-      await supabase2.from("strategic_reviews").update({
-        team_feedback: updatedFeedback,
-        overall_status: newStatus,
-        updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("client_id", clientId);
-    } catch {
-    }
-    res.json({
-      success: true,
-      message: "Feedback recorded successfully",
-      feedback: updatedFeedback,
-      overallStatus: newStatus
-    });
-  } catch (err) {
-    console.error("Feedback save error:", err);
-    res.status(500).json({ error: err.message });
-  }
+registerStrategicReviewRoutes(app, {
+  supabase: supabase2,
+  strategicReviewMemoryCache,
+  executeStrategicAiModel,
+  cleanJsonString
 });
 app.get("/api/seo-autopilot/snapshots", async (req, res) => {
   const clientId = req.query.clientId;
@@ -7706,7 +8067,8 @@ RETURN STRICTLY VALID JSON ONLY (no markdown or text outside the JSON block):
       };
     }
     let processedHtml = parsed.content_html || "";
-    const commercialHub = "https://www.australianaccountants.com.au/expert-cfo-services-australia/?utm_source=chatgpt.com";
+    const commercialHub = targetHubUrl && targetHubUrl.trim() ? targetHubUrl.trim() : clientRow?.wordpress_url || clientRow?.gsc_site_url || "https://client-site.com.au";
+    const isAA = clientBrand.toLowerCase().includes("accountant") || commercialHub.includes("australianaccountants");
     processedHtml = processedHtml.replace(
       /\$1[0-9]{2},000\s*(to|-)\s*\$?[23][0-9]{2},000(\s*annually)?/gi,
       "a full-time salary package"
@@ -7715,17 +8077,19 @@ RETURN STRICTLY VALID JSON ONLY (no markdown or text outside the JSON block):
       /(typical|average)?\s*(cfo|executive)?\s*salaries\s*(ranging\s*)?from\s*\$[0-9,]+\s*(to|-)\s*\$[0-9,]+/gi,
       "full-time executive salaries, superannuation, leave entitlements and on-costs"
     );
-    processedHtml = processedHtml.replace(
-      /<a\s+[^>]*href=["'][^"']*(fractional-cfo-vs-in-house|fractional-cfo-vs-inhouse|in-house-finance-team|cfo-vs-finance-team)[^"']*["'][^>]*>(.*?)<\/a>/gi,
-      "$2"
-    );
     const proposedSlug = parsed.suggested_slug || topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     if (proposedSlug) {
       const slugRegex = new RegExp(`<a\\s+[^>]*href=["'][^"']*${proposedSlug}[^"']*["'][^>]*>(.*?)<\\/a>`, "gi");
       processedHtml = processedHtml.replace(slugRegex, "$1");
     }
-    const earlyHubLinkHtml = `Learn more about Australian Accountants\u2019 <a href="${commercialHub}">CFO services in Australia</a>.`;
-    if (!processedHtml.includes("expert-cfo-services-australia")) {
+    if (isAA) {
+      processedHtml = processedHtml.replace(
+        /<a\s+[^>]*href=["'][^"']*(fractional-cfo-vs-in-house|fractional-cfo-vs-inhouse|in-house-finance-team|cfo-vs-finance-team)[^"']*["'][^>]*>(.*?)<\/a>/gi,
+        "$2"
+      );
+    }
+    if (targetHubUrl && targetHubUrl.trim() && !processedHtml.includes(commercialHub)) {
+      const earlyHubLinkHtml = `Learn more about ${clientBrand}\u2019s <a href="${commercialHub}">${focusKeyword || topic}</a>.`;
       const firstPClose = processedHtml.indexOf("</p>");
       if (firstPClose !== -1) {
         const secondPClose = processedHtml.indexOf("</p>", firstPClose + 4);
@@ -7736,10 +8100,12 @@ RETURN STRICTLY VALID JSON ONLY (no markdown or text outside the JSON block):
         }
       }
     }
-    processedHtml = processedHtml.replace(
-      /<a\s+[^>]*href=["'][^"']*outsourcing-cfo-services[^"']*["'][^>]*>(.*?)<\/a>/gi,
-      `<a href="${commercialHub}">CFO services in Australia</a>`
-    );
+    if (isAA && commercialHub) {
+      processedHtml = processedHtml.replace(
+        /<a\s+[^>]*href=["'][^"']*outsourcing-cfo-services[^"']*["'][^>]*>(.*?)<\/a>/gi,
+        `<a href="${commercialHub}">CFO services in Australia</a>`
+      );
+    }
     const newAiClich\u00E9s = [
       [/robust financial leadership is paramount/gi, "financial leadership supports informed commercial decisions"],
       [/bedrock of sustainable success/gi, "foundation of operational stability"],
@@ -7807,10 +8173,10 @@ RETURN STRICTLY VALID JSON ONLY (no markdown or text outside the JSON block):
       /a fractional cfo (can|will) (seamlessly )?manage international expansion/gi,
       "A fractional CFO may support international expansion when they have relevant cross-border experience. Specialist tax and legal advice may also be required for each jurisdiction."
     );
-    const targetCtaHtml = `<p>Australian Accountants can assist with financial reporting, forecasting and outsourced CFO support. Learn more about our <a href="${commercialHub}">CFO services in Australia</a> or contact the team to discuss your requirements.</p>`;
-    if (!processedHtml.includes(commercialHub)) {
+    const targetCtaHtml = isAA ? `<p>Australian Accountants can assist with financial reporting, forecasting and outsourced CFO support. Learn more about our <a href="${commercialHub}">CFO services in Australia</a> or contact the team to discuss your requirements.</p>` : `<p>${clientBrand} can assist with ${topic.toLowerCase()}. Learn more about our <a href="${commercialHub}">${focusKeyword || topic}</a> or contact our team to discuss your requirements.</p>`;
+    if (commercialHub && !processedHtml.includes(commercialHub)) {
       processedHtml += "\n" + targetCtaHtml;
-    } else {
+    } else if (commercialHub) {
       const lastPIndex = processedHtml.lastIndexOf("<p>");
       if (lastPIndex !== -1 && processedHtml.slice(lastPIndex).toLowerCase().includes("contact")) {
         processedHtml = processedHtml.slice(0, lastPIndex) + targetCtaHtml;
@@ -7823,13 +8189,13 @@ RETURN STRICTLY VALID JSON ONLY (no markdown or text outside the JSON block):
   </h3>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-300">
     <div><strong>Focus Keyword:</strong> ${focusKeyword || topic}</div>
-    <div><strong>Money / Commercial Keyword:</strong> CFO services in Australia</div>
+    <div><strong>Money / Commercial Keyword:</strong> ${isAA ? "CFO services in Australia" : focusKeyword || topic}</div>
     <div><strong>Meta Title:</strong> ${parsed.meta_title || `${topic} | ${clientBrand}`}</div>
     <div><strong>Meta Description:</strong> ${parsed.meta_description || ""}</div>
     <div><strong>Proposed URL Slug:</strong> /${proposedSlug}/</div>
     <div><strong>Commercial Hub Linked:</strong> <a href="${commercialHub}" class="text-blue-600 dark:text-blue-400 underline" target="_blank">${commercialHub}</a></div>
-    <div><strong>Featured Image Prompt:</strong> Professional Australian corporate boardroom discussion with executive financial charts on screen, natural Sydney office lighting, modern clean aesthetic.</div>
-    <div><strong>Featured Image Alt Text:</strong> ${focusKeyword || topic} - Australian business financial management consultation</div>
+    <div><strong>Featured Image Prompt:</strong> Professional Australian ${clientLoc} high-quality photography, clean aesthetic, natural lighting.</div>
+    <div><strong>Featured Image Alt Text:</strong> ${focusKeyword || topic} - ${clientBrand} consultation</div>
     <div><strong>Schema Markup:</strong> Article & FAQPage JSON-LD</div>
     <div><strong>Publication Status:</strong> Ready for human review (Draft)</div>
   </div>
@@ -8712,92 +9078,7 @@ app.post("/api/commander/bulk-apply", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get("/api/keywords/metrics", async (req, res) => {
-  const clientId = req.query.clientId;
-  if (!clientId) return res.status(400).json({ error: "clientId is required" });
-  try {
-    const metrics = await getKeywordMetricsStore(clientId);
-    res.json({ success: true, metrics });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-app.post("/api/keywords/ahrefs-sync", async (req, res) => {
-  const { clientId, queries } = req.body;
-  if (!clientId || !Array.isArray(queries) || queries.length === 0) {
-    return res.status(400).json({ error: "clientId and queries array are required" });
-  }
-  try {
-    const ahrefsKey = (process.env.AHREFS_API_KEY || "").trim();
-    const existingMetrics = await getKeywordMetricsStore(clientId);
-    const updatedMap = {};
-    for (const q of queries) {
-      const cleanKw = q.trim().toLowerCase();
-      if (!cleanKw) continue;
-      if (existingMetrics[cleanKw] && existingMetrics[cleanKw].volume > 0) {
-        updatedMap[cleanKw] = existingMetrics[cleanKw];
-        continue;
-      }
-      if (ahrefsKey) {
-        try {
-          const ahrefsRes = await fetch(`https://api.ahrefs.com/v3/keywords-explorer/overview?country=au&keywords=${encodeURIComponent(cleanKw)}`, {
-            headers: {
-              "Authorization": `Bearer ${ahrefsKey}`,
-              "Accept": "application/json"
-            }
-          });
-          if (ahrefsRes.ok) {
-            const data = await ahrefsRes.json();
-            const kwData = data.keywords?.[0] || data[0];
-            if (kwData) {
-              updatedMap[cleanKw] = {
-                volume: kwData.volume || 0,
-                difficulty: kwData.difficulty || kwData.kd || 0,
-                cpc: kwData.cpc || 0,
-                syncedAt: (/* @__PURE__ */ new Date()).toISOString()
-              };
-              continue;
-            }
-          }
-        } catch (ahrefsErr) {
-          console.warn("[AHREFS API] query warning:", ahrefsErr);
-        }
-      }
-      const wordCount = cleanKw.split(" ").length;
-      let estVolume = 100;
-      let estDifficulty = 15;
-      if (cleanKw.includes("australia") || cleanKw.includes("sydney") || cleanKw.includes("melbourne") || cleanKw.includes("brisbane")) {
-        estVolume = Math.floor(Math.random() * 400) + 150;
-        estDifficulty = Math.floor(Math.random() * 25) + 20;
-      } else if (wordCount <= 2) {
-        estVolume = Math.floor(Math.random() * 1200) + 400;
-        estDifficulty = Math.floor(Math.random() * 40) + 35;
-      } else if (wordCount === 3) {
-        estVolume = Math.floor(Math.random() * 500) + 200;
-        estDifficulty = Math.floor(Math.random() * 20) + 15;
-      } else {
-        estVolume = Math.floor(Math.random() * 250) + 70;
-        estDifficulty = Math.floor(Math.random() * 15) + 10;
-      }
-      updatedMap[cleanKw] = {
-        volume: estVolume,
-        difficulty: estDifficulty,
-        cpc: Number((Math.random() * 4 + 1).toFixed(2)),
-        syncedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-    }
-    await saveKeywordMetricsStore(clientId, updatedMap);
-    const finalStored = await getKeywordMetricsStore(clientId);
-    res.json({
-      success: true,
-      count: Object.keys(updatedMap).length,
-      metrics: finalStored
-    });
-  } catch (err) {
-    console.error("Ahrefs sync error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+registerKeywordRoutes(app);
 if (process.env.NODE_ENV !== "production" && !process.env.PASSENGER_APP_ENV) {
   const vite = await createViteServer({
     server: { middlewareMode: true },
@@ -8806,7 +9087,8 @@ if (process.env.NODE_ENV !== "production" && !process.env.PASSENGER_APP_ENV) {
   app.use(vite.middlewares);
 } else {
   const distPath = path2.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
+  app.use("/assets", express.static(path2.join(distPath, "assets"), { maxAge: "1y", immutable: true }));
+  app.use(express.static(distPath, { maxAge: "1h" }));
   app.get("*", (req, res) => {
     res.sendFile(path2.join(distPath, "index.html"));
   });

@@ -63,31 +63,12 @@ async function syncAllClients() {
           throw new Error(data.error || 'Unknown API Error');
         }
 
-        console.log(`  -> Fetched Metrics: Clicks=${data.gsc_clicks}, Traffic=${data.ga4_traffic}`);
+        console.log(
+          `  -> Synced & Persisted: Clicks=${data.gsc_clicks}, Traffic=${data.ga4_traffic}, Organic=${data.ga4_organic_traffic ?? 0}, Calls=${data.phone_calls ?? 0}`
+        );
 
-        // 3. Upsert into weekly_data table
-        const { error: upsertError } = await supabase
-          .from('weekly_data')
-          .upsert(
-            {
-              client_id: client.id,
-              week_start_date: weekStart,
-              gsc_clicks: data.gsc_clicks,
-              gsc_impressions: data.gsc_impressions,
-              gsc_ctr: data.gsc_ctr,
-              gsc_position: data.gsc_position,
-              ga4_traffic: data.ga4_traffic,
-              ga4_new_users: data.ga4_new_users,
-              ga4_returning_users: data.ga4_returning_users
-            },
-            { onConflict: 'client_id, week_start_date' }
-          );
-
-        if (upsertError) {
-          console.error(`  -> Failed to UPSERT weekly_data:`, upsertError.message);
-        } else {
-          console.log(`  -> Successfully updated DB for ${client.name}`);
-        }
+        // Gentle pacing delay to avoid Google API bursts
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
       } catch (err: any) {
         console.error(`  -> Failed to sync ${client.name}:`, err.message);

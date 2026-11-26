@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Shield, CheckCircle2, XCircle, RefreshCw, Unlink, Globe, Lock, AlertCircle, ExternalLink, Palette, Monitor, Zap, BrainCircuit, FileSpreadsheet } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import Tooltip from '../components/Tooltip';
+import { authFetch } from '../utils/authFetch';
 
 interface AuthStatus {
   connected: boolean;
@@ -70,7 +71,7 @@ export default function GlobalSettings() {
 
   const fetchKeys = async () => {
     try {
-      const res = await fetch('/api/admin/keys');
+      const res = await authFetch('/api/admin/keys');
       if (!res.ok) {
         throw new Error(`Server returned status ${res.status}: ${res.statusText}`);
       }
@@ -117,7 +118,7 @@ export default function GlobalSettings() {
   const handleSaveKey = async (id: string, value: string) => {
     setSavingKeyId(id);
     try {
-      const res = await fetch('/api/admin/keys', {
+      const res = await authFetch('/api/admin/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, key_value: value })
@@ -700,7 +701,7 @@ export default function GlobalSettings() {
                         onClick={async () => {
                           if (confirm('Sever all connections to this account?')) {
                             try {
-                              await fetch('/api/auth/google/disconnect', { method: 'POST' });
+                              await authFetch('/api/auth/google/disconnect', { method: 'POST' });
                               fetchStatus();
                             } catch (e) {
                               alert('Protocol Failure: Disconnect Aborted');
@@ -822,7 +823,7 @@ export default function GlobalSettings() {
                 onClick={async () => {
                   if (confirm('Finalize database seeding sequence?')) {
                     try {
-                      const res = await fetch('/api/admin/seed', { method: 'POST' });
+                      const res = await authFetch('/api/admin/seed', { method: 'POST' });
                       const result = await res.json();
                       alert('Sequence Success: System Initialized');
                     } catch (e: any) {

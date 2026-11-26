@@ -34,6 +34,7 @@ import Tooltip from '../components/Tooltip';
 import LeadNotificationCenter from '../components/LeadNotificationCenter';
 import { startOfWeek, subWeeks, subMonths, format, startOfMonth, endOfMonth, endOfWeek, parseISO, isSameWeek, subDays, addDays } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
+import { authFetch } from '../utils/authFetch';
 
 interface DashboardRow {
   client: Client;
@@ -149,7 +150,7 @@ export default function MasterDashboard() {
     }
     setIsSyncingSheets(true);
     try {
-      const response = await fetch('/api/admin/sync-sheets', {
+      const response = await authFetch('/api/admin/sync-sheets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,9 +210,6 @@ export default function MasterDashboard() {
       setLoading(true);
     }
     try {
-      const allClients = await getClients();
-      setClients(allClients);
-
       const today = new Date();
       let currentStart: Date, currentEnd: Date, prevStart: Date, prevEnd: Date;
 
@@ -313,23 +311,24 @@ export default function MasterDashboard() {
       const leadRangeStr = `${format(leadCurrentStart, 'MMM dd')} - ${format(leadCurrentEnd, 'MMM dd')}`;
       const leadPrevRangeStr = `${format(leadPrevStart, 'MMM dd')} - ${format(leadPrevEnd, 'MMM dd')}`;
 
-      // Fetch date-precise leads from Lead Shield API for real-time lead periods
-      let currentRangeLeads: any = { clients: {} };
-      let prevRangeLeads: any = { clients: {} };
-      try {
-        [currentRangeLeads, prevRangeLeads] = await Promise.all([
-          getLeadStatsByRange(leadCurrentStartStr, leadCurrentEndStr),
-          getLeadStatsByRange(leadPrevStartStr, leadPrevEndStr)
-        ]);
-      } catch (leadErr) {
-        console.warn('[LEAD SHIELD] Range query fallback:', leadErr);
-      }
-
-      const dashboardCache = await getDashboardCache(viewMode);
-      const allWeeklyData = await getAllWeeklyData({
-        startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
-        endDate: format(today, 'yyyy-MM-dd')
-      });
+      // Fetch ALL 5 independent data sources in parallel instead of sequentially (2x-3x faster load)
+      const [allClients, currentRangeLeads, prevRangeLeads, dashboardCache, allWeeklyData] = await Promise.all([
+        getClients(),
+        getLeadStatsByRange(leadCurrentStartStr, leadCurrentEndStr).catch((err) => {
+          console.warn('[LEAD SHIELD] Current range fallback:', err);
+          return { clients: {} } as any;
+        }),
+        getLeadStatsByRange(leadPrevStartStr, leadPrevEndStr).catch((err) => {
+          console.warn('[LEAD SHIELD] Prev range fallback:', err);
+          return { clients: {} } as any;
+        }),
+        getDashboardCache(viewMode),
+        getAllWeeklyData({
+          startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
+          endDate: format(today, 'yyyy-MM-dd')
+        })
+      ]);
+      setClients(allClients);
 
       const dashboardRows: DashboardRow[] = await Promise.all(allClients.map(async (client) => {
         let weeklyData: WeeklyData[] = allWeeklyData[client.id] || [];
@@ -450,35 +449,46 @@ export default function MasterDashboard() {
           organicUsersChange: calculateChange(resolvedCurrentOrganicUsers, resolvedPreviousOrganicUsers)
         };
 
-        // Breakdown channels for individual leads if available
-        const leadDetails = leadShieldCurrent?.leads || [];
-        const channelCounts = {
-          seo: 0,
-          googleAds: 0,
-          metaAds: 0,
-          social: 0,
-          other: 0
+        // Breakdown channels for individual leads (current & previous periods for % comparison)
+        const countChannels = (details: any[]) => {
+          const counts = { seo: 0, googleAds: 0, metaAds: 0, social: 0, other: 0 };
+          for (const dl of details) {
+            const isGen = (dl.status || '').toUpperCase() === 'GENUINE';
+            if (!isGen) continue;
+            const ch = (dl.channel || '').toLowerCase();
+            if (ch.includes('seo') || ch.includes('organic') || ch.includes('website') || ch === '') {
+              counts.seo += 1;
+            } else if (ch.includes('google') || ch.includes('adwords') || ch.includes('gclid')) {
+              counts.googleAds += 1;
+            } else if (ch.includes('meta') || ch.includes('facebook') || ch.includes('fb') || ch.includes('instagram') || ch.includes('ig')) {
+              counts.metaAds += 1;
+            } else if (ch.includes('social')) {
+              counts.social += 1;
+            } else {
+              counts.other += 1;
+            }
+          }
+          return counts;
         };
 
-        for (const dl of leadDetails) {
-          const isGen = (dl.status || '').toUpperCase() === 'GENUINE';
-          if (!isGen) continue;
-          const ch = (dl.channel || '').toLowerCase();
-          if (ch.includes('seo') || ch.includes('organic') || ch.includes('website') || ch === '') {
-            channelCounts.seo += 1;
-          } else if (ch.includes('google') || ch.includes('adwords') || ch.includes('gclid')) {
-            channelCounts.googleAds += 1;
-          } else if (ch.includes('meta') || ch.includes('facebook') || ch.includes('fb') || ch.includes('instagram') || ch.includes('ig')) {
-            channelCounts.metaAds += 1;
-          } else if (ch.includes('social')) {
-            channelCounts.social += 1;
-          } else {
-            channelCounts.other += 1;
-          }
-        }
+        const leadDetails = leadShieldCurrent?.leads || [];
+        const prevLeadDetails = leadShieldPrev?.leads || [];
+        const channelCounts = countChannels(leadDetails);
+        const prevChannelCounts = countChannels(prevLeadDetails);
+
+        const channelChanges = {
+          seo: calculateChange(channelCounts.seo, prevChannelCounts.seo),
+          googleAds: calculateChange(channelCounts.googleAds, prevChannelCounts.googleAds),
+          metaAds: calculateChange(channelCounts.metaAds, prevChannelCounts.metaAds),
+          social: calculateChange(channelCounts.social, prevChannelCounts.social),
+          allSocial: calculateChange(
+            channelCounts.metaAds + channelCounts.social,
+            prevChannelCounts.metaAds + prevChannelCounts.social
+          )
+        };
 
         // Pure SEO leads: if channel data is present, use verified SEO leads, otherwise fallback to total legit
-        const hasChannelTracking = leadDetails.length > 0;
+        const hasChannelTracking = leadDetails.length > 0 || prevLeadDetails.length > 0;
         const seoLeadsCount = hasChannelTracking && (channelCounts.googleAds > 0 || channelCounts.metaAds > 0)
           ? channelCounts.seo
           : resolvedCurrentLeadsLegit;
@@ -488,6 +498,8 @@ export default function MasterDashboard() {
           legit: resolvedCurrentLeadsLegit,
           seoLegit: seoLeadsCount,
           channelCounts,
+          prevChannelCounts,
+          channelChanges,
           hasChannelTracking,
           prevLegit: resolvedPrevLeadsLegit,
           change: calculateChange(resolvedCurrentLeadsLegit, resolvedPrevLeadsLegit),
@@ -650,12 +662,12 @@ export default function MasterDashboard() {
     }
   };
 
-  const handleSort = (key: string) => {
+  const handleSort = React.useCallback((key: string) => {
     setSortConfig(current => ({
       key,
       direction: current?.key === key && current.direction === 'asc' ? 'desc' : 'asc'
     }));
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -682,7 +694,7 @@ export default function MasterDashboard() {
   }, [rows]);
 
   const filteredRows = React.useMemo(() => {
-    let result = rows;
+    let result = [...rows];
 
     if (selectedOwner !== 'all') {
       result = result.filter(r => {
@@ -1173,56 +1185,95 @@ export default function MasterDashboard() {
                         />
                       </div>
                     ) : (
-                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[280px]" content={
+                      <Tooltip position={rowIndex < 2 ? 'bottom' : 'top'} widthClass="w-[310px]" content={
                         <div className="space-y-1.5 p-1 text-left text-xs">
                           <div className={`font-semibold border-b pb-1 flex justify-between items-center ${theme === 'white' ? 'border-zinc-200 text-zinc-700' : 'border-zinc-800 text-zinc-300'}`}>
                             <span className="font-bold">Leads Channel Breakdown</span>
-                            <span className="text-[10px] opacity-70">Genuine</span>
+                            <span className="text-[10px] opacity-70">vs previous period</span>
                           </div>
 
-                          {(row.leads as any).hasChannelTracking && ((row.leads as any).channelCounts?.googleAds > 0 || (row.leads as any).channelCounts?.metaAds > 0 || (row.leads as any).channelCounts?.social > 0) ? (
-                            <div className="space-y-1 py-1">
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="flex items-center gap-1.5 font-medium text-emerald-400">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                  Pure SEO Leads:
-                                </span>
-                                <span className="font-bold font-mono text-emerald-400">{(row.leads as any).channelCounts?.seo || 0}</span>
+                          {(() => {
+                            const cc = (row.leads as any).channelCounts || { seo: 0, googleAds: 0, metaAds: 0, social: 0 };
+                            const pc = (row.leads as any).prevChannelCounts || { seo: 0, googleAds: 0, metaAds: 0, social: 0 };
+                            const chg = (row.leads as any).channelChanges || { seo: 0, googleAds: 0, metaAds: 0, social: 0 };
+                            const showBreakdown = (row.leads as any).hasChannelTracking && (
+                              cc.googleAds > 0 || pc.googleAds > 0 ||
+                              cc.metaAds > 0 || pc.metaAds > 0 ||
+                              cc.social > 0 || pc.social > 0
+                            );
+
+                            const renderBadge = (val: number) => (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                val > 0
+                                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                  : val < 0
+                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                    : 'bg-zinc-500/10 text-zinc-500'
+                              }`}>
+                                {val > 0 ? `▲ +${val.toFixed(1)}%` : val < 0 ? `▼ ${val.toFixed(1)}%` : '• 0%'}
+                              </span>
+                            );
+
+                            return showBreakdown ? (
+                              <div className="space-y-1.5 py-1">
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="flex items-center gap-1.5 font-medium text-emerald-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                    Pure SEO:
+                                  </span>
+                                  <div className="flex items-center gap-1.5 font-mono">
+                                    <span className="font-bold text-emerald-400">{cc.seo}</span>
+                                    <span className="text-[11px] text-zinc-500">/ {pc.seo}</span>
+                                    {renderBadge(chg.seo)}
+                                  </div>
+                                </div>
+                                {(cc.googleAds > 0 || pc.googleAds > 0) && (
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="flex items-center gap-1.5 font-medium text-blue-400">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                      Google Ads:
+                                    </span>
+                                    <div className="flex items-center gap-1.5 font-mono">
+                                      <span className="font-bold text-blue-400">{cc.googleAds}</span>
+                                      <span className="text-[11px] text-zinc-500">/ {pc.googleAds}</span>
+                                      {renderBadge(chg.googleAds)}
+                                    </div>
+                                  </div>
+                                )}
+                                {(cc.metaAds > 0 || pc.metaAds > 0) && (
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="flex items-center gap-1.5 font-medium text-purple-400">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                      Meta / Social Ads:
+                                    </span>
+                                    <div className="flex items-center gap-1.5 font-mono">
+                                      <span className="font-bold text-purple-400">{cc.metaAds}</span>
+                                      <span className="text-[11px] text-zinc-500">/ {pc.metaAds}</span>
+                                      {renderBadge(chg.metaAds)}
+                                    </div>
+                                  </div>
+                                )}
+                                {(cc.social > 0 || pc.social > 0) && (
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="flex items-center gap-1.5 font-medium text-pink-400">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
+                                      Social / Direct:
+                                    </span>
+                                    <div className="flex items-center gap-1.5 font-mono">
+                                      <span className="font-bold text-pink-400">{cc.social}</span>
+                                      <span className="text-[11px] text-zinc-500">/ {pc.social}</span>
+                                      {renderBadge(chg.social)}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              {(row.leads as any).channelCounts?.googleAds > 0 && (
-                                <div className="flex justify-between items-center text-xs">
-                                  <span className="flex items-center gap-1.5 font-medium text-blue-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                    Google Ads Leads:
-                                  </span>
-                                  <span className="font-bold font-mono text-blue-400">{(row.leads as any).channelCounts.googleAds}</span>
-                                </div>
-                              )}
-                              {(row.leads as any).channelCounts?.metaAds > 0 && (
-                                <div className="flex justify-between items-center text-xs">
-                                  <span className="flex items-center gap-1.5 font-medium text-purple-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                                    Meta / Social Ads:
-                                  </span>
-                                  <span className="font-bold font-mono text-purple-400">{(row.leads as any).channelCounts.metaAds}</span>
-                                </div>
-                              )}
-                              {(row.leads as any).channelCounts?.social > 0 && (
-                                <div className="flex justify-between items-center text-xs">
-                                  <span className="flex items-center gap-1.5 font-medium text-pink-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
-                                    Social / Direct:
-                                  </span>
-                                  <span className="font-bold font-mono text-pink-400">{(row.leads as any).channelCounts.social}</span>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex justify-between items-center py-0.5">
-                              <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Current Genuine:</span>
-                              <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
-                            </div>
-                          )}
+                            ) : (
+                              <div className="flex justify-between items-center py-0.5">
+                                <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Current Genuine:</span>
+                                <span className="font-bold text-emerald-500 font-mono">{row.leads.legit} <span className="text-zinc-500 font-normal">/ {row.leads.current} total</span></span>
+                              </div>
+                            );
+                          })()}
 
                           <div className="flex justify-between items-center py-0.5 border-t border-zinc-500/10">
                             <span className={theme === 'white' ? 'text-zinc-600' : 'text-zinc-400'}>Total Legit Leads:</span>

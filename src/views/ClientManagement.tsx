@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import React from 'react';
+import { authFetch } from '../utils/authFetch';
 import { 
   Plus, 
   Search, 
@@ -214,7 +215,7 @@ export default function ClientManagement() {
     
     setRepairing(true);
     try {
-      const res = await fetch('/api/admin/bulk-repair-gsc', { method: 'POST' });
+      const res = await authFetch('/api/admin/bulk-repair-gsc', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         alert(`Bulk repair complete!\n\nRepaired ${data.repairs_count} client URLs.`);
@@ -582,7 +583,7 @@ NOTIFY pgrst, 'reload schema';
     try {
       logDebug('Starting bootstrap request...');
       setLoading(true);
-      const res = await fetch('/api/admin/seed', { 
+      const res = await authFetch('/api/admin/seed', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
